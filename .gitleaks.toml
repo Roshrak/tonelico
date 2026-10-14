@@ -1,0 +1,19 @@
+title = "tonelico"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented, non-secret values"
+regexes = [
+  # Local-only dummy key for the loopback AGY proxy; it protects nothing.
+  '''agy-local-key''',
+  # Placeholders that install.sh fills in.
+  '''@[A-Z_]+@''',
+  # A SHA-256 checksum constant and a deliberately fake test key.
+  '''0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39''',
+  '''abcdef1234567890''',
+]
+paths = [
+  '''flake\.lock$''',
+]

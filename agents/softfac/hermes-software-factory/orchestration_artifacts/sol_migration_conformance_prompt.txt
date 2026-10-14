@@ -1,0 +1,1978 @@
+You are Sol High (gpt-5.6-sol), the authoritative, independent reviewer and quality gate for the Hermes Software Factory v2 (HOH Architecture).
+
+AUTHORITATIVE CONTRACT:
+You are conducting a strict MIGRATION PLAN CONFORMANCE REVIEW of the ongoing Aider -> AGY CLI migration.
+The AUTHORITATIVE ACCEPTANCE CONTRACT for this entire migration is the full Astra Migration Plan (`C:\Users\HH18\astra_plan.md`).
+The Astra migration plan outranks any prior partial reviews or shortcuts. If a prior Sol review guidance contradicts the Astra plan, issue a PRECEDENT_CORRECTION and follow the Astra plan.
+
+YOUR MANDATE:
+1. You must compare the implementation against EVERY migration step in the Astra plan, Step 1 through Step 14, as well as the Final Release Checklist (Section 4).
+2. You must detect:
+   - skipped steps;
+   - partially implemented steps;
+   - work performed out of required order (e.g. implementing Step 7 builder/preflight before Step 2 execution isolation contract is proven);
+   - implementation that contradicts the plan;
+   - obsolete compatibility behavior that the plan requires removing;
+   - safety prerequisites that were bypassed;
+   - missing tests or evidence (distinguish mocks from live proof);
+   - premature production cutover or premature claims of completion.
+3. DO NOT assume current mechanisms are sufficient simply because Hermes presents them:
+   - Does `--sandbox`, `--dangerously-skip-permissions`, `cwd=worktree`, `--add-dir`, `_assert_source_unchanged`, and git worktree checks actually satisfy the execution-isolation contract defined by Astra Step 2 and Step 6? Prove it from code and live/fixture evidence.
+   - Astra Step 9 requires runtime state to live outside candidate and warns against solving safety by broadly ignoring/deleting artifacts. Compare the current cleanup design to Step 9.
+4. DETERMINE THE ACTUAL ACHIEVED STEP BOUNDARY INDEPENDENTLY:
+   - Do NOT assume Hermes is at Step 13 or Step 14.
+   - If AgyBuilder was coded but Step 2 execution isolation is unproven, you must report that functional implementation progressed ahead of its safety prerequisites.
+   - Output `do_not_proceed_beyond_step` representing the earliest unapproved/blocking prerequisite.
+5. ORDERED REMEDIATION:
+   - When verdict is REJECT, provide an ordered list in `next_required_work` strictly mapped to Astra plan step numbers, addressing the earliest violated prerequisite first.
+
+---
+AUTHORITATIVE ASTRA MIGRATION PLAN (C:\Users\HH18\astra_plan.md):
+# SoftFac v2: Aider → Antigravity CLI migration plan
+
+The migration should replace the Builder execution boundary—not the factory’s planning, testing, review, memory, or commit authority.
+
+A simple class rename and command substitution is insufficient: `agy --dangerously-skip-permissions` can execute commands as well as edit files. The cutover must therefore prove process containment, completion detection, scope enforcement, and crash safety before making `AgyBuilder` the production default.
+
+This is an implementation plan only. No source files, installed skills, credentials, or services were changed.
+
+## 1. Verified baseline and architectural decisions
+
+### Current evidence
+
+| Item | Verified state |
+|---|---|
+| Main HOH checkout | `C:\Users\HH18\Downloads\hermes-software-factory-v2-hoh\hermes-software-factory-v2` |
+| Main commit | `066e885966420b14d470dc159f0ff39acf2099a9` |
+| Main regression suite | **29 tests passed**, rerun during this inspection |
+| Audit checkout | `C:\Users\HH18\softfac-audit-worktree`; contains staged, unstaged, and untracked work |
+| Audit regression suite | **58 tests run: 57 passed, 1 opt-in test skipped** |
+| Installed CLI | `C:\Users\HH18\AppData\Local\agy\bin\agy.exe`, version **1.2.0** |
+| Model catalog | Includes **`gemini-3.8-flash-high`** |
+| Actual ledger files | `ledger/issue_ledger.json` and `ledger/trajectory.json`, currently JSON snapshots—not JSONL |
+| Existing obsolete arguments | `--bridge-url` and hidden `--builder-architect-model`; inspected main does **not** currently expose `--aider-bin` |
+
+The [main implementation](C:/Users/HH18/Downloads/hermes-software-factory-v2-hoh/hermes-software-factory-v2/lib/hermes_factory_v2.py:918) and [audit implementation](C:/Users/HH18/softfac-audit-worktree/lib/hermes_factory_v2.py:1191) are not interchangeable baselines. The audit checkout has additional slice, budget, and locking behavior; passing tests do not establish that every installed-skill invariant is already implemented correctly.
+
+### Decisions governing the plan
+
+1. **Default target:** the clean main HOH checkout above, implemented in a new migration worktree. Reuse audit changes only through individually reviewed patches.
+2. **Builder:** direct `agy` subprocess; no Aider compatibility backend and no Builder HTTP bridge.
+3. **Model:** exact slug `gemini-3.8-flash-high`; no `openai/` prefix and no silent model fallback.
+4. **Responsibilities:** Astra plans; AGY implements; Luna diagnoses; Sol independently reviews; the runner owns tests, evidence, staging, rollback, and commits.
+5. **Determinism:** reproducible inputs, configuration, transitions, evidence, and gate decisions—not guaranteed identical model-generated patches.
+6. **Historical compatibility:** preserve old evidence and `--prior-run`; never silently resume a partially executed old-Builder candidate under AGY.
+7. **JSONL:** deliver the requested journals as a separately audited persistence change, retaining existing JSON snapshot compatibility.
+8. **Release condition:** unavailable or unproven safety capability means `blocked`, not a reduced-safety fallback.
+
+Google documents structured headless output, including a terminal result and stream initialization metadata. Use those machine-readable surfaces instead of interpreting conversational success text. Their behavior still needs fixtures from the installed 1.2.0 executable. [Official headless documentation](https://antigravity.google/docs/cli/headless/)
+
+## 2. Invariants and ownership
+
+Treat the following as the migration’s acceptance contract.
+
+| Invariant | Enforcement owner | Required proof |
+|---|---|---|
+| Approved plan and bounded steps | `validate_plan` / runner | Invalid plans cause zero Builder dispatches |
+| Candidate isolation | Runner and execution boundary | Builder cannot modify source checkout or trusted run state |
+| `allowed_files` | Path validation and scope gates | Out-of-scope changes cannot reach tests/review/commit |
+| Per-slice scope | Dispatcher | Slice N cannot edit another slice’s files |
+| Fresh Builder context | `AgyBuilder` | Separate invocation and conversation per call |
+| No Builder Git authority | Execution boundary and Git guards | Builder cannot stage, commit, reset, merge, or alter refs |
+| Durable budgets | Locked run-state persistence | Crash/resume never replenishes consumed budget |
+| HOH memory | `MemoryLedger` | Stable issue identity, lifecycle, sequence, and provenance |
+| Independent Sol review | Existing review path | Fresh review receives exact candidate evidence, not Builder conversation |
+| Deterministic pre-review checks | `_pre_review_gate` | Invalid candidates never invoke Sol |
+| Hash-checked commit | Runner | Approved diff, staged tree, and committed tree agree |
+| Safe rollback | `_safe_rollback` | Exact authorized checkpoint restored; source untouched |
+| Fail-closed resume | State loader and execution entry points | Ambiguous/partial Builder execution cannot restart implicitly |
+
+“GOAP gates” here means the existing action preconditions and state transitions. Do not introduce a new GOAP search engine or rename the factory’s phases as part of this migration.
+
+The required action ordering remains:
+
+```text
+Preflight → Validated plan → Isolated candidate → Sequential Builder slices
+    → Scope/integrity checks → Tests
+        → Luna repair → Builder → Checks → Tests, when needed
+    → Deterministic pre-review gate → Fresh Sol review
+        → Rework → Checks → Tests → Fresh review, when rejected
+    → Revalidate approved candidate → Task-branch commit
+```
+
+## 3. Execution and approval protocol
+
+The steps below are sequential release increments, not one oversized factory plan. Where the factory limits a plan to eight implementation steps, submit each increment separately; retain stricter request-specific limits.
+
+For **every step**, Hermes must give Sol High:
+
+- Base commit and current file hashes.
+- Exact allowed paths.
+- Complete diff, including all pages and new files.
+- Exact verification commands, exit codes, and test counts.
+- Invariant-to-test mapping.
+- Known limitations, skipped checks, and release blockers.
+- Candidate diff SHA-256 and explicit `APPROVE` or `REJECT`.
+
+Any edit after approval invalidates that approval.
+
+For eligible implementation increments, follow `agy-control-worker`: automatic isolated delegation, complete report/diff inspection, and **no `agy_apply` without explicit user approval**. Do not let the partially migrated factory approve or deploy itself.
+
+---
+
+## Step 1 — Freeze the baseline and inventory the removal surface
+
+**Goal and scope**
+
+Establish exactly what is being migrated, preserving all existing work and evidence.
+
+**Files**
+
+Create:
+
+- `docs/agy-migration-plan.md`
+- `docs/agy-migration-baseline.md`
+
+Inspect all tracked runtime, tests, launchers, dependency files, service examples, and documentation.
+
+**Concrete changes**
+
+1. Create a dedicated migration branch/worktree from the approved main commit.
+2. Record:
+   - HEAD and worktree status.
+   - Python/Git versions.
+   - Tracked-file hashes.
+   - Main and audit regression results separately.
+3. Inventory:
+   ```text
+   AiderBuilder
+   clean_aider_generated_artifacts
+   DEFAULT_AIDER_MODEL
+   DEFAULT_AIDER_URL
+   DEFAULT_BUILDER_ARCHITECT_MODEL
+   DEFAULT_BRIDGE_URL
+   aider_bin
+   bridge_url
+   builder_architect_model
+   urllib
+   LiteLLM
+   model metadata/settings
+   generated histories/caches
+   ```
+4. Include `.gitignore`, `SHA256SUMS`, `bridge/agy_bridge.py`, and `systemd/agy-bridge.service.example`.
+5. Identify installed launcher/module locations before planning deployment; do not assume editing the repository updates the running installation.
+6. Record which audit-worktree protections need to be ported. Do not copy its entire dirty file.
+
+**Verification**
+
+```powershell
+git -C "<migration-worktree>" status --short
+python -B tests/test_factory_v2.py
+git -C "<migration-worktree>" grep -n -i -E "aider|litellm|bridge_url|builder_architect|model-metadata-file|model-settings-file"
+```
+
+The baseline must retain all 29 main test outcomes and record the 58-test audit suite separately.
+
+**Pitfalls and mitigation**
+
+- **Wrong checkout:** record absolute paths in every audit packet.
+- **Uncommitted audit changes lost:** prohibit resets, blanket checkout restoration, or automatic merging.
+- **Sensitive legacy defaults:** record their existence without reproducing credentials; remove Builder credential fallbacks later. Credential rotation is a separate authorized operation.
+
+---
+
+## Step 2 — Specify the AGY runtime and isolation contract
+
+**Goal and scope**
+
+Resolve safety capabilities before relying on permission-skipping execution.
+
+**Files**
+
+Create:
+
+- `docs/agy-builder-contract.md`
+- Sanitized fixtures under `tests/fixtures/agy/1.2.0/`
+
+No production backend switch yet.
+
+**Concrete specifications**
+
+Record and verify:
+
+- Executable resolution and version format.
+- Required flags.
+- Exact model selection.
+- Fresh-conversation behavior.
+- Effective working directory.
+- Configuration, rules, hooks, plugins, MCP, and credential discovery.
+- Terminal completion/error schema.
+- Timeout and descendant-process behavior.
+- Files created outside the candidate.
+
+Define two separate boundaries:
+
+1. **Execution isolation:** prevent writes to the source checkout, shared Git metadata, trusted state, approvals, and unrelated host files.
+2. **Candidate acceptance scope:** reject any candidate changes outside `allowed_files` and the current slice boundary.
+
+A prompt and `cwd=worktree` enforce neither boundary by themselves.
+
+The required `--dangerously-skip-permissions` flag approves tool operations; it must not be represented as a safety feature. [Official permissions documentation](https://antigravity.google/docs/cli/headless/#permissions-in-headless-mode)
+
+Select an audited external execution boundary where necessary. Its policy must cover native file tools and descendants, not only terminal commands. The current sandbox documentation describes Linux/macOS mechanisms; it is not evidence of equivalent Windows coverage. [Official sandbox documentation](https://antigravity.google/docs/cli/sandbox/)
+
+**Verification**
+
+Use disposable fixtures to attempt:
+
+- An allowed file edit.
+- An out-of-scope candidate edit.
+- A source-checkout write.
+- A write to `run_state.json` and review artifacts.
+- Git ref/index modification.
+- A delayed child write after cancellation.
+
+Only the authorized edit may succeed within the enforced boundary.
+
+**Pitfalls and mitigation**
+
+- **Windows isolation requires provisioning:** stop for explicit authorization to provision it. Do not silently run unrestricted.
+- **Shared `.git` access:** linked worktrees share repository metadata; making only the source directory read-only is insufficient.
+- **Prompt compliance mistaken for enforcement:** malicious fixture processes must exercise the same launch boundary as AGY.
+- **Impossible required capability:** retain a release blocker rather than weaken “100% preservation.”
+
+---
+
+## Step 3 — Characterize the invariants before replacing the Builder
+
+**Goal and scope**
+
+Turn current safety expectations into regression tests.
+
+**Files**
+
+Modify:
+
+- `tests/test_factory_v2.py`
+
+Create focused test modules if needed:
+
+- `tests/test_factory_builder_contract.py`
+- `tests/test_factory_resume_contract.py`
+
+**Concrete changes**
+
+Preserve existing tests for:
+
+- Safe/tool-less role invocation.
+- Committed-HEAD planning and dirty-checkout preservation.
+- Symlink rejection.
+- Scope violations.
+- Luna repair routing.
+- Sol rejection and fresh re-review.
+- Wrong approval hash.
+- Rollback.
+- Issue lifecycle and prior-run disclosure.
+
+Add missing characterization tests for:
+
+- Empty candidate diff.
+- Zero tests discovered.
+- Builder changes index or HEAD.
+- Builder writes partial files and then raises.
+- Builder writes outside scope and raises simultaneously.
+- Resume after ambiguous dispatch.
+- Budget reservation before dispatch.
+- Trusted ledger/review artifact tampering.
+- Out-of-scope ignored files.
+- Multiple slices with different editable-file sets.
+
+Port audit-worktree tests selectively; do not equate test presence with sufficient assertion strength.
+
+**Verification**
+
+Run the existing suite plus the new targeted suite. Record pre-existing failures separately. A newly exposed invariant gap must become an explicit prerequisite fix, not an `xfail` hidden inside migration acceptance.
+
+**Pitfalls and mitigation**
+
+- **Broad mocks skip orchestration:** retain fake roles/builders for engine tests, but introduce real subprocess fixtures later.
+- **Test-count preservation instead of behavior preservation:** map every removed Builder-specific test to its AGY replacement.
+
+---
+
+## Step 4 — Introduce AGY configuration and historical-state compatibility
+
+**Goal and scope**
+
+Make AGY a first-class, persisted Builder configuration without breaking historical inspection.
+
+**Files**
+
+Modify:
+
+- `lib/hermes_factory_v2.py`
+- Configuration/CLI/state tests.
+
+**Concrete changes**
+
+Target configuration:
+
+```python
+DEFAULT_BUILDER_MODEL = "gemini-3.8-flash-high"
+
+@dataclass
+class Config:
+    # Existing non-Builder fields remain unchanged.
+    ...
+    builder_model: str = DEFAULT_BUILDER_MODEL
+    agy_bin: str | None = None
+```
+
+Remove from active configuration and CLI:
+
+- `DEFAULT_AIDER_MODEL`
+- `DEFAULT_AIDER_URL`
+- `DEFAULT_BUILDER_ARCHITECT_MODEL`
+- Builder-only `DEFAULT_BRIDGE_URL`
+- `bridge_url`
+- `builder_architect_model`
+- `--bridge-url`
+- `--builder-architect-model`
+- `--aider-bin`, wherever another supported baseline exposes it.
+
+Add in `add_common` and `config_from_args`:
+
+```python
+parser.add_argument("--agy-bin", default=None)
+parser.add_argument("--builder-model", default=DEFAULT_BUILDER_MODEL)
+```
+
+Preserve integer/budget validation; do not replace strict validation with silent coercion.
+
+Introduce a run-configuration version separate from ledger versions:
+
+```python
+RUN_CONFIG_VERSION = 2
+
+def load_config_for_execution(state: dict[str, Any]) -> Config: ...
+def read_run_state(run_dir: Path) -> dict[str, Any]: ...
+```
+
+New runs record:
+
+```json
+{
+  "run_config_version": 2,
+  "builder_backend": "agy",
+  "builder_contract_version": 1
+}
+```
+
+Change `status()` to read historical state without constructing today’s `Config` or resolving AGY.
+
+Old runs:
+
+- Remain inspectable.
+- Remain eligible as validated prior-run evidence.
+- Cannot execute/resume under the new backend without a new run and fresh plan.
+- Unknown schemas and unknown active configuration keys fail closed.
+
+**Verification**
+
+Test CLI defaults, explicit executable paths, serialization round trips, removed-argument rejection, old-run status, old-run execution rejection, and historical prior-run loading.
+
+**Pitfalls and mitigation**
+
+- **`Config(**old_state["config"])` crashes:** separate raw inspection from executable configuration.
+- **Global schema bump breaks HOH history:** version configuration independently.
+- **Silent prefix conversion:** reject obsolete `openai/...` Builder model values instead of silently rewriting them during execution.
+
+---
+
+## Step 5 — Implement executable resolution and capability preflight
+
+**Goal and scope**
+
+Prove that the selected executable can satisfy the audited Builder contract before candidate creation.
+
+**Files**
+
+Modify:
+
+- `lib/hermes_factory_v2.py`
+- Builder preflight tests.
+
+**Concrete changes**
+
+Add:
+
+```python
+def resolve_agy_executable(explicit: str | None) -> Path: ...
+
+class AgyBuilder:
+    def __init__(self, agy_bin: str | None = None) -> None: ...
+
+    def preflight(
+        self, config: Config, run_dir: Path
+    ) -> dict[str, Any]: ...
+```
+
+Resolution order:
+
+1. Explicit `--agy-bin`.
+2. `shutil.which("agy")`.
+3. On Windows, `%LOCALAPPDATA%/agy/bin/agy.exe`.
+
+On this machine, the fallback resolves to the requested `C:/Users/HH18/AppData/Local/agy/bin/agy.exe`.
+
+Rules:
+
+- An invalid explicit path is an error; do not fall back.
+- Resolve once to an absolute executable path.
+- Reject directories and unsupported shell shims.
+- Never launch `.cmd`/`.bat` through an improvised shell string.
+- Pin the executable identity through the run.
+
+For observed bare semantic-version output, use `re.fullmatch`, for example:
+
+```python
+r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+```
+
+Do not accept arbitrary banners containing a version substring. Version 1.2.0 becomes supported only after Step 2’s contract audit.
+
+Preflight order:
+
+1. Resolve executable.
+2. Check `--version` and binary hash.
+3. Check required capabilities.
+4. Check exact model catalog entry.
+5. Run a bounded no-edit capability probe in a disposable confined directory.
+6. Verify completion and effective model/cwd evidence.
+7. Persist sanitized `preflight_builder.json`.
+
+No HTTP requests to a Builder bridge, no API-key fallback, and no automatic installation/login/update.
+
+**Verification**
+
+Missing binary, invalid explicit path, unsupported version, missing model, malformed catalog, unauthenticated runtime, failed probe, and wrong effective model must all block before candidate creation.
+
+**Pitfalls and mitigation**
+
+- **`--version` mistaken for authentication proof:** require the separate capability probe.
+- **Model self-report mistaken for routing evidence:** inspect CLI metadata, not generated prose.
+- **PATH changes between calls:** recheck the pinned binary identity before dispatch.
+
+---
+
+## Step 6 — Implement the bounded AGY subprocess runtime
+
+**Goal and scope**
+
+Launch AGY safely, preserve diagnostic evidence, and stop all writers before downstream gates.
+
+**Files**
+
+Modify:
+
+- `lib/hermes_factory_v2.py`
+
+Create:
+
+- `tests/test_factory_builder_process.py`
+- `tests/fixtures/builder_process_fixture.py`
+
+**Concrete changes**
+
+Use a dedicated Builder process helper rather than changing every role/test invocation:
+
+```python
+def run_builder_process(
+    argv: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout: int,
+    stdout_path: Path,
+    stderr_path: Path,
+) -> subprocess.CompletedProcess[str]: ...
+```
+
+The approved invocation retains the requested core command:
+
+```text
+agy --model gemini-3.8-flash-high
+    --dangerously-skip-permissions
+    --output-format stream-json
+    --disable-slash-commands
+    --print-timeout <bounded-duration>
+    --print <instruction>
+```
+
+Additional flags must be verified by Step 2; place all options before the final prompt argument.
+
+Runtime requirements:
+
+- Argument list; `shell=False`.
+- Exact resolved candidate `cwd`.
+- No `--continue`, `--conversation`, inherited project override, or extra workspace directories.
+- Non-interactive stdin.
+- Concurrently drain stdout/stderr with bounded storage.
+- Explicit UTF-8 handling; retain undecodable raw evidence and fail closed.
+- Separate CLI timeout from the outer watchdog, leaving a bounded shutdown margin.
+- Windows process ownership through a Job Object or equivalent audited boundary; prevent escape before process execution.
+- On other supported platforms, use an audited process-group/container lifecycle.
+- Await writer termination before tests, snapshots, rollback, or review.
+- Preserve partial logs on timeout, cancellation, spawn error, or output overflow.
+- Do not print full prompt-bearing argv in errors.
+
+Reject NUL-containing or oversized prompts before spawning. On Windows, measure the serialized command line in UTF-16 code units with conservative headroom. Do not silently truncate or change input protocols.
+
+**Verification**
+
+Real fixture subprocess tests must cover Unicode paths, spaces, quotes, shell metacharacters, huge stderr, malformed UTF-8, timeout, cancellation, delayed child writes, and output exhaustion.
+
+**Pitfalls and mitigation**
+
+- **Killing only the parent leaves a writer:** process-tree termination is a release gate.
+- **Output deadlock:** drain both pipes concurrently.
+- **Isolation breaks authentication:** use the approved AGY identity/configuration route; do not blindly copy Aider’s child-home manipulation.
+- **Orphaned external daemon:** track or prohibit external writer services; process groups alone are not proof.
+
+---
+
+## Step 7 — Implement `AgyBuilder.run` and fail-closed result validation
+
+**Goal and scope**
+
+Replace Aider’s editing invocation while preserving the injected Builder interface.
+
+**Files**
+
+Modify:
+
+- `lib/hermes_factory_v2.py`
+- Builder contract tests and AGY fixtures.
+
+**Concrete changes**
+
+Preserve the existing engine-facing signature:
+
+```python
+def run(
+    self,
+    *,
+    worktree: Path,
+    instruction: str,
+    allowed_files: list[str],
+    config: Config,
+    run_dir: Path,
+    label: str,
+) -> None: ...
+```
+
+Add:
+
+```python
+def parse_agy_event_stream(raw: bytes) -> dict[str, Any]: ...
+```
+
+Before dispatch:
+
+1. Validate label, canonical worktree, and file boundary.
+2. Revalidate executable/configuration identity.
+3. Create unique attempt artifacts outside the candidate.
+4. Bind instruction hash, allowed paths, model, executable, and candidate baseline.
+
+Recommended label validation:
+
+```python
+r"[A-Za-z0-9][A-Za-z0-9_.-]{0,95}"
+```
+
+The parser must require the audited stream structure:
+
+- Exactly one initialization event.
+- Matching canonical cwd and configured model.
+- One fresh conversation for this invocation.
+- Exactly one terminal result.
+- Process exit zero and terminal `SUCCESS`.
+- No contradictory error or unsupported terminal state.
+- No missing, truncated, duplicated, or malformed terminal evidence.
+
+Treat the stream as an untrusted protocol: bound record sizes, validate types, and reject duplicate keys in security-relevant objects.
+
+Add structured errors:
+
+```python
+class BuilderFailure(FactoryError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str,
+        non_resumable: bool,
+        evidence_path: str | None = None,
+    ) -> None: ...
+```
+
+Stable codes should include:
+
+```text
+agy_spawn_failed
+agy_timeout
+agy_canceled
+agy_protocol_error
+agy_runtime_error
+agy_model_mismatch
+agy_identity_changed
+agy_output_incomplete
+agy_isolation_failed
+```
+
+The CLI’s `SUCCESS` means completion, not a valid implementation. Changed-file, test, and review gates remain authoritative.
+
+**Verification**
+
+Test all audited non-success statuses, zero exit with an error result, wrong model/cwd, stale conversation reuse, missing final result, duplicate result, partial file edits followed by failure, and ordinary response text containing words such as “error” or “token limit.”
+
+**Pitfalls and mitigation**
+
+- **Porting Aider marker regexes:** remove them; classify AGY using its own verified protocol.
+- **Demanding nonexistent `structured_output`:** require it only if the invocation actually uses an audited `--json-schema`.
+- **Inventing upstream quota causes:** record unknown causes as unknown.
+- **Success with no patch:** block at the candidate gate, not by trusting a “done” sentence.
+
+---
+
+## Step 8 — Centralize every Builder dispatch and preserve slices
+
+**Goal and scope**
+
+Ensure initial build, Luna repair, and reviewer rework all use identical safety handling.
+
+**Files**
+
+Modify:
+
+- `FactoryEngine`
+- `_builder_instruction`
+- `_builder_slice_instruction`, if ported
+- `_luna_repair`
+- Execution-loop tests.
+
+**Concrete changes**
+
+Introduce:
+
+```python
+def _dispatch_builder(
+    self,
+    *,
+    run_dir: Path,
+    state: dict[str, Any],
+    config: Config,
+    worktree: Path,
+    instruction: str,
+    editable_files: list[str],
+    label: str,
+    ledger: MemoryLedger,
+) -> None: ...
+```
+
+This method must:
+
+1. Validate a nonempty subset of plan `allowed_files`.
+2. Persist the attempt reservation and increment `builder_calls_used`.
+3. Persist the slice/attempt manifest before dispatch.
+4. Snapshot the candidate and trusted boundary.
+5. Invoke the Builder.
+6. Run integrity and scope checks even when the Builder raises.
+7. Persist all failures without masking one with another.
+8. Mark completion only after all postconditions pass.
+
+Route through this method:
+
+- Initial slices.
+- Test-failure repairs.
+- Direct Sol-requested rework.
+- Sol → Luna rework.
+- Test failures following reviewer rework.
+
+Use structured step targets:
+
+```json
+{
+  "step": "Implement the validated decoder change",
+  "editable_files": ["src/decoder.py"]
+}
+```
+
+Reject empty, ambiguous, or out-of-bound targets. Do not infer scope from ambiguous basenames or fall back to the entire plan boundary.
+
+Prompts must include only the current objective, step, editable files, relevant constraints, and completion instruction. Explicitly prohibit Git operations, dependency installation, unrelated edits, and treating Builder-run tests as factory evidence.
+
+**Verification**
+
+Tests must prove slice ordering, manifest-before-dispatch, prompt isolation, distinct conversations, durable call counts, immediate stopping on slice failure, and equivalent guards for every repair route.
+
+**Pitfalls and mitigation**
+
+- **Cumulative diff rejects earlier slices:** compare each invocation’s before/after changes to its slice scope; compare the cumulative candidate to plan scope.
+- **Audit code contains broad fallback behavior:** port intended invariants, not its current fallback implementation.
+- **Repair path bypasses checks:** assert every Builder call passes through `_dispatch_builder`.
+
+---
+
+## Step 9 — Harden scope, Git authority, and candidate identity
+
+**Goal and scope**
+
+Prevent AGY’s broader tool capabilities from bypassing the existing candidate gates.
+
+**Files**
+
+Modify:
+
+- `normalize_path`
+- `ensure_paths_confined`
+- `_changed_files`
+- `_scope_check`
+- `_assert_source_unchanged`
+- `_stage`
+- Candidate-integrity tests.
+
+**Concrete changes**
+
+1. Use NUL-delimited Git path output rather than `splitlines()` for filenames.
+2. Reject path traversal, absolute paths, drive/UNC escapes, unsafe symlinks/junctions, and unsupported file types.
+3. Handle Windows case-insensitive path collisions explicitly.
+4. Snapshot candidate HEAD, index, tracked files, untracked files, and relevant ignored files.
+5. Protect linked-worktree Git metadata, refs, configuration, and hooks.
+6. Require candidate HEAD/index to remain unchanged during Builder execution; staging belongs to the runner.
+7. Remove `clean_aider_generated_artifacts` and both call sites.
+8. Do not add `clean_agy_generated_artifacts` or ignore `.agy*` broadly.
+9. Keep runtime logs and CLI state outside the candidate.
+10. Use a separately declared policy for test-generated artifacts; the Builder must not gain those write permissions implicitly.
+
+For source protection, preserve existing legitimate dirty-checkout behavior. Do not expand a preservation check into a blanket requirement to erase unrelated user edits.
+
+**Verification**
+
+Exercise rename/delete/new-file/binary changes; Unicode and newline filenames; ignored-file edits; symlink/junction escapes; index staging; commits; ref changes; `.gitignore` modification; and out-of-scope writes followed by failure.
+
+**Pitfalls and mitigation**
+
+- **Post-run checks cannot undo external damage:** execution isolation from Step 2 remains mandatory.
+- **Ignoring generated files hides malicious changes:** enumerate runtime scratch paths explicitly.
+- **Source status text is not content integrity:** use content hashes where state equality matters.
+- **Hook execution mutates the reviewed tree:** control hooks in runner Git operations without editing user Git configuration.
+
+---
+
+## Step 10 — Make resume, budgets, and rollback provider-neutral
+
+**Goal and scope**
+
+Remove dependence on Aider artifacts while preserving crash and rollback guarantees.
+
+**Files**
+
+Modify:
+
+- `_load` / executable-state loading.
+- `execute`, `resume`, and locked variants.
+- `_create_checkpoint`
+- `_safe_rollback`
+- Budget/fingerprint logic.
+- Crash-recovery tests.
+
+**Concrete changes**
+
+1. Use OS-backed single-writer locking for state-mutating entry points.
+2. Enforce `non_resumable` in **both** `execute` and `resume` before capability calls.
+3. Replace checks for `*.token_limit.json` with authoritative state.
+4. Persist attempt states:
+
+   ```text
+   reserved → dispatched → completed
+                        ↘ failed / ambiguous
+   ```
+
+5. A crash after reservation does not refund the attempt.
+6. An incomplete dispatch record blocks automatic replay.
+7. Preserve `debug_attempts_used`, `review_cycles_used`, and `builder_calls_used` monotonically.
+8. Resume verifies plan hash, candidate identity, model, executable, and configuration contract.
+9. Preserve failed candidates and logs; do not delete them merely because resume was requested.
+10. Rollback operates only inside the validated candidate, after all writers stop.
+11. Include tracked, untracked, staged, unstaged, and binary state in checkpoint/no-progress fingerprints using canonical length-delimited records.
+
+**Verification**
+
+Inject crashes before/after reservation, process spawn, result persistence, budget update, checkpoint creation, and rollback.
+
+Test concurrent execute/resume, deleted failure artifacts, modified plans, exhausted budgets, and rollback after staged/untracked changes.
+
+**Pitfalls and mitigation**
+
+- **Automatic candidate deletion destroys evidence:** quarantine first; cleanup is separate.
+- **State corruption resets counters:** reject invalid/missing required execution fields instead of defaulting them to zero.
+- **Rollback races a writer:** require proven writer quiescence.
+- **Old-run resume silently changes backend:** reject and instruct creation of a new run with `--prior-run`.
+
+---
+
+## Step 11 — Preserve HOH memory and add the requested JSONL journals
+
+**Goal and scope**
+
+Preserve issue/trajectory semantics while delivering JSONL without breaking existing consumers.
+
+**Files**
+
+Modify:
+
+- `MemoryLedger`
+- `load_prior_run_context`
+- Ledger consistency/recovery tests.
+
+Create:
+
+- `docs/ledger-compatibility.md`
+
+**Concrete changes**
+
+Retain:
+
+```text
+ledger/issue_ledger.json
+ledger/trajectory.json
+```
+
+Add for new runs:
+
+```text
+ledger/issue_ledger.jsonl
+ledger/trajectory.jsonl
+```
+
+Define the relationship explicitly:
+
+- `trajectory.jsonl` contains the canonical sequenced transaction record, including issue deltas.
+- `issue_ledger.jsonl` is an idempotent issue-event projection.
+- Existing `.json` files remain versioned materialized snapshots.
+
+Every transaction includes:
+
+```text
+schema_version, run_id, transaction_id, seq,
+event_type, issue_id when applicable,
+payload, previous_hash, record_hash
+```
+
+Under the single-writer lock:
+
+1. Append and flush the canonical record.
+2. Append the corresponding issue projection, when applicable.
+3. Atomically replace snapshots.
+4. Record the completed generation.
+
+Recovery replays valid canonical records and deduplicates projection transaction IDs. Preserve torn/corrupt evidence; never replace it with an empty ledger.
+
+Preserve issue IDs, fingerprints, root objective classification, lifecycle rules, evidence references, and progressive-disclosure limits. Add backend/model/attempt metadata without renaming historical issue sources.
+
+Legacy snapshot-only runs stay readable without rewriting them. Corrupt legacy data blocks with evidence.
+
+**Verification**
+
+Test legacy snapshots, new journals, issue deduplication, reopening/regression, no premature resolution, prior-run bounds, interleaved crash points, duplicate transaction recovery, torn tails, and corrupt records.
+
+**Pitfalls and mitigation**
+
+- **Two independent authoritative journals diverge:** use one canonical transaction history.
+- **Global version change invalidates prior runs:** maintain explicit schema readers.
+- **Migration becomes a memory redesign:** preserve lifecycle semantics; limit change to durable representation and recovery.
+- **Sensitive logs leak into journals:** store sanitized metadata and artifact references, not credentials or full conversations.
+
+---
+
+## Step 12 — Reprove deterministic review and commit gates
+
+**Goal and scope**
+
+Bind approval to the exact tested candidate and prevent post-approval mutation.
+
+**Files**
+
+Modify only where necessary:
+
+- `_test`
+- `_pre_review_gate`
+- `_candidate_source_context`
+- `_review`
+- Commit path.
+- Gate regression tests.
+
+**Concrete changes**
+
+1. Keep existing test, syntax, conflict-marker, nonempty-diff, and scope checks.
+2. Preserve the current conflict detection baseline:
+   ```python
+   re.compile(r"^\+(<<<<<<<|=======|>>>>>>>)", re.MULTILINE)
+   ```
+   Any refinement must have separate fixtures.
+3. Make test discovery evidence runner-specific. A bare exit code zero is insufficient when no tests ran.
+4. Bind test results to a candidate content/tree identity.
+5. Require staged content to match the tested candidate.
+6. Keep reviewer source context index-derived and independent.
+7. Persist:
+   - Base commit.
+   - Approved staged diff SHA-256.
+   - Approved Git tree OID.
+   - Test evidence identity.
+   - Sol decision and model.
+8. Immediately before commit, recheck scope, source integrity, HEAD, index/tree, diff hash, and writer quiescence.
+9. Verify the resulting commit’s parent and tree.
+10. Mark `committed` only after post-commit verification succeeds.
+11. Preserve task-branch-only behavior; no automatic merge or push.
+
+**Verification**
+
+Tests must block review/commit for no discovery, failed tests, syntax errors, conflicts, empty diff, wrong hash, altered staged content, same-path unstaged mutations, moving base, and post-review writes.
+
+Success must prove:
+
+```text
+tested candidate = approved staged tree = committed tree
+```
+
+**Pitfalls and mitigation**
+
+- **Same filenames hide changed content:** bind content identities, not path lists.
+- **Tests modify their own source:** invalidate the evidence or enforce a clean source boundary.
+- **Commit succeeds but final state write crashes:** recover by verifying the expected parent/tree; never create a duplicate commit blindly.
+- **Hash-format change breaks old records:** version the new candidate contract; do not reinterpret historical hashes.
+
+---
+
+## Step 13 — Complete Aider removal and synchronize documentation
+
+**Goal and scope**
+
+Remove all active Aider dependencies, transport assumptions, generated artifacts, and operational instructions.
+
+**Files**
+
+Modify:
+
+- `lib/hermes_factory_v2.py`
+- `tests/test_factory_v2.py`
+- `.gitignore`
+- `README.md`
+- `docs/software-factory-SKILL.md`
+- `SHA256SUMS`
+- Dependency/package manifests if present.
+- Launchers/install scripts where required.
+
+Remove from the shipped factory bundle, after consumer verification:
+
+- `bridge/agy_bridge.py`
+- `systemd/agy-bridge.service.example`
+
+Update at deployment:
+
+- `C:/Users/HH18/AppData/Local/hermes/skills/software-development/software-factory-v2/SKILL.md`
+
+**Concrete changes**
+
+Delete:
+
+- `AiderBuilder`.
+- Aider-only version/model/configuration helpers.
+- Metadata/settings writers.
+- API-base and LiteLLM request plumbing.
+- Aider history parsing and cleanup.
+- Aider-specific mock HTTP server and opt-in tests.
+- `.aider*` ignore rule.
+- Unused `urllib` imports and Builder bridge constants.
+
+Replace `test_aider_runs_lean_gemini_builder` with an AGY contract test asserting the new argv, exact model, cwd, timeout, result validation, and absent legacy flags.
+
+Update docs to describe:
+
+- Astra → AGY → Luna → Sol responsibilities.
+- Exact default model and `--agy-bin`.
+- AGY authentication and audited runtime prerequisites.
+- Isolation limitations and fail-closed conditions.
+- New artifacts, historical-run policy, JSONL compatibility.
+- Offline versus live verification.
+- No automatic model substitution, merge, or credential fallback.
+
+Remove the installed skill’s “Keep Aider as the normal Builder” rule at deployment.
+
+**Verification**
+
+Add `tests/test_no_legacy_builder_dependencies.py` to check production imports, CLI help, configuration fields, package contents, and generated run artifacts.
+
+A lexical scan may retain explicitly allowlisted migration history and negative tests. It must find zero **active** Aider requirements.
+
+**Pitfalls and mitigation**
+
+- **Blind replacement damages names/history:** use symbol- and context-aware edits.
+- **Removing shared services:** remove factory package dependencies, not unrelated running services.
+- **Old `.aider*` files become visible:** preserve user files; never clean source content to make the scan pass.
+- **Checksum manifest stale:** regenerate only after final file content stabilizes.
+
+---
+
+## Step 14 — Run acceptance, obtain release approval, and deploy
+
+**Goal and scope**
+
+Demonstrate the complete pipeline without Aider or the Builder bridge.
+
+**Files**
+
+Create:
+
+- `docs/agy-migration-acceptance.md`
+
+Update only approved deployed module/launcher/skill copies.
+
+**Concrete verification layers**
+
+### A. Offline deterministic suite
+
+Run from the migration worktree:
+
+```powershell
+$env:PYTHONDONTWRITEBYTECODE = '1'
+$env:PYTHONUTF8 = '1'
+python -B -m unittest discover -s tests -p "test_*.py"
+python -B bin/hermes-code-factory-v2 run --help
+python -B bin/hermes-code-factory-v2 plan --help
+git diff --check
+```
+
+Require all supported baseline behaviors plus migration tests to pass.
+
+### B. Real subprocess fixtures
+
+Exercise the actual process supervisor, parser, timeouts, writer containment, and argument handling without a model.
+
+### C. Installed AGY contract tests
+
+With explicit authorization for model use:
+
+- Verify exact version/model/configuration.
+- Complete a tiny allowed edit.
+- Verify fresh conversations across two slices.
+- Verify UTF-8 paths and output.
+- Verify unavailable-model/authentication failure.
+- Verify no source, Git metadata, trusted-state, or scope escape.
+
+### D. End-to-end factory tests
+
+Use disposable repositories to exercise:
+
+1. Successful build → tests → Sol approval → task commit.
+2. Test failure → Luna → AGY repair → retest → approval.
+3. Sol rejection → AGY rework → retest → fresh approval.
+4. Sol rejection routed through Luna.
+5. Builder timeout/partial output → retained non-resumable failure.
+6. Scope violation → no review and no commit.
+7. Post-approval mutation → hash gate rejection.
+8. Prior-run disclosure from a legacy run.
+
+Perform acceptance with Aider absent from the test runtime and no Builder bridge dependency. Do not stop unrelated user services merely to simulate absence.
+
+**Deployment sequence**
+
+1. Freeze the reviewed release tree and hashes.
+2. Obtain Sol High’s approval of that exact tree.
+3. Obtain explicit deployment/application authorization.
+4. Back up exact deployed files.
+5. Install module, launcher, docs/skill, and checksums as one reviewed release.
+6. Run launcher help/status checks and the approved live smoke.
+7. Compare deployed hashes to the release manifest.
+
+**Pitfalls and mitigation**
+
+- **Mocks presented as production proof:** report each layer independently.
+- **Installed skill precedes working runtime:** deploy the approved set together.
+- **AGY auto-update invalidates evidence:** require re-audit on identity change.
+- **Deployment fails:** stop new dispatches and restore the reviewed installation backup. Never silently replay an AGY candidate through Aider.
+
+## 4. Final release checklist
+
+Sol High must reject the migration unless all of the following are evidenced:
+
+- [ ] `AgyBuilder` is the only production Builder implementation.
+- [ ] Default model is exactly `gemini-3.8-flash-high`.
+- [ ] `--agy-bin` is resolved, persisted, and correctly used after resume.
+- [ ] No active Aider executable, configuration, history, metadata/settings, LiteLLM, or Builder bridge dependency remains.
+- [ ] AGY permission-skipping execution has an approved isolation boundary.
+- [ ] Every Builder route uses the same durable dispatch and integrity checks.
+- [ ] Per-slice and whole-plan scope gates are independently tested.
+- [ ] Ambiguous/partial execution cannot reach tests, review, commit, or automatic replay.
+- [ ] Budgets, locks, checkpoints, rollback, and failed evidence survive crashes.
+- [ ] Issue history, trajectory, progressive disclosure, and legacy inspection remain functional.
+- [ ] Requested JSONL journals have deterministic recovery and snapshot compatibility.
+- [ ] Sol remains independent and approval binds the tested/staged/committed candidate.
+- [ ] Main/source checkout and unrelated user changes remain preserved.
+- [ ] Offline, installed-CLI, and live end-to-end evidence are reported separately.
+- [ ] Repository and deployed artifacts match the formally approved release.
+
+**Recommended execution order:** approve the baseline and runtime/isolation contract first. Then implement the adapter and provider-neutral guards. Switch the default only after those gates pass; remove the legacy package surface and deploy last.
+
+
+
+---
+CURRENT REPOSITORY CANDIDATE STATE:
+Target Repo: C:\Users\HH18\Downloads\hermes-software-factory-v2-hoh\hermes-software-factory-v2
+Branch: hermes/replace-aider-with-agy
+HEAD Commit: 232b5ef78d981dc3a084a2463f105ea42406cc1e
+Git Porcelain Status:
+?? lib/__pycache__/hermes_factory_v2.cpython-311.pyc
+
+
+Commits ahead of main:
+232b5ef fix(isolation): refine source checkout mutation detection and update SHA256SUMS
+8d6c6d6 fix(sol-review): address isolation boundary, strict cache cleanup, preflight json, and docs
+c20ec64 chore: update SHA256SUMS for Agy migration artifacts
+7ab9e65 fix(isolation): harden git worktree check using rev-parse git-dir vs git-common-dir
+1d30f27 docs: update README and software-factory skill to reflect Agy CLI builder
+872e4fb feat: replace aider with agy builder in softfac v2 core engine
+
+
+FULL GIT DIFF (main..HEAD):
+```diff
+diff --git a/README.md b/README.md
+index 10bfe51..a0fcf64 100644
+--- a/README.md
++++ b/README.md
+@@ -7,7 +7,7 @@ Hermes
+   -> capability preflight
+   -> Sol Planner
+   -> isolated Git worktree
+-  -> Aider + Gemini Medium Lean Builder
++  -> Agy CLI + Gemini Flash High Lean Builder
+   -> scope check and tests
+   -> Luna diagnosis only when tests fail
+   -> fresh Sol Reviewer with staged source context
+@@ -29,7 +29,7 @@ run artifacts, or repository contents.
+ 
+ ## Install the factory CLI
+ 
+-Requirements: Python 3.10+, Git, Hermes CLI, Aider, and a working provider.
++Requirements: Python 3.10+, Git, Hermes CLI, Agy CLI (`gemini-3.8-flash-high`), and a working provider.
+ 
+ ```bash
+ mkdir -p "$HOME/.local/bin" "$HOME/.local/lib"
+@@ -58,10 +58,11 @@ python3 tests/test_factory_v2.py
+ The tests use temporary repositories and fake providers. They do not consume
+ API quota.
+ 
+-## Configure the Gemini bridge
++## Direct Agy Builder & Optional Bridge
+ 
+-The bridge requires the `agy` CLI and its Google AI Pro authentication. Copy
+-the bridge file and edit the example service for the recipient's environment:
++The Lean Builder invokes the `agy` CLI directly using `gemini-3.8-flash-high` within the isolated Git worktree, without requiring an external HTTP bridge proxy.
++
++If using the legacy HTTP bridge (`bridge/agy_bridge.py`) for custom tooling, note that the bridge can run as an OpenAI-compatible proxy on `http://127.0.0.1:8765/v1` or `8045/v1`:
+ 
+ ```bash
+ mkdir -p "$HOME/.hermes" "$HOME/.config/systemd/user"
+@@ -73,7 +74,6 @@ systemctl --user enable --now agy-bridge.service
+ curl -fsS http://127.0.0.1:8765/v1/models
+ ```
+ 
+-The bridge must return `gemini-3.8-flash-medium` for the normal Builder path.
+ The service template uses the recipient's home directory (`%h`) and resolves
+ `agy` through `PATH`; it does not assume `/home/aesc` or a Nix store path.
+ 
+@@ -109,7 +109,7 @@ git -C /path/to/repo cherry-pick COMMIT_HASH
+ ## Provider roles
+ 
+ - Sol: planning and independent review, fresh tool-less Hermes processes.
+-- Gemini Medium + Aider: the only AI write authority.
++- Gemini Flash High + Agy CLI: the only AI write authority.
+ - Luna: failure diagnosis and repair instructions, no file writes.
+ - Hermes/runner: scope, tests, hashes, Git worktrees, and commits.
+ 
+diff --git a/SHA256SUMS b/SHA256SUMS
+index 0696c7a..fef6c7e 100644
+--- a/SHA256SUMS
++++ b/SHA256SUMS
+@@ -1,7 +1,7 @@
+-b4c183eda5466774f515ced753890e4b43dad6135eddf2767f9c30cc0b0346a1  README.md
++3555f379b270b28fa1759ea18457f95bceaf897e6312862ae4cecf279417cddf  README.md
+ 1ad5903336180b38176c5d3c8f508910b94d1892db333f899e597f2aa93b1c3f  bin/hermes-code-factory-v2
+ 34fef2349d95f57feb584d64e286c6adc716284bd1a1b5120d70f02123a8280a  bridge/agy_bridge.py
+-490d3ce374de5e4a8515ae50b03505fb2d24d3ee12dc3396bce412534e6cc02a  docs/software-factory-SKILL.md
+-48ab62606c9a863b23a4d838712c7b65a225495f1c2838d3ff79b18fdee5ea1a  lib/hermes_factory_v2.py
++8acba2f86e3f449a6ac624a9b6898d6488ec236996429da58fb2c9a152696838  docs/software-factory-SKILL.md
++8e623311cadfb19b15f93c6cd5635cb39ba3277ed00c119d2f4b80db47630f21  lib/hermes_factory_v2.py
+ df97b7ce08ffe248274111389864f77609b77df1b1af66a7ec4c5f2499763928  systemd/agy-bridge.service.example
+-d3c228e1febd0d593ba93eed43866f61a7275456df97bd831dc2d629a79724f1  tests/test_factory_v2.py
++58619e7318cb7283573d48a78c5874ea97a93c9c29ee4a431e05e8d73ff67c7c  tests/test_factory_v2.py
+diff --git a/docs/software-factory-SKILL.md b/docs/software-factory-SKILL.md
+index 3f115d3..f809a32 100644
+--- a/docs/software-factory-SKILL.md
++++ b/docs/software-factory-SKILL.md
+@@ -1,19 +1,19 @@
+ ---
+ name: software-factory
+-description: "Build and fix code with Sol planning/review, lean Aider/Gemini building, Luna debugging, strict scope/tests, and a hash-checked Git commit gate."
+-version: 2.1.0
++description: "Build and fix code with Sol planning/review, lean Agy/Gemini building, Luna debugging, strict scope/tests, and a hash-checked Git commit gate."
++version: 2.2.0
+ author: Hermes Agent
+ license: MIT
+-platforms: [linux]
++platforms: [linux, windows]
+ metadata:
+   hermes:
+-    tags: [coding, builder, aider, sol, git, workflow]
++    tags: [coding, builder, agy, sol, git, workflow]
+ ---
+ 
+ # Software Factory v2
+ 
+ ## Overview
+-This skill routes implementation through the fail-closed v2 factory. Hermes orchestrates; capability preflight runs before planning; fresh Sol contexts plan and review through the `openai-codex` ChatGPT/Codex OAuth route by default; Aider is a lean single-model Gemini Medium builder using `diff-fenced`; fresh Luna diagnoses failures through the same subscription route; Git commits only the exact staged diff approved by Sol. Sol is not injected into Aider's context, and Aider does not run a second architect pass. The installed `prompt-master` skill is applied to every role prompt: explicit goal, context, constraints, output contract, and done criteria, without hidden chain-of-thought requests.
++This skill routes implementation through the fail-closed v2 factory. Hermes orchestrates; capability preflight runs before planning; fresh Sol contexts plan and review through the `openai-codex` ChatGPT/Codex OAuth route by default; Agy CLI is a lean single-model Gemini Flash High builder (`gemini-3.8-flash-high`) operating under sandboxed headless mode; fresh Luna diagnoses failures through the same subscription route; Git commits only the exact staged diff approved by Sol. Sol is not injected into Agy's context, and Agy does not run a second architect pass. The installed `prompt-master` skill is applied to every role prompt: explicit goal, context, constraints, output contract, and done criteria, without hidden chain-of-thought requests.
+ 
+ ## When to Use
+ - The user requests building a new feature, refactoring code, or fixing bugs in a repository.
+diff --git a/lib/hermes_factory_v2.py b/lib/hermes_factory_v2.py
+index 1f39c19..017b453 100644
+--- a/lib/hermes_factory_v2.py
++++ b/lib/hermes_factory_v2.py
+@@ -3,7 +3,7 @@
+ """Hermes Software Factory v2.
+ 
+ Fail-closed orchestration for:
+-Hermes -> Sol planner -> Aider/Gemini builder -> tests -> Luna repair ->
++Hermes -> Sol planner -> Agy/Gemini builder -> tests -> Luna repair ->
+ fresh Sol reviewer -> hash-checked Git commit.
+ """
+ 
+@@ -37,8 +37,9 @@ DEFAULT_LUNA_MODEL = "gpt-5.6-luna"
+ DEFAULT_PLANNER_REASONING = "high"
+ DEFAULT_REVIEWER_REASONING = "high"
+ DEFAULT_LUNA_REASONING = "xhigh"
+-DEFAULT_BUILDER_MODEL = "openai/gemini-3.8-flash-high"
+-DEFAULT_BUILDER_ARCHITECT_MODEL = "openai/gemini-3.8-flash-high"
++DEFAULT_BUILDER_MODEL = "gemini-3.8-flash-high"
++DEFAULT_BUILDER_ARCHITECT_MODEL = "gemini-3.8-flash-high"
++DEFAULT_AGY_MODEL = DEFAULT_BUILDER_MODEL
+ DEFAULT_AIDER_MODEL = DEFAULT_BUILDER_MODEL
+ DEFAULT_AIDER_URL = "http://127.0.0.1:8045/v1"
+ DEFAULT_BRIDGE_URL = "http://127.0.0.1:8045/v1"
+@@ -787,6 +788,10 @@ class Config:
+     builder_timeout: int = 900
+     test_timeout: int = 900
+ 
++    def __post_init__(self) -> None:
++        if self.builder_model.startswith("openai/"):
++            self.builder_model = self.builder_model.removeprefix("openai/")
++
+ 
+ class CodexRoleClient:
+     """Invokes Codex CLI directly for Sol/Astra/Luna calls."""
+@@ -908,60 +913,146 @@ class HermesRoleClient:
+         return parse_json_object(result.stdout)
+ 
+ 
++def clean_builder_generated_artifacts(worktree: Path, is_disposable_worktree: bool = True) -> None:
++    """Fail-closed cleanup for builder cache artifacts.
++    Only deletes explicitly matched known builder cache paths after scope verification,
++    never deleting arbitrary directories or files that might be user data or scope violations.
++    """
++    if not is_disposable_worktree:
++        return
++    # An isolated disposable worktree created by git worktree add has a .git file or linked worktree directory.
++    # To be strictly fail-closed, verify it is a linked worktree (git rev-parse --git-dir != --git-common-dir).
++    try:
++        git_dir_res = git(worktree, "rev-parse", "--git-dir")
++        common_dir_res = git(worktree, "rev-parse", "--git-common-dir")
++        if git_dir_res.returncode != 0 or common_dir_res.returncode != 0:
++            return
++        g_dir = Path(git_dir_res.stdout.strip()).resolve()
++        c_dir = Path(common_dir_res.stdout.strip()).resolve()
++        if g_dir == c_dir:
++            # Main repository! NEVER clean artifacts from a main checkout!
++            return
++    except Exception:
++        return
++
++    res = git(worktree, "ls-files")
++    if res.returncode != 0:
++        raise FactoryError(f"Failed to inspect tracked files before cleanup: {res.stderr.strip()}", "cleanup")
++    tracked_files = {normalize_path(p) for p in res.stdout.splitlines() if p.strip()}
++
++    exact_cache_items = (
++        ".aider.tags.cache.v4",
++    )
++    for fname in exact_cache_items:
++        fpath = worktree / fname
++        if fpath.exists() and not fpath.is_symlink():
++            rel_prefix = normalize_path(fname)
++            if any(p == rel_prefix or p.startswith(rel_prefix + "/") for p in tracked_files):
++                continue
++            try:
++                if fpath.is_file():
++                    fpath.unlink()
++                elif fpath.is_dir():
++                    # Inspect directory contents: strictly require ONLY known aider tag cache names
++                    known_aider_tag_filenames = {"tags.db", "tags.db-journal", "cache.db", "cache.db-journal"}
++                    entries = list(fpath.iterdir())
++                    if not entries:
++                        fpath.rmdir()
++                        continue
++                    # Fail closed if ANY entry is a directory or an unexpected file name
++                    non_cache = [e for e in entries if e.is_dir() or e.name not in known_aider_tag_filenames]
++                    if non_cache:
++                        raise FactoryError(f"Unexpected user content in cache dir {fname}: {[str(p.name) for p in non_cache]}", "cleanup")
++                    for e in entries:
++                        e.unlink()
++                    fpath.rmdir()
++            except OSError as exc:
++                raise FactoryError(f"Failed to remove builder cache {fname}: {exc}", "cleanup")
++
++    # For directory caches (.gemini, .agy), if they exist and are untracked:
++    # Fail closed if they contain subdirectories or unknown file types
++    for dirname in (".gemini", ".agy"):
++        cdir = worktree / dirname
++        if cdir.exists() and not cdir.is_symlink():
++            if not cdir.is_dir():
++                # If someone created a regular file named .gemini or .agy, do not touch it
++                continue
++            rel_prefix = normalize_path(dirname)
++            if any(p == rel_prefix or p.startswith(rel_prefix + "/") for p in tracked_files):
++                continue
++            # Inspect contents
++            entries = list(cdir.iterdir())
++            if not entries:
++                cdir.rmdir()
++                continue
++            # Fail closed if there are subdirectories or unexpected file types
++            unexpected = [e.name for e in entries if e.is_dir() or e.suffix.lower() not in {".json", ".cache", ".tmp", ".log", ".lock", ".db", ".bin", ".txt"}]
++            if unexpected:
++                raise FactoryError(f"Unknown or unexpected content in builder cache directory {dirname}: {unexpected}", "cleanup")
++            for e in entries:
++                e.unlink()
++            cdir.rmdir()
++
++
+ def clean_aider_generated_artifacts(worktree: Path) -> None:
+-    """Remove only the known untracked repo-map cache from a task worktree."""
+-    cache_dir = worktree / ".aider.tags.cache.v4"
+-    if cache_dir.is_dir() and not cache_dir.is_symlink():
+-        shutil.rmtree(cache_dir)
++    """Backward compatibility alias for clean_builder_generated_artifacts."""
++    clean_builder_generated_artifacts(worktree)
+ 
+ 
+-class AiderBuilder:
+-    def __init__(self, aider_bin: str | None = None) -> None:
+-        self.aider_bin = aider_bin or shutil.which("aider") or "aider"
++class AgyBuilder:
++    def __init__(self, agy_bin: str | None = None) -> None:
++        self.agy_bin = agy_bin or shutil.which("agy") or "agy"
+ 
+     def preflight(self, config: Config, run_dir: Path) -> dict[str, Any]:
+-        version = command([self.aider_bin, "--version"], timeout=30)
++        version = command([self.agy_bin, "--version"], timeout=30)
+         if version.returncode != 0:
+-            raise FactoryError(f"Aider unavailable: {version.stderr.strip()}", "preflight")
++            raise FactoryError(f"agy unavailable: {version.stderr.strip()}", "preflight")
++
++        probe_cmd = [
++            self.agy_bin,
++            "--sandbox",
++            "--model",
++            config.builder_model,
++            "--output-format",
++            "json",
++            "--disable-slash-commands",
++            "--print",
++            "Reply with exactly BUILDER_PREFLIGHT_OK",
++        ]
++        preflight_dir = run_dir / "preflight_sandbox"
++        preflight_dir.mkdir(parents=True, exist_ok=True)
++        probe = command(probe_cmd, cwd=preflight_dir, timeout=config.builder_timeout)
++        if probe.returncode != 0:
++            detail = (probe.stderr or probe.stdout or "no output").strip()
++            raise FactoryError(
++                f"agy builder model preflight failed: {detail}",
++                "preflight",
++            )
+ 
+-        # Sol owns planning. Aider is deliberately a single-model Lean
+-        # Builder, so preflight only the Gemini editor model used by Aider.
+-        bridge_models = {config.builder_model.removeprefix("openai/")}
++        raw_out = probe.stdout.strip()
+         try:
+-            model_docs = {}
+-            completions = {}
+-            api_key = os.environ.get("GEMINI_API_KEY") or "REDACTED-API-KEY"
+-            for bridge_model in sorted(bridge_models):
+-                payload = json.dumps(
+-                    {
+-                        "model": bridge_model,
+-                        "messages": [{"role": "user", "content": "Reply with exactly BUILDER_OK"}],
+-                        "stream": False,
+-                        "temperature": 0,
+-                    }
+-                ).encode("utf-8")
+-                request = urllib.request.Request(
+-                    f"{config.bridge_url}/chat/completions",
+-                    data=payload,
+-                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+-                    method="POST",
++            parsed_payload = json.loads(raw_out)
++            if not isinstance(parsed_payload, dict):
++                raise FactoryError(
++                    f"agy builder preflight probe did not return a JSON object: {raw_out[:200]}",
++                    "preflight",
+                 )
+-                with urllib.request.urlopen(request, timeout=min(config.role_timeout, 240)) as response:
+-                    completion = json.loads(response.read().decode("utf-8"))
+-                completions[bridge_model] = completion
+-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+-            raise FactoryError(f"Gemini bridge capability preflight failed: {exc}", "preflight") from exc
+-        for bridge_model, completion in completions.items():
+-            if completion.get("model") != bridge_model:
+-                raise FactoryError("Gemini bridge chat completion returned the wrong model", "preflight")
+-            choices = completion.get("choices")
+-            content = choices[0].get("message", {}).get("content", "") if isinstance(choices, list) and choices else ""
+-            if not isinstance(content, str) or not content.strip():
+-                raise FactoryError(f"Gemini bridge returned no chat content for {bridge_model}", "preflight")
++            status = str(parsed_payload.get("status", "")).strip()
++            resp = str(parsed_payload.get("response", "")).strip()
++            if status != "SUCCESS" or resp != "BUILDER_PREFLIGHT_OK":
++                raise FactoryError(
++                    f"agy builder preflight probe returned unexpected payload (status={status!r}, response={resp!r})",
++                    "preflight",
++                )
++        except json.JSONDecodeError as exc:
++            raise FactoryError(
++                f"agy builder preflight probe returned invalid JSON: {exc} (output: {raw_out[:200]})",
++                "preflight",
++            ) from exc
+         evidence = {
+-            "aider_version": version.stdout.strip(),
+-            "models": model_docs,
+-            "chat_models": {key: value.get("model") for key, value in completions.items()},
++            "agy_version": version.stdout.strip(),
++            "builder_model": config.builder_model,
++            "probe_output": probe.stdout.strip(),
+         }
+         atomic_json(run_dir / "preflight_builder.json", evidence)
+         return evidence
+@@ -976,76 +1067,64 @@ class AiderBuilder:
+         run_dir: Path,
+         label: str,
+     ) -> None:
+-        message_path = run_dir / f"{label}.md"
+-        write_text(message_path, instruction)
+-        metadata_file = run_dir / "gemini_metadata.json"
+-        metadata_content = {
+-            config.builder_model: {
+-                "max_tokens": 8192,
+-                "max_input_tokens": 1048576,
+-                "max_output_tokens": 8192,
+-                "input_cost_per_token": 0.0000003,
+-                "output_cost_per_token": 0.0000025,
+-                "litellm_provider": "openai",
+-                "mode": "chat",
+-            }
+-        }
+-        write_text(metadata_file, json.dumps(metadata_content, indent=2))
+-
+-        settings_file = run_dir / "gemini_settings.yml"
+-        settings_content = (
+-            f"- name: {config.builder_model}\n"
+-            f"  edit_format: diff-fenced\n"
+-            f"  weak_model_name: {config.builder_model}\n"
+-            f"  use_repo_map: true\n"
++        scope_prefix = ""
++        if allowed_files:
++            scope_prefix = (
++                f"Target worktree: {worktree}\n"
++                f"Allowed files: {', '.join(allowed_files)}\n"
++                f"You are strictly confined to the directory {worktree}. Do not read, write, touch, or execute anything outside this root.\n"
++                f"You must strictly modify only the allowed files specified within this worktree. If an allowed file does not yet exist, create it inside the worktree.\n\n"
++            )
++        full_instruction = (
++            f"{scope_prefix}{instruction}\n\n"
++            f"CRITICAL CONSTRAINT:\n"
++            f"- Operate STRICTLY inside current working directory: {worktree}.\n"
++            f"- DO NOT read, inspect, create, or modify any files in parent repositories or source repositories.\n"
++            f"- Any modification outside {worktree} is an immediate fatal violation."
+         )
+-        write_text(settings_file, settings_content)
+ 
+-        env = os.environ.copy()
+-        gemini_token = os.environ.get("OPENAI_API_KEY") or os.environ.get("GEMINI_API_KEY") or ("sk-" + "cbc3af9098ec49759c5b0643acc1573b")
+-        env["OPENAI_API_KEY"] = gemini_token
+-        argv = [
+-            self.aider_bin,
++        cmd = [
++            self.agy_bin,
++            "--sandbox",
+             "--model",
+             config.builder_model,
+-            "--model-metadata-file",
+-            str(metadata_file),
+-            "--model-settings-file",
+-            str(settings_file),
+-            "--edit-format",
+-            "diff-fenced",
+-            "--yes-always",
+-            "--no-stream",
+-            "--no-auto-commits",
+-            "--no-gitignore",
+-            "--no-add-gitignore-files",
+-            "--no-check-update",
+-            "--no-analytics",
+-            "--no-show-model-warnings",
+-            "--no-restore-chat-history",
+-            "--openai-api-base",
+-            config.bridge_url,
+-            "--input-history-file",
+-            str(run_dir / "aider.input.history"),
+-            "--chat-history-file",
+-            str(run_dir / "aider.chat.history.md"),
+-            "--llm-history-file",
+-            str(run_dir / "aider.llm.history"),
+-            "--message-file",
+-            str(message_path),
+-            "--",
+-            *allowed_files,
++            "--output-format",
++            "json",
++            "--disable-slash-commands",
++            "--add-dir",
++            str(worktree),
++            "--dangerously-skip-permissions",
++            "--print",
++            full_instruction,
+         ]
+-        result = command(argv, cwd=worktree, env=env, timeout=config.builder_timeout)
++        result = command(cmd, cwd=worktree, timeout=config.builder_timeout)
+         write_text(run_dir / f"{label}.log", (result.stdout or "") + ("\n" + result.stderr if result.stderr else ""))
+-        # Aider's repo-map implementation creates this cache in the project
+-        # root even when all history files are redirected. It is generated
+-        # metadata, not a candidate edit, so remove this exact known artifact
+-        # before the factory's strict scope gate runs. Never sweep arbitrary
+-        # untracked files here.
+-        clean_aider_generated_artifacts(worktree)
+         if result.returncode != 0:
+-            raise FactoryError(f"Aider/Gemini builder failed in {label}; see {label}.log", "builder")
++            raise FactoryError(f"agy builder failed in {label}; see {label}.log", "builder")
++
++        out_str = (result.stdout or "").strip()
++        if not out_str:
++            raise FactoryError(f"agy builder returned empty output in {label}; see {label}.log", "builder")
++        try:
++            payload = json.loads(out_str)
++            if not isinstance(payload, dict):
++                raise FactoryError(f"agy builder returned non-dict JSON output in {label}; see {label}.log", "builder")
++            if payload.get("status") != "SUCCESS":
++                raise FactoryError(
++                    f"agy builder returned non-success payload status {payload.get('status')!r} in {label}; see {label}.log",
++                    "builder",
++                )
++        except json.JSONDecodeError as exc:
++            raise FactoryError(f"agy builder returned malformed JSON output in {label}; see {label}.log", "builder") from exc
++
++
++class AiderBuilder(AgyBuilder):
++    """Backward compatibility alias for AgyBuilder."""
++    def __init__(self, builder_bin: str | None = None, aider_bin: str | None = None) -> None:
++        bin_to_use = builder_bin or aider_bin
++        super().__init__(agy_bin=bin_to_use)
++        self.aider_bin = self.agy_bin
++
+ 
+ 
+ class FactoryEngine:
+@@ -1058,7 +1137,7 @@ class FactoryEngine:
+     ) -> None:
+         self.state_root = state_root.expanduser().resolve()
+         self.role_client = role_client or CodexRoleClient()
+-        self.builder = builder or AiderBuilder()
++        self.builder = builder or AgyBuilder()
+ 
+     def _run_dir(self, identifier: str) -> Path:
+         if not re.fullmatch(r"[A-Za-z0-9_.-]+", identifier):
+@@ -1098,10 +1177,12 @@ class FactoryEngine:
+         expected_head = state.get("source_head_before")
+         guard_paths = state.get("source_guard_paths")
+         expected_status = state.get("source_allowed_status_before")
++        expected_full_status = state.get("source_status_before")
+         if expected_head is None or not isinstance(guard_paths, list) or expected_status is None:
+             raise FactoryError("run is missing its source checkout guard baseline", "state")
+         actual_head = git(repo, "rev-parse", "HEAD").stdout.strip()
+         actual_status = self._source_status(repo, guard_paths)
++        actual_full_status = self._source_status(repo)
+         atomic_json(
+             run_dir / f"source_status_{label}.json",
+             {
+@@ -1111,6 +1192,8 @@ class FactoryEngine:
+                 "actual_head": actual_head,
+                 "expected_allowed_status": expected_status,
+                 "actual_allowed_status": actual_status,
++                "expected_full_status": expected_full_status,
++                "actual_full_status": actual_full_status,
+             },
+         )
+         if actual_head != expected_head or actual_status != expected_status:
+@@ -1118,6 +1201,38 @@ class FactoryEngine:
+                 "planned base or allowed source paths changed during isolated factory run; refusing to continue",
+                 "isolation",
+             )
++        # Verify source checkout did not receive unexpected out-of-scope mutations after builder phases
++        # Specifically: guard paths must match expected_status, HEAD must match expected_head.
++        # If expected_full_status was recorded at worktree creation, check that any difference
++        # between actual_full_status and expected_full_status is NOT due to files modified inside
++        # the main checkout during builder execution without permission.
++        if expected_full_status is not None and label.startswith("after_builder") and actual_full_status != expected_full_status:
++            # Parse changed paths from git status porcelain
++            def parse_status_paths(status_text: str) -> set[str]:
++                paths = set()
++                for line in status_text.splitlines():
++                    line = line.strip()
++                    if len(line) >= 3:
++                        # Porcelain v1: XY filename or XY orig -> new
++                        path_part = line[2:].strip()
++                        if " -> " in path_part:
++                            path_part = path_part.split(" -> ")[-1].strip()
++                        paths.add(normalize_path(path_part))
++                return paths
++
++            before_paths = parse_status_paths(expected_full_status)
++            after_paths = parse_status_paths(actual_full_status)
++            new_mutations = after_paths - before_paths
++            # Exclude standard benign artifacts (.pyc, worktree dirs, etc.)
++            suspicious = [
++                p for p in new_mutations
++                if not (p.endswith(".pyc") or p.startswith("__pycache__/") or "/__pycache__/" in p)
++            ]
++            if suspicious:
++                raise FactoryError(
++                    f"unrelated source checkout paths mutated during isolated factory run: {suspicious}; refusing to continue",
++                    "isolation",
++                )
+ 
+     def _candidate_files(self, repo: Path) -> list[str]:
+         tracked = git(repo, "ls-files").stdout.splitlines()
+@@ -1382,6 +1497,20 @@ class FactoryEngine:
+         # Revalidate after every builder/test boundary. A builder can replace a
+         # previously safe file with a symlink before staging.
+         ensure_paths_confined(worktree, allowed)
++        # Collect changed files BEFORE cache cleanup so any out-of-scope files are detected
++        changed_before_cleanup = self._changed_files(worktree)
++        outside_before = sorted(set(changed_before_cleanup) - set(allowed))
++        if outside_before:
++            # Check if any outside files are legitimate builder cache artifacts
++            known_cache_patterns = {".aider.tags.cache.v4", ".gemini", ".agy"}
++            rogue_files = [
++                p for p in outside_before
++                if not any(p == cp or p.startswith(cp + "/") for cp in known_cache_patterns)
++            ]
++            if rogue_files:
++                raise FactoryError(f"scope violation after {label}: {rogue_files}", "scope")
++
++        clean_builder_generated_artifacts(worktree)
+         changed = self._changed_files(worktree)
+         outside = sorted(set(changed) - set(allowed))
+         evidence = {"label": label, "changed_files": changed, "allowed_files": allowed, "outside_scope": outside}
+@@ -1440,7 +1569,7 @@ class FactoryEngine:
+         return (
+             "Goal:\nImplement the approved Sol plan.\n\n"
+             f"Context:\nOriginal request: {config.request}\n"
+-            "Aider is the Lean Builder. Sol already owns architecture and planning; apply the approved plan "
++            "Agy is the Lean Builder. Sol already owns architecture and planning; apply the approved plan "
+             "without inventing a second design.\n\n"
+             "Scope:\nAllowed files (hard boundary):\n"
+             + "\n".join(f"- {p}" for p in plan["allowed_files"])
+@@ -1485,7 +1614,7 @@ class FactoryEngine:
+             "- Do not request files outside allowed_files.\n- Do not reveal hidden reasoning.\n\n"
+             "Output:\nReturn only strict JSON with exactly: root_cause (string), repair_steps (string array), "
+             "files (array subset of allowed_files), tests_to_rerun (string array).\n\n"
+-            "Done when:\nThe repair instructions are concrete enough for Aider/Gemini to apply and retest.\n\n"
++            "Done when:\nThe repair instructions are concrete enough for Agy/Gemini to apply and retest.\n\n"
+             "Input:\n" + json.dumps(payload, indent=2)
+         )
+         diagnosis = self._role_call(
+@@ -1876,13 +2005,15 @@ class FactoryEngine:
+             ledger.record_event(phase="preflight_execution", action="capability_preflight", result="success")
+             self._assert_source_unchanged(Path(config.repo), state, run_dir, "before_worktree")
+             worktree = self._create_worktree(run_dir, state, config)
++            # Record clean baseline of source checkout at worktree creation time
++            state["source_status_before"] = self._source_status(Path(config.repo))
+             ledger.record_event(
+                 phase="worktree",
+                 action="create_worktree",
+                 result="success",
+                 details={"branch": state.get("branch")},
+             )
+-            clean_aider_generated_artifacts(worktree)
++            clean_builder_generated_artifacts(worktree)
+             ensure_paths_confined(worktree, allowed)
+             self._scope_check(worktree, allowed, "before_builder", run_dir)
+             cp_initial = self._create_checkpoint(worktree, run_dir, "initial")
+@@ -2437,6 +2568,7 @@ def add_common(parser: argparse.ArgumentParser) -> None:
+     parser.add_argument("--luna-model", default=DEFAULT_LUNA_MODEL)
+     parser.add_argument("--luna-reasoning", default=DEFAULT_LUNA_REASONING)
+     parser.add_argument("--builder-model", default=DEFAULT_BUILDER_MODEL)
++    parser.add_argument("--agy-model", dest="builder_model", default=argparse.SUPPRESS, help="Alias for --builder-model")
+     parser.add_argument(
+         "--builder-architect-model",
+         default=None,
+diff --git a/tests/test_factory_v2.py b/tests/test_factory_v2.py
+index ac90659..08cf754 100644
+--- a/tests/test_factory_v2.py
++++ b/tests/test_factory_v2.py
+@@ -5,6 +5,7 @@ from __future__ import annotations
+ 
+ import json
+ import re
++import shutil
+ import subprocess
+ import sys
+ import tempfile
+@@ -16,6 +17,9 @@ sys.path.insert(0, "/home/aesc/.local/lib")
+ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+ 
+ from hermes_factory_v2 import (
++    DEFAULT_AGY_MODEL,
++    DEFAULT_BUILDER_MODEL,
++    AgyBuilder,
+     AiderBuilder,
+     Config,
+     FactoryEngine,
+@@ -25,6 +29,7 @@ from hermes_factory_v2 import (
+     atomic_json,
+     build_file_tree_skeleton,
+     classify_objective,
++    clean_builder_generated_artifacts,
+     load_prior_run_context,
+     make_debug_evidence_packet,
+     make_review_evidence_packet,
+@@ -382,17 +387,21 @@ class FactoryIntegrationTests(unittest.TestCase):
+         self.assertEqual(argv[argv.index("--toolsets") + 1], "bot_room")
+         self.assertEqual(invoked.call_args.kwargs["cwd"], run_dir)
+ 
+-    def test_aider_runs_lean_gemini_builder(self):
+-        builder = AiderBuilder("/fake/aider")
++    def test_agy_runs_lean_gemini_builder(self):
++        builder = AgyBuilder("/fake/agy")
+         run_dir = self.root / "builder"
+         run_dir.mkdir()
+         captured = []
+ 
+         def fake_command(argv, **kwargs):
+             captured.append(argv)
+-            return subprocess.CompletedProcess(argv, 0, "ok", "")
++            if "--print" in argv and "Reply with exactly BUILDER_PREFLIGHT_OK" in argv:
++                payload = json.dumps({"status": "SUCCESS", "response": "BUILDER_PREFLIGHT_OK"})
++                return subprocess.CompletedProcess(argv, 0, payload, "")
++            return subprocess.CompletedProcess(argv, 0, json.dumps({"status": "SUCCESS"}), "")
+ 
+         with patch("hermes_factory_v2.command", side_effect=fake_command):
++            builder.preflight(self.config(), run_dir)
+             builder.run(
+                 worktree=self.repo,
+                 instruction="make change",
+@@ -401,12 +410,30 @@ class FactoryIntegrationTests(unittest.TestCase):
+                 run_dir=run_dir,
+                 label="builder_test",
+             )
+-        argv = captured[0]
+-        self.assertNotIn("--architect", argv)
+-        self.assertNotIn("--editor-model", argv)
+-        self.assertNotIn("--editor-edit-format", argv)
+-        self.assertIn("--no-auto-commits", argv)
+-        self.assertEqual(argv[argv.index("--model") + 1], "openai/gemini-3.8-flash-high")
++        self.assertEqual(captured[0][:2], ["/fake/agy", "--version"])
++        self.assertEqual(
++            captured[1][:7],
++            [
++                "/fake/agy",
++                "--sandbox",
++                "--model",
++                "gemini-3.8-flash-high",
++                "--output-format",
++                "json",
++                "--disable-slash-commands",
++            ],
++        )
++        argv = captured[2]
++        self.assertEqual(argv[0], "/fake/agy")
++        self.assertEqual(argv[argv.index("--model") + 1], "gemini-3.8-flash-high")
++        self.assertIn("--add-dir", argv)
++        self.assertEqual(argv[argv.index("--add-dir") + 1], str(self.repo))
++        self.assertIn("--sandbox", argv)
++        self.assertIn("--print", argv)
++        self.assertIn("--dangerously-skip-permissions", argv)
++        instruction_arg = argv[argv.index("--print") + 1]
++        self.assertIn("Allowed files: calc.py", instruction_arg)
++        self.assertIn("make change", instruction_arg)
+ 
+     def test_planning_reads_committed_head_and_preserves_dirty_checkout(self):
+         (self.repo / "calc.py").write_text("def value():\n    return 99\n", encoding="utf-8")
+@@ -682,5 +709,139 @@ class FactoryIntegrationTests(unittest.TestCase):
+         self.assertEqual(len(ctx["selected_issues"]), 1)
+ 
+ 
++class AgyBuilderEdgeCaseTests(unittest.TestCase):
++    def test_clean_builder_generated_artifacts_removes_known_files_and_preserves_user_files(self):
++        with tempfile.TemporaryDirectory() as td:
++            root = Path(td)
++            # Create a mock base git repo and worktree
++            main_repo = root / "main_repo"
++            main_repo.mkdir()
++            subprocess.run(["git", "init"], cwd=main_repo, check=True, capture_output=True)
++            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=main_repo, check=True)
++            subprocess.run(["git", "config", "user.name", "Test"], cwd=main_repo, check=True)
++            (main_repo / "README.md").write_text("hello", encoding="utf-8")
++            subprocess.run(["git", "add", "README.md"], cwd=main_repo, check=True)
++            subprocess.run(["git", "commit", "-m", "init"], cwd=main_repo, check=True)
++
++            worktree = root / "wt"
++            subprocess.run(["git", "worktree", "add", str(worktree), "HEAD"], cwd=main_repo, check=True)
++
++            # Case 1: Known cache files in a worktree
++            cache_dir = worktree / ".aider.tags.cache.v4"
++            cache_dir.mkdir()
++            (cache_dir / "tags.db").write_text("dummy", encoding="utf-8")
++
++            clean_builder_generated_artifacts(worktree)
++            self.assertFalse((cache_dir / "tags.db").exists())
++            self.assertFalse(cache_dir.exists())
++
++            # Case 2: Untracked non-cache user file in cache dir raises FactoryError (fail closed)
++            cache_dir.mkdir()
++            (cache_dir / "user_notes.txt").write_text("do not delete", encoding="utf-8")
++            with self.assertRaises(FactoryError):
++                clean_builder_generated_artifacts(worktree)
++            self.assertTrue((cache_dir / "user_notes.txt").exists())
++            (cache_dir / "user_notes.txt").unlink()
++            cache_dir.rmdir()
++
++            # Case 3: Deceptive user file (e.g. user_data.db) in worktree root must NOT be deleted
++            user_db = worktree / "user_data.db"
++            user_db.write_text("sqlite format", encoding="utf-8")
++            clean_builder_generated_artifacts(worktree)
++            self.assertTrue(user_db.exists())
++
++            # Case 4: Known builder artifacts .agy and .gemini are cleaned
++            dot_agy = worktree / ".agy"
++            dot_gemini = worktree / ".gemini"
++            dot_agy.mkdir()
++            dot_gemini.mkdir()
++            (dot_agy / "state.json").write_text("{}", encoding="utf-8")
++            (dot_gemini / "tmp.json").write_text("{}", encoding="utf-8")
++            clean_builder_generated_artifacts(worktree)
++            self.assertFalse(dot_agy.exists())
++            self.assertFalse(dot_gemini.exists())
++
++            # Case 5: Main repository checkout (not disposable worktree) is protected
++            dot_agy_main = main_repo / ".agy"
++            dot_agy_main.mkdir()
++            clean_builder_generated_artifacts(main_repo, is_disposable_worktree=False)
++            self.assertTrue(dot_agy_main.exists())
++
++            # Case 6: Tracked cache file must not be deleted
++            tracked_cache_dir = worktree / ".aider.tags.cache.v4"
++            tracked_cache_dir.mkdir()
++            tracked_tag_file = tracked_cache_dir / "tags.db"
++            tracked_tag_file.write_text("tracked tags", encoding="utf-8")
++            subprocess.run(["git", "add", ".aider.tags.cache.v4/tags.db"], cwd=worktree, check=True)
++            clean_builder_generated_artifacts(worktree)
++            self.assertTrue(tracked_tag_file.exists())
++            subprocess.run(["git", "rm", "-f", ".aider.tags.cache.v4/tags.db"], cwd=worktree, check=True)
++
++            # Case 7: Agy preflight strictly requires status=SUCCESS and exact response in JSON
++            test_builder = AgyBuilder(agy_bin="/fake/agy")
++            test_config = Config(repo=str(worktree), request="req", requested_files=["README.md"], test_command="pytest")
++            with tempfile.TemporaryDirectory() as p_td:
++                # Malformed JSON
++                p_run_dir = Path(p_td)
++                with unittest.mock.patch("subprocess.run") as mock_sub:
++                    mock_sub.return_value = subprocess.CompletedProcess([], 0, "BUILDER_PREFLIGHT_OK", "")
++                    with self.assertRaises(FactoryError):
++                        test_builder.preflight(test_config, p_run_dir)
++                    # Valid JSON but status not SUCCESS
++                    mock_sub.return_value = subprocess.CompletedProcess([], 0, json.dumps({"status": "ERROR", "response": "BUILDER_PREFLIGHT_OK"}), "")
++                    with self.assertRaises(FactoryError):
++                        test_builder.preflight(test_config, p_run_dir)
++                    # Valid JSON but response mismatch
++                    mock_sub.return_value = subprocess.CompletedProcess([], 0, json.dumps({"status": "SUCCESS", "response": "OTHER"}), "")
++                    with self.assertRaises(FactoryError):
++                        test_builder.preflight(test_config, p_run_dir)
++                    # Valid JSON SUCCESS passes
++                    mock_sub.return_value = subprocess.CompletedProcess([], 0, json.dumps({"status": "SUCCESS", "response": "BUILDER_PREFLIGHT_OK"}), "")
++                    test_builder.preflight(test_config, p_run_dir)
++
++    def test_agy_builder_raises_on_invalid_and_non_dict_json(self):
++        builder = AgyBuilder(agy_bin="/fake/agy")
++        config = Config(repo=".", request="req", requested_files=["calc.py"], test_command="pytest")
++        with tempfile.TemporaryDirectory() as td:
++            run_dir = Path(td)
++
++            # Case 1: non-json
++            with patch("hermes_factory_v2.command", return_value=subprocess.CompletedProcess([], 0, "not json", "")):
++                with self.assertRaises(FactoryError):
++                    builder.run(
++                        worktree=Path("."),
++                        instruction="task",
++                        allowed_files=["calc.py"],
++                        config=config,
++                        run_dir=run_dir,
++                        label="builder_test",
++                    )
++
++            # Case 2: valid JSON but non-dict (e.g. list, string, null)
++            for non_dict_val in ["[]", "null", "\"success\""]:
++                with patch("hermes_factory_v2.command", return_value=subprocess.CompletedProcess([], 0, non_dict_val, "")):
++                    with self.assertRaises(FactoryError):
++                        builder.run(
++                            worktree=Path("."),
++                            instruction="task",
++                            allowed_files=["calc.py"],
++                            config=config,
++                            run_dir=run_dir,
++                            label="builder_test",
++                        )
++
++            # Case 3: status is not SUCCESS
++            with patch("hermes_factory_v2.command", return_value=subprocess.CompletedProcess([], 0, "{\"status\": \"ERROR\", \"error\": \"failed\"}", "")):
++                with self.assertRaises(FactoryError):
++                    builder.run(
++                        worktree=Path("."),
++                        instruction="task",
++                        allowed_files=["calc.py"],
++                        config=config,
++                        run_dir=run_dir,
++                        label="builder_test",
++                    )
++
++
+ if __name__ == "__main__":
+     unittest.main(verbosity=2)
+
+```
+
+---
+INSTRUCTIONS FOR OUTPUT:
+Evaluate every single step from Step 1 to Step 14 against the plan text.
+Evaluate each of the 15 items in the Final Release Checklist.
+Evaluate prior findings (isolation breach, cache cleanup destruction, SHA256SUMS, documentation).
+Return ONLY a valid JSON object matching the requested schema.

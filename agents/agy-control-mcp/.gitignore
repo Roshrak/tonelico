@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-test/
+result
+result-*
+var/
+.runtime
+.npm-cache/
+*.log

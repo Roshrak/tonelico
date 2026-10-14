@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "sanitized_step2_isolation_probe_matrix",
+  "sanitized": true,
+  "status": "EXECUTED_BOUNDARY_WITH_SEPARATE_CANCELLATION_EVIDENCE",
+  "evidence_fixtures": [
+    "sandbox_probe.json",
+    "cancellation_probe.json",
+    "authenticated_tool_probe.json",
+    "scope_acceptance_probe.json"
+  ],
+  "candidate_root": "C:/fixture/candidate",
+  "protected_roots": [
+    "C:/fixture/source-checkout",
+    "C:/fixture/trusted-run-state",
+    "C:/fixture/trusted-review-artifacts",
+    "C:/fixture/git-metadata",
+    "C:/fixture/unrelated-host"
+  ],
+  "cases": [
+    {
+      "id": "allowed_candidate_edit",
+      "operation": "write C:/fixture/candidate/allowed.txt",
+      "expected": "ALLOW",
+      "observed": "WROTE"
+    },
+    {
+      "id": "out_of_scope_candidate_edit",
+      "operation": "write C:/fixture/candidate/out-of-scope.txt",
+      "expected": "BLOCK_OR_REJECT_BY_SCOPE",
+      "observed": "WROTE"
+    },
+    {
+      "id": "source_checkout_write",
+      "operation": "write C:/fixture/source-checkout/source.txt",
+      "expected": "BLOCK",
+      "observed": "BLOCKED"
+    },
+    {
+      "id": "trusted_state_write",
+      "operation": "write C:/fixture/trusted-run-state/run_state.json",
+      "expected": "BLOCK",
+      "observed": "BLOCKED"
+    },
+    {
+      "id": "trusted_review_artifact_write",
+      "operation": "write C:/fixture/trusted-review-artifacts/approval.json",
+      "expected": "BLOCK",
+      "observed": "BLOCKED"
+    },
+    {
+      "id": "git_metadata_mutation",
+      "operation": "modify C:/fixture/git-metadata/index-or-ref",
+      "expected": "BLOCK",
+      "observed": "BLOCKED"
+    },
+    {
+      "id": "delayed_descendant_write_after_cancel",
+      "operation": "child writes C:/fixture/unrelated-host/late.txt after cancellation",
+      "expected": "BLOCK_AND_NO_WRITER_REMAINS",
+      "observed": "BLOCKED_AND_NO_WRITER_AFTER_OUTER_STOP"
+    }
+  ]
+}

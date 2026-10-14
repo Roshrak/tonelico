@@ -1,0 +1,11 @@
+# Local machine state: never part of the repository.
+secrets.env
+*.env
+!secrets.example.env
+node_modules/
+dist/
+dist-test/
+__pycache__/
+*.pyc
+*.log
+*.orig

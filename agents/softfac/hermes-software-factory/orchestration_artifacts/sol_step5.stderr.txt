@@ -1,0 +1,3115 @@
+2026-09-12T00:34:00.762076Z  WARN codex_core_plugins::manager: remote installed plugin bundle sync failed error=chatgpt authentication required for remote plugin catalog; api key auth is not supported
+2026-09-12T00:34:00.802663Z  WARN codex_skills::interface: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/
+2026-09-12T00:34:00.802694Z  WARN codex_skills::interface: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/
+2026-09-12T00:34:00.812757Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell
+2026-09-12T00:34:01.060768Z  WARN codex_core_plugins::manager: failed to warm featured plugin ids cache error=remote featured plugin request to https://chatgpt.com/backend-api/plugins/featured?platform=codex failed with status 401 Unauthorized: {"detail":"Unauthorized"}
+2026-09-12T00:34:01.697626Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=file:///C:/Users/HH18/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json
+2026-09-12T00:34:01.702551Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=file:///C:/Users/HH18/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json
+OpenAI Codex v0.153.1
+--------
+workdir: C:\Users\HH18
+model: gpt-5.6-sol
+provider: codex_local_access
+approval: never
+sandbox: danger-full-access
+reasoning effort: high
+reasoning summaries: none
+session id: 01a09309-13c4-75c0-ac73-276461b835c3
+--------
+user
+You are Sol Reviewer (gpt-5.6-sol), the independent gatekeeper for the Human-Out-of-the-Loop Software Factory v2.
+Review Astra Migration Step 5 only: Implement executable resolution and capability preflight.
+
+AUTHORITATIVE ASTRA PLAN (C:/Users/HH18/astra_plan.md)
+# SoftFac v2: Aider → Antigravity CLI migration plan
+
+The migration should replace the Builder execution boundary—not the factory’s planning, testing, review, memory, or commit authority.
+
+A simple class rename and command substitution is insufficient: `agy --dangerously-skip-permissions` can execute commands as well as edit files. The cutover must therefore prove process containment, completion detection, scope enforcement, and crash safety before making `AgyBuilder` the production default.
+
+This is an implementation plan only. No source files, installed skills, credentials, or services were changed.
+
+## 1. Verified baseline and architectural decisions
+
+### Current evidence
+
+| Item | Verified state |
+|---|---|
+| Main HOH checkout | `C:\Users\HH18\Downloads\hermes-software-factory-v2-hoh\hermes-software-factory-v2` |
+| Main commit | `066e885966420b14d470dc159f0ff39acf2099a9` |
+| Main regression suite | **29 tests passed**, rerun during this inspection |
+| Audit checkout | `C:\Users\HH18\softfac-audit-worktree`; contains staged, unstaged, and untracked work |
+| Audit regression suite | **58 tests run: 57 passed, 1 opt-in test skipped** |
+| Installed CLI | `C:\Users\HH18\AppData\Local\agy\bin\agy.exe`, version **1.2.0** |
+| Model catalog | Includes **`gemini-3.8-flash-high`** |
+| Actual ledger files | `ledger/issue_ledger.json` and `ledger/trajectory.json`, currently JSON snapshots—not JSONL |
+| Existing obsolete arguments | `--bridge-url` and hidden `--builder-architect-model`; inspected main does **not** currently expose `--aider-bin` |
+
+The [main implementation](C:/Users/HH18/Downloads/hermes-software-factory-v2-hoh/hermes-software-factory-v2/lib/hermes_factory_v2.py:918) and [audit implementation](C:/Users/HH18/softfac-audit-worktree/lib/hermes_factory_v2.py:1191) are not interchangeable baselines. The audit checkout has additional slice, budget, and locking behavior; passing tests do not establish that every installed-skill invariant is already implemented correctly.
+
+### Decisions governing the plan
+
+1. **Default target:** the clean main HOH checkout above, implemented in a new migration worktree. Reuse audit changes only through individually reviewed patches.
+2. **Builder:** direct `agy` subprocess; no Aider compatibility backend and no Builder HTTP bridge.
+3. **Model:** exact slug `gemini-3.8-flash-high`; no `openai/` prefix and no silent model fallback.
+4. **Responsibilities:** Astra plans; AGY implements; Luna diagnoses; Sol independently reviews; the runner owns tests, evidence, staging, rollback, and commits.
+5. **Determinism:** reproducible inputs, configuration, transitions, evidence, and gate decisions—not guaranteed identical model-generated patches.
+6. **Historical compatibility:** preserve old evidence and `--prior-run`; never silently resume a partially executed old-Builder candidate under AGY.
+7. **JSONL:** deliver the requested journals as a separately audited persistence change, retaining existing JSON snapshot compatibility.
+8. **Release condition:** unavailable or unproven safety capability means `blocked`, not a reduced-safety fallback.
+
+Google documents structured headless output, including a terminal result and stream initialization metadata. Use those machine-readable surfaces instead of interpreting conversational success text. Their behavior still needs fixtures from the installed 1.2.0 executable. [Official headless documentation](https://antigravity.google/docs/cli/headless/)
+
+## 2. Invariants and ownership
+
+Treat the following as the migration’s acceptance contract.
+
+| Invariant | Enforcement owner | Required proof |
+|---|---|---|
+| Approved plan and bounded steps | `validate_plan` / runner | Invalid plans cause zero Builder dispatches |
+| Candidate isolation | Runner and execution boundary | Builder cannot modify source checkout or trusted run state |
+| `allowed_files` | Path validation and scope gates | Out-of-scope changes cannot reach tests/review/commit |
+| Per-slice scope | Dispatcher | Slice N cannot edit another slice’s files |
+| Fresh Builder context | `AgyBuilder` | Separate invocation and conversation per call |
+| No Builder Git authority | Execution boundary and Git guards | Builder cannot stage, commit, reset, merge, or alter refs |
+| Durable budgets | Locked run-state persistence | Crash/resume never replenishes consumed budget |
+| HOH memory | `MemoryLedger` | Stable issue identity, lifecycle, sequence, and provenance |
+| Independent Sol review | Existing review path | Fresh review receives exact candidate evidence, not Builder conversation |
+| Deterministic pre-review checks | `_pre_review_gate` | Invalid candidates never invoke Sol |
+| Hash-checked commit | Runner | Approved diff, staged tree, and committed tree agree |
+| Safe rollback | `_safe_rollback` | Exact authorized checkpoint restored; source untouched |
+| Fail-closed resume | State loader and execution entry points | Ambiguous/partial Builder execution cannot restart implicitly |
+
+“GOAP gates” here means the existing action preconditions and state transitions. Do not introduce a new GOAP search engine or rename the factory’s phases as part of this migration.
+
+The required action ordering remains:
+
+```text
+Preflight → Validated plan → Isolated candidate → Sequential Builder slices
+    → Scope/integrity checks → Tests
+        → Luna repair → Builder → Checks → Tests, when needed
+    → Deterministic pre-review gate → Fresh Sol review
+        → Rework → Checks → Tests → Fresh review, when rejected
+    → Revalidate approved candidate → Task-branch commit
+```
+
+## 3. Execution and approval protocol
+
+The steps below are sequential release increments, not one oversized factory plan. Where the factory limits a plan to eight implementation steps, submit each increment separately; retain stricter request-specific limits.
+
+For **every step**, Hermes must give Sol High:
+
+- Base commit and current file hashes.
+- Exact allowed paths.
+- Complete diff, including all pages and new files.
+- Exact verification commands, exit codes, and test counts.
+- Invariant-to-test mapping.
+- Known limitations, skipped checks, and release blockers.
+- Candidate diff SHA-256 and explicit `APPROVE` or `REJECT`.
+
+Any edit after approval invalidates that approval.
+
+For eligible implementation increments, follow `agy-control-worker`: automatic isolated delegation, complete report/diff inspection, and **no `agy_apply` without explicit user approval**. Do not let the partially migrated factory approve or deploy itself.
+
+---
+
+## Step 1 — Freeze the baseline and inventory the removal surface
+
+**Goal and scope**
+
+Establish exactly what is being migrated, preserving all existing work and evidence.
+
+**Files**
+
+Create:
+
+- `docs/agy-migration-plan.md`
+- `docs/agy-migration-baseline.md`
+
+Inspect all tracked runtime, tests, launchers, dependency files, service examples, and documentation.
+
+**Concrete changes**
+
+1. Create a dedicated migration branch/worktree from the approved main commit.
+2. Record:
+   - HEAD and worktree status.
+   - Python/Git versions.
+   - Tracked-file hashes.
+   - Main and audit regression results separately.
+3. Inventory:
+   ```text
+   AiderBuilder
+   clean_aider_generated_artifacts
+   DEFAULT_AIDER_MODEL
+   DEFAULT_AIDER_URL
+   DEFAULT_BUILDER_ARCHITECT_MODEL
+   DEFAULT_BRIDGE_URL
+   aider_bin
+   bridge_url
+   builder_architect_model
+   urllib
+   LiteLLM
+   model metadata/settings
+   generated histories/caches
+   ```
+4. Include `.gitignore`, `SHA256SUMS`, `bridge/agy_bridge.py`, and `systemd/agy-bridge.service.example`.
+5. Identify installed launcher/module locations before planning deployment; do not assume editing the repository updates the running installation.
+6. Record which audit-worktree protections need to be ported. Do not copy its entire dirty file.
+
+**Verification**
+
+```powershell
+git -C "<migration-worktree>" status --short
+python -B tests/test_factory_v2.py
+git -C "<migration-worktree>" grep -n -i -E "aider|litellm|bridge_url|builder_architect|model-metadata-file|model-settings-file"
+```
+
+The baseline must retain all 29 main test outcomes and record the 58-test audit suite separately.
+
+**Pitfalls and mitigation**
+
+- **Wrong checkout:** record absolute paths in every audit packet.
+- **Uncommitted audit changes lost:** prohibit resets, blanket checkout restoration, or automatic merging.
+- **Sensitive legacy defaults:** record their existence without reproducing credentials; remove Builder credential fallbacks later. Credential rotation is a separate authorized operation.
+
+---
+
+## Step 2 — Specify the AGY runtime and isolation contract
+
+**Goal and scope**
+
+Resolve safety capabilities before relying on permission-skipping execution.
+
+**Files**
+
+Create:
+
+- `docs/agy-builder-contract.md`
+- Sanitized fixtures under `tests/fixtures/agy/1.2.0/`
+
+No production backend switch yet.
+
+**Concrete specifications**
+
+Record and verify:
+
+- Executable resolution and version format.
+- Required flags.
+- Exact model selection.
+- Fresh-conversation behavior.
+- Effective working directory.
+- Configuration, rules, hooks, plugins, MCP, and credential discovery.
+- Terminal completion/error schema.
+- Timeout and descendant-process behavior.
+- Files created outside the candidate.
+
+Define two separate boundaries:
+
+1. **Execution isolation:** prevent writes to the source checkout, shared Git metadata, trusted state, approvals, and unrelated host files.
+2. **Candidate acceptance scope:** reject any candidate changes outside `allowed_files` and the current slice boundary.
+
+A prompt and `cwd=worktree` enforce neither boundary by themselves.
+
+The required `--dangerously-skip-permissions` flag approves tool operations; it must not be represented as a safety feature. [Official permissions documentation](https://antigravity.google/docs/cli/headless/#permissions-in-headless-mode)
+
+Select an audited external execution boundary where necessary. Its policy must cover native file tools and descendants, not only terminal commands. The current sandbox documentation describes Linux/macOS mechanisms; it is not evidence of equivalent Windows coverage. [Official sandbox documentation](https://antigravity.google/docs/cli/sandbox/)
+
+**Verification**
+
+Use disposable fixtures to attempt:
+
+- An allowed file edit.
+- An out-of-scope candidate edit.
+- A source-checkout write.
+- A write to `run_state.json` and review artifacts.
+- Git ref/index modification.
+- A delayed child write after cancellation.
+
+Only the authorized edit may succeed within the enforced boundary.
+
+**Pitfalls and mitigation**
+
+- **Windows isolation requires provisioning:** stop for explicit authorization to provision it. Do not silently run unrestricted.
+- **Shared `.git` access:** linked worktrees share repository metadata; making only the source directory read-only is insufficient.
+- **Prompt compliance mistaken for enforcement:** malicious fixture processes must exercise the same launch boundary as AGY.
+- **Impossible required capability:** retain a release blocker rather than weaken “100% preservation.”
+
+---
+
+## Step 3 — Characterize the invariants before replacing the Builder
+
+**Goal and scope**
+
+Turn current safety expectations into regression tests.
+
+**Files**
+
+Modify:
+
+- `tests/test_factory_v2.py`
+
+Create focused test modules if needed:
+
+- `tests/test_factory_builder_contract.py`
+- `tests/test_factory_resume_contract.py`
+
+**Concrete changes**
+
+Preserve existing tests for:
+
+- Safe/tool-less role invocation.
+- Committed-HEAD planning and dirty-checkout preservation.
+- Symlink rejection.
+- Scope violations.
+- Luna repair routing.
+- Sol rejection and fresh re-review.
+- Wrong approval hash.
+- Rollback.
+- Issue lifecycle and prior-run disclosure.
+
+Add missing characterization tests for:
+
+- Empty candidate diff.
+- Zero tests discovered.
+- Builder changes index or HEAD.
+- Builder writes partial files and then raises.
+- Builder writes outside scope and raises simultaneously.
+- Resume after ambiguous dispatch.
+- Budget reservation before dispatch.
+- Trusted ledger/review artifact tampering.
+- Out-of-scope ignored files.
+- Multiple slices with different editable-file sets.
+
+Port audit-worktree tests selectively; do not equate test presence with sufficient assertion strength.
+
+**Verification**
+
+Run the existing suite plus the new targeted suite. Record pre-existing failures separately. A newly exposed invariant gap must become an explicit prerequisite fix, not an `xfail` hidden inside migration acceptance.
+
+**Pitfalls and mitigation**
+
+- **Broad mocks skip orchestration:** retain fake roles/builders for engine tests, but introduce real subprocess fixtures later.
+- **Test-count preservation instead of behavior preservation:** map every removed Builder-specific test to its AGY replacement.
+
+---
+
+## Step 4 — Introduce AGY configuration and historical-state compatibility
+
+**Goal and scope**
+
+Make AGY a first-class, persisted Builder configuration without breaking historical inspection.
+
+**Files**
+
+Modify:
+
+- `lib/hermes_factory_v2.py`
+- Configuration/CLI/state tests.
+
+**Concrete changes**
+
+Target configuration:
+
+```python
+DEFAULT_BUILDER_MODEL = "gemini-3.8-flash-high"
+
+@dataclass
+class Config:
+    # Existing non-Builder fields remain unchanged.
+    ...
+    builder_model: str = DEFAULT_BUILDER_MODEL
+    agy_bin: str | None = None
+```
+
+Remove from active configuration and CLI:
+
+- `DEFAULT_AIDER_MODEL`
+- `DEFAULT_AIDER_URL`
+- `DEFAULT_BUILDER_ARCHITECT_MODEL`
+- Builder-only `DEFAULT_BRIDGE_URL`
+- `bridge_url`
+- `builder_architect_model`
+- `--bridge-url`
+- `--builder-architect-model`
+- `--aider-bin`, wherever another supported baseline exposes it.
+
+Add in `add_common` and `config_from_args`:
+
+```python
+parser.add_argument("--agy-bin", default=None)
+parser.add_argument("--builder-model", default=DEFAULT_BUILDER_MODEL)
+```
+
+Preserve integer/budget validation; do not replace strict validation with silent coercion.
+
+Introduce a run-configuration version separate from ledger versions:
+
+```python
+RUN_CONFIG_VERSION = 2
+
+def load_config_for_execution(state: dict[str, Any]) -> Config: ...
+def read_run_state(run_dir: Path) -> dict[str, Any]: ...
+```
+
+New runs record:
+
+```json
+{
+  "run_config_version": 2,
+  "builder_backend": "agy",
+  "builder_contract_version": 1
+}
+```
+
+Change `status()` to read historical state without constructing today’s `Config` or resolving AGY.
+
+Old runs:
+
+- Remain inspectable.
+- Remain eligible as validated prior-run evidence.
+- Cannot execute/resume under the new backend without a new run and fresh plan.
+- Unknown schemas and unknown active configuration keys fail closed.
+
+**Verification**
+
+Test CLI defaults, explicit executable paths, serialization round trips, removed-argument rejection, old-run status, old-run execution rejection, and historical prior-run loading.
+
+**Pitfalls and mitigation**
+
+- **`Config(**old_state["config"])` crashes:** separate raw inspection from executable configuration.
+- **Global schema bump breaks HOH history:** version configuration independently.
+- **Silent prefix conversion:** reject obsolete `openai/...` Builder model values instead of silently rewriting them during execution.
+
+---
+
+## Step 5 — Implement executable resolution and capability preflight
+
+**Goal and scope**
+
+Prove that the selected executable can satisfy the audited Builder contract before candidate creation.
+
+**Files**
+
+Modify:
+
+- `lib/hermes_factory_v2.py`
+- Builder preflight tests.
+
+**Concrete changes**
+
+Add:
+
+```python
+def resolve_agy_executable(explicit: str | None) -> Path: ...
+
+class AgyBuilder:
+    def __init__(self, agy_bin: str | None = None) -> None: ...
+
+    def preflight(
+        self, config: Config, run_dir: Path
+    ) -> dict[str, Any]: ...
+```
+
+Resolution order:
+
+1. Explicit `--agy-bin`.
+2. `shutil.which("agy")`.
+3. On Windows, `%LOCALAPPDATA%/agy/bin/agy.exe`.
+
+On this machine, the fallback resolves to the requested `C:/Users/HH18/AppData/Local/agy/bin/agy.exe`.
+
+Rules:
+
+- An invalid explicit path is an error; do not fall back.
+- Resolve once to an absolute executable path.
+- Reject directories and unsupported shell shims.
+- Never launch `.cmd`/`.bat` through an improvised shell string.
+- Pin the executable identity through the run.
+
+For observed bare semantic-version output, use `re.fullmatch`, for example:
+
+```python
+r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+```
+
+Do not accept arbitrary banners containing a version substring. Version 1.2.0 becomes supported only after Step 2’s contract audit.
+
+Preflight order:
+
+1. Resolve executable.
+2. Check `--version` and binary hash.
+3. Check required capabilities.
+4. Check exact model catalog entry.
+5. Run a bounded no-edit capability probe in a disposable confined directory.
+6. Verify completion and effective model/cwd evidence.
+7. Persist sanitized `preflight_builder.json`.
+
+No HTTP requests to a Builder bridge, no API-key fallback, and no automatic installation/login/update.
+
+**Verification**
+
+Missing binary, invalid explicit path, unsupported version, missing model, malformed catalog, unauthenticated runtime, failed probe, and wrong effective model must all block before candidate creation.
+
+**Pitfalls and mitigation**
+
+- **`--version` mistaken for authentication proof:** require the separate capability probe.
+- **Model self-report mistaken for routing evidence:** inspect CLI metadata, not generated prose.
+- **PATH changes between calls:** recheck the pinned binary identity before dispatch.
+
+---
+
+## Step 6 — Implement the bounded AGY subprocess runtime
+
+**Goal and scope**
+
+Launch AGY safely, preserve diagnostic evidence, and stop all writers before downstream gates.
+
+**Files**
+
+Modify:
+
+- `lib/hermes_factory_v2.py`
+
+Create:
+
+- `tests/test_factory_builder_process.py`
+- `tests/fixtures/builder_process_fixture.py`
+
+**Concrete changes**
+
+Use a dedicated Builder process helper rather than changing every role/test invocation:
+
+```python
+def run_builder_process(
+    argv: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout: int,
+    stdout_path: Path,
+    stderr_path: Path,
+) -> subprocess.CompletedProcess[str]: ...
+```
+
+The approved invocation retains the requested core command:
+
+```text
+agy --model gemini-3.8-flash-high
+    --dangerously-skip-permissions
+    --output-format stream-json
+    --disable-slash-commands
+    --print-timeout <bounded-duration>
+    --print <instruction>
+```
+
+Additional flags must be verified by Step 2; place all options before the final prompt argument.
+
+Runtime requirements:
+
+- Argument list; `shell=False`.
+- Exact resolved candidate `cwd`.
+- No `--continue`, `--conversation`, inherited project override, or extra workspace directories.
+- Non-interactive stdin.
+- Concurrently drain stdout/stderr with bounded storage.
+- Explicit UTF-8 handling; retain undecodable raw evidence and fail closed.
+- Separate CLI timeout from the outer watchdog, leaving a bounded shutdown margin.
+- Windows process ownership through a Job Object or equivalent audited boundary; prevent escape before process execution.
+- On other supported platforms, use an audited process-group/container lifecycle.
+- Await writer termination before tests, snapshots, rollback, or review.
+- Preserve partial logs on timeout, cancellation, spawn error, or output overflow.
+- Do not print full prompt-bearing argv in errors.
+
+Reject NUL-containing or oversized prompts before spawning. On Windows, measure the serialized command line in UTF-16 code units with conservative headroom. Do not silently truncate or change input protocols.
+
+**Verification**
+
+Real fixture subprocess tests must cover Unicode paths, spaces, quotes, shell metacharacters, huge stderr, malformed UTF-8, timeout, cancellation, delayed child writes, and output exhaustion.
+
+**Pitfalls and mitigation**
+
+- **Killing only the parent leaves a writer:** process-tree termination is a release gate.
+- **Output deadlock:** drain both pipes concurrently.
+- **Isolation breaks authentication:** use the approved AGY identity/configuration route; do not blindly copy Aider’s child-home manipulation.
+- **Orphaned external daemon:** track or prohibit external writer services; process groups alone are not proof.
+
+---
+
+## Step 7 — Implement `AgyBuilder.run` and fail-closed result validation
+
+**Goal and scope**
+
+Replace Aider’s editing invocation while preserving the injected Builder interface.
+
+**Files**
+
+Modify:
+
+- `lib/hermes_factory_v2.py`
+- Builder contract tests and AGY fixtures.
+
+**Concrete changes**
+
+Preserve the existing engine-facing signature:
+
+```python
+def run(
+    self,
+    *,
+    worktree: Path,
+    instruction: str,
+    allowed_files: list[str],
+    config: Config,
+    run_dir: Path,
+    label: str,
+) -> None: ...
+```
+
+Add:
+
+```python
+def parse_agy_event_stream(raw: bytes) -> dict[str, Any]: ...
+```
+
+Before dispatch:
+
+1. Validate label, canonical worktree, and file boundary.
+2. Revalidate executable/configuration identity.
+3. Create unique attempt artifacts outside the candidate.
+4. Bind instruction hash, allowed paths, model, executable, and candidate baseline.
+
+Recommended label validation:
+
+```python
+r"[A-Za-z0-9][A-Za-z0-9_.-]{0,95}"
+```
+
+The parser must require the audited stream structure:
+
+- Exactly one initialization event.
+- Matching canonical cwd and configured model.
+- One fresh conversation for this invocation.
+- Exactly one terminal result.
+- Process exit zero and terminal `SUCCESS`.
+- No contradictory error or unsupported terminal state.
+- No missing, truncated, duplicated, or malformed terminal evidence.
+
+Treat the stream as an untrusted protocol: bound record sizes, validate types, and reject duplicate keys in security-relevant objects.
+
+Add structured errors:
+
+```python
+class BuilderFailure(FactoryError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str,
+        non_resumable: bool,
+        evidence_path: str | None = None,
+    ) -> None: ...
+```
+
+Stable codes should include:
+
+```text
+agy_spawn_failed
+agy_timeout
+agy_canceled
+agy_protocol_error
+agy_runtime_error
+agy_model_mismatch
+agy_identity_changed
+agy_output_incomplete
+agy_isolation_failed
+```
+
+The CLI’s `SUCCESS` means completion, not a valid implementation. Changed-file, test, and review gates remain authoritative.
+
+**Verification**
+
+Test all audited non-success statuses, zero exit with an error result, wrong model/cwd, stale conversation reuse, missing final result, duplicate result, partial file edits followed by failure, and ordinary response text containing words such as “error” or “token limit.”
+
+**Pitfalls and mitigation**
+
+- **Porting Aider marker regexes:** remove them; classify AGY using its own verified protocol.
+- **Demanding nonexistent `structured_output`:** require it only if the invocation actually uses an audited `--json-schema`.
+- **Inventing upstream quota causes:** record unknown causes as unknown.
+- **Success with no patch:** block at the candidate gate, not by trusting a “done” sentence.
+
+---
+
+## Step 8 — Centralize every Builder dispatch and preserve slices
+
+**Goal and scope**
+
+Ensure initial build, Luna repair, and reviewer rework all use identical safety handling.
+
+**Files**
+
+Modify:
+
+- `FactoryEngine`
+- `_builder_instruction`
+- `_builder_slice_instruction`, if ported
+- `_luna_repair`
+- Execution-loop tests.
+
+**Concrete changes**
+
+Introduce:
+
+```python
+def _dispatch_builder(
+    self,
+    *,
+    run_dir: Path,
+    state: dict[str, Any],
+    config: Config,
+    worktree: Path,
+    instruction: str,
+    editable_files: list[str],
+    label: str,
+    ledger: MemoryLedger,
+) -> None: ...
+```
+
+This method must:
+
+1. Validate a nonempty subset of plan `allowed_files`.
+2. Persist the attempt reservation and increment `builder_calls_used`.
+3. Persist the slice/attempt manifest before dispatch.
+4. Snapshot the candidate and trusted boundary.
+5. Invoke the Builder.
+6. Run integrity and scope checks even when the Builder raises.
+7. Persist all failures without masking one with another.
+8. Mark completion only after all postconditions pass.
+
+Route through this method:
+
+- Initial slices.
+- Test-failure repairs.
+- Direct Sol-requested rework.
+- Sol → Luna rework.
+- Test failures following reviewer rework.
+
+Use structured step targets:
+
+```json
+{
+  "step": "Implement the validated decoder change",
+  "editable_files": ["src/decoder.py"]
+}
+```
+
+Reject empty, ambiguous, or out-of-bound targets. Do not infer scope from ambiguous basenames or fall back to the entire plan boundary.
+
+Prompts must include only the current objective, step, editable files, relevant constraints, and completion instruction. Explicitly prohibit Git operations, dependency installation, unrelated edits, and treating Builder-run tests as factory evidence.
+
+**Verification**
+
+Tests must prove slice ordering, manifest-before-dispatch, prompt isolation, distinct conversations, durable call counts, immediate stopping on slice failure, and equivalent guards for every repair route.
+
+**Pitfalls and mitigation**
+
+- **Cumulative diff rejects earlier slices:** compare each invocation’s before/after changes to its slice scope; compare the cumulative candidate to plan scope.
+- **Audit code contains broad fallback behavior:** port intended invariants, not its current fallback implementation.
+- **Repair path bypasses checks:** assert every Builder call passes through `_dispatch_builder`.
+
+---
+
+## Step 9 — Harden scope, Git authority, and candidate identity
+
+**Goal and scope**
+
+Prevent AGY’s broader tool capabilities from bypassing the existing candidate gates.
+
+**Files**
+
+Modify:
+
+- `normalize_path`
+- `ensure_paths_confined`
+- `_changed_files`
+- `_scope_check`
+- `_assert_source_unchanged`
+- `_stage`
+- Candidate-integrity tests.
+
+**Concrete changes**
+
+1. Use NUL-delimited Git path output rather than `splitlines()` for filenames.
+2. Reject path traversal, absolute paths, drive/UNC escapes, unsafe symlinks/junctions, and unsupported file types.
+3. Handle Windows case-insensitive path collisions explicitly.
+4. Snapshot candidate HEAD, index, tracked files, untracked files, and relevant ignored files.
+5. Protect linked-worktree Git metadata, refs, configuration, and hooks.
+6. Require candidate HEAD/index to remain unchanged during Builder execution; staging belongs to the runner.
+7. Remove `clean_aider_generated_artifacts` and both call sites.
+8. Do not add `clean_agy_generated_artifacts` or ignore `.agy*` broadly.
+9. Keep runtime logs and CLI state outside the candidate.
+10. Use a separately declared policy for test-generated artifacts; the Builder must not gain those write permissions implicitly.
+
+For source protection, preserve existing legitimate dirty-checkout behavior. Do not expand a preservation check into a blanket requirement to erase unrelated user edits.
+
+**Verification**
+
+Exercise rename/delete/new-file/binary changes; Unicode and newline filenames; ignored-file edits; symlink/junction escapes; index staging; commits; ref changes; `.gitignore` modification; and out-of-scope writes followed by failure.
+
+**Pitfalls and mitigation**
+
+- **Post-run checks cannot undo external damage:** execution isolation from Step 2 remains mandatory.
+- **Ignoring generated files hides malicious changes:** enumerate runtime scratch paths explicitly.
+- **Source status text is not content integrity:** use content hashes where state equality matters.
+- **Hook execution mutates the reviewed tree:** control hooks in runner Git operations without editing user Git configuration.
+
+---
+
+## Step 10 — Make resume, budgets, and rollback provider-neutral
+
+**Goal and scope**
+
+Remove dependence on Aider artifacts while preserving crash and rollback guarantees.
+
+**Files**
+
+Modify:
+
+- `_load` / executable-state loading.
+- `execute`, `resume`, and locked variants.
+- `_create_checkpoint`
+- `_safe_rollback`
+- Budget/fingerprint logic.
+- Crash-recovery tests.
+
+**Concrete changes**
+
+1. Use OS-backed single-writer locking for state-mutating entry points.
+2. Enforce `non_resumable` in **both** `execute` and `resume` before capability calls.
+3. Replace checks for `*.token_limit.json` with authoritative state.
+4. Persist attempt states:
+
+   ```text
+   reserved → dispatched → completed
+                        ↘ failed / ambiguous
+   ```
+
+5. A crash after reservation does not refund the attempt.
+6. An incomplete dispatch record blocks automatic replay.
+7. Preserve `debug_attempts_used`, `review_cycles_used`, and `builder_calls_used` monotonically.
+8. Resume verifies plan hash, candidate identity, model, executable, and configuration contract.
+9. Preserve failed candidates and logs; do not delete them merely because resume was requested.
+10. Rollback operates only inside the validated candidate, after all writers stop.
+11. Include tracked, untracked, staged, unstaged, and binary state in checkpoint/no-progress fingerprints using canonical length-delimited records.
+
+**Verification**
+
+Inject crashes before/after reservation, process spawn, result persistence, budget update, checkpoint creation, and rollback.
+
+Test concurrent execute/resume, deleted failure artifacts, modified plans, exhausted budgets, and rollback after staged/untracked changes.
+
+**Pitfalls and mitigation**
+
+- **Automatic candidate deletion destroys evidence:** quarantine first; cleanup is separate.
+- **State corruption resets counters:** reject invalid/missing required execution fields instead of defaulting them to zero.
+- **Rollback races a writer:** require proven writer quiescence.
+- **Old-run resume silently changes backend:** reject and instruct creation of a new run with `--prior-run`.
+
+---
+
+## Step 11 — Preserve HOH memory and add the requested JSONL journals
+
+**Goal and scope**
+
+Preserve issue/trajectory semantics while delivering JSONL without breaking existing consumers.
+
+**Files**
+
+Modify:
+
+- `MemoryLedger`
+- `load_prior_run_context`
+- Ledger consistency/recovery tests.
+
+Create:
+
+- `docs/ledger-compatibility.md`
+
+**Concrete changes**
+
+Retain:
+
+```text
+ledger/issue_ledger.json
+ledger/trajectory.json
+```
+
+Add for new runs:
+
+```text
+ledger/issue_ledger.jsonl
+ledger/trajectory.jsonl
+```
+
+Define the relationship explicitly:
+
+- `trajectory.jsonl` contains the canonical sequenced transaction record, including issue deltas.
+- `issue_ledger.jsonl` is an idempotent issue-event projection.
+- Existing `.json` files remain versioned materialized snapshots.
+
+Every transaction includes:
+
+```text
+schema_version, run_id, transaction_id, seq,
+event_type, issue_id when applicable,
+payload, previous_hash, record_hash
+```
+
+Under the single-writer lock:
+
+1. Append and flush the canonical record.
+2. Append the corresponding issue projection, when applicable.
+3. Atomically replace snapshots.
+4. Record the completed generation.
+
+Recovery replays valid canonical records and deduplicates projection transaction IDs. Preserve torn/corrupt evidence; never replace it with an empty ledger.
+
+Preserve issue IDs, fingerprints, root objective classification, lifecycle rules, evidence references, and progressive-disclosure limits. Add backend/model/attempt metadata without renaming historical issue sources.
+
+Legacy snapshot-only runs stay readable without rewriting them. Corrupt legacy data blocks with evidence.
+
+**Verification**
+
+Test legacy snapshots, new journals, issue deduplication, reopening/regression, no premature resolution, prior-run bounds, interleaved crash points, duplicate transaction recovery, torn tails, and corrupt records.
+
+**Pitfalls and mitigation**
+
+- **Two independent authoritative journals diverge:** use one canonical transaction history.
+- **Global version change invalidates prior runs:** maintain explicit schema readers.
+- **Migration becomes a memory redesign:** preserve lifecycle semantics; limit change to durable representation and recovery.
+- **Sensitive logs leak into journals:** store sanitized metadata and artifact references, not credentials or full conversations.
+
+---
+
+## Step 12 — Reprove deterministic review and commit gates
+
+**Goal and scope**
+
+Bind approval to the exact tested candidate and prevent post-approval mutation.
+
+**Files**
+
+Modify only where necessary:
+
+- `_test`
+- `_pre_review_gate`
+- `_candidate_source_context`
+- `_review`
+- Commit path.
+- Gate regression tests.
+
+**Concrete changes**
+
+1. Keep existing test, syntax, conflict-marker, nonempty-diff, and scope checks.
+2. Preserve the current conflict detection baseline:
+   ```python
+   re.compile(r"^\+(<<<<<<<|=======|>>>>>>>)", re.MULTILINE)
+   ```
+   Any refinement must have separate fixtures.
+3. Make test discovery evidence runner-specific. A bare exit code zero is insufficient when no tests ran.
+4. Bind test results to a candidate content/tree identity.
+5. Require staged content to match the tested candidate.
+6. Keep reviewer source context index-derived and independent.
+7. Persist:
+   - Base commit.
+   - Approved staged diff SHA-256.
+   - Approved Git tree OID.
+   - Test evidence identity.
+   - Sol decision and model.
+8. Immediately before commit, recheck scope, source integrity, HEAD, index/tree, diff hash, and writer quiescence.
+9. Verify the resulting commit’s parent and tree.
+10. Mark `committed` only after post-commit verification succeeds.
+11. Preserve task-branch-only behavior; no automatic merge or push.
+
+**Verification**
+
+Tests must block review/commit for no discovery, failed tests, syntax errors, conflicts, empty diff, wrong hash, altered staged content, same-path unstaged mutations, moving base, and post-review writes.
+
+Success must prove:
+
+```text
+tested candidate = approved staged tree = committed tree
+```
+
+**Pitfalls and mitigation**
+
+- **Same filenames hide changed content:** bind content identities, not path lists.
+- **Tests modify their own source:** invalidate the evidence or enforce a clean source boundary.
+- **Commit succeeds but final state write crashes:** recover by verifying the expected parent/tree; never create a duplicate commit blindly.
+- **Hash-format change breaks old records:** version the new candidate contract; do not reinterpret historical hashes.
+
+---
+
+## Step 13 — Complete Aider removal and synchronize documentation
+
+**Goal and scope**
+
+Remove all active Aider dependencies, transport assumptions, generated artifacts, and operational instructions.
+
+**Files**
+
+Modify:
+
+- `lib/hermes_factory_v2.py`
+- `tests/test_factory_v2.py`
+- `.gitignore`
+- `README.md`
+- `docs/software-factory-SKILL.md`
+- `SHA256SUMS`
+- Dependency/package manifests if present.
+- Launchers/install scripts where required.
+
+Remove from the shipped factory bundle, after consumer verification:
+
+- `bridge/agy_bridge.py`
+- `systemd/agy-bridge.service.example`
+
+Update at deployment:
+
+- `C:/Users/HH18/AppData/Local/hermes/skills/software-development/software-factory-v2/SKILL.md`
+
+**Concrete changes**
+
+Delete:
+
+- `AiderBuilder`.
+- Aider-only version/model/configuration helpers.
+- Metadata/settings writers.
+- API-base and LiteLLM request plumbing.
+- Aider history parsing and cleanup.
+- Aider-specific mock HTTP server and opt-in tests.
+- `.aider*` ignore rule.
+- Unused `urllib` imports and Builder bridge constants.
+
+Replace `test_aider_runs_lean_gemini_builder` with an AGY contract test asserting the new argv, exact model, cwd, timeout, result validation, and absent legacy flags.
+
+Update docs to describe:
+
+- Astra → AGY → Luna → Sol responsibilities.
+- Exact default model and `--agy-bin`.
+- AGY authentication and audited runtime prerequisites.
+- Isolation limitations and fail-closed conditions.
+- New artifacts, historical-run policy, JSONL compatibility.
+- Offline versus live verification.
+- No automatic model substitution, merge, or credential fallback.
+
+Remove the installed skill’s “Keep Aider as the normal Builder” rule at deployment.
+
+**Verification**
+
+Add `tests/test_no_legacy_builder_dependencies.py` to check production imports, CLI help, configuration fields, package contents, and generated run artifacts.
+
+A lexical scan may retain explicitly allowlisted migration history and negative tests. It must find zero **active** Aider requirements.
+
+**Pitfalls and mitigation**
+
+- **Blind replacement damages names/history:** use symbol- and context-aware edits.
+- **Removing shared services:** remove factory package dependencies, not unrelated running services.
+- **Old `.aider*` files become visible:** preserve user files; never clean source content to make the scan pass.
+- **Checksum manifest stale:** regenerate only after final file content stabilizes.
+
+---
+
+## Step 14 — Run acceptance, obtain release approval, and deploy
+
+**Goal and scope**
+
+Demonstrate the complete pipeline without Aider or the Builder bridge.
+
+**Files**
+
+Create:
+
+- `docs/agy-migration-acceptance.md`
+
+Update only approved deployed module/launcher/skill copies.
+
+**Concrete verification layers**
+
+### A. Offline deterministic suite
+
+Run from the migration worktree:
+
+```powershell
+$env:PYTHONDONTWRITEBYTECODE = '1'
+$env:PYTHONUTF8 = '1'
+python -B -m unittest discover -s tests -p "test_*.py"
+python -B bin/hermes-code-factory-v2 run --help
+python -B bin/hermes-code-factory-v2 plan --help
+git diff --check
+```
+
+Require all supported baseline behaviors plus migration tests to pass.
+
+### B. Real subprocess fixtures
+
+Exercise the actual process supervisor, parser, timeouts, writer containment, and argument handling without a model.
+
+### C. Installed AGY contract tests
+
+With explicit authorization for model use:
+
+- Verify exact version/model/configuration.
+- Complete a tiny allowed edit.
+- Verify fresh conversations across two slices.
+- Verify UTF-8 paths and output.
+- Verify unavailable-model/authentication failure.
+- Verify no source, Git metadata, trusted-state, or scope escape.
+
+### D. End-to-end factory tests
+
+Use disposable repositories to exercise:
+
+1. Successful build → tests → Sol approval → task commit.
+2. Test failure → Luna → AGY repair → retest → approval.
+3. Sol rejection → AGY rework → retest → fresh approval.
+4. Sol rejection routed through Luna.
+5. Builder timeout/partial output → retained non-resumable failure.
+6. Scope violation → no review and no commit.
+7. Post-approval mutation → hash gate rejection.
+8. Prior-run disclosure from a legacy run.
+
+Perform acceptance with Aider absent from the test runtime and no Builder bridge dependency. Do not stop unrelated user services merely to simulate absence.
+
+**Deployment sequence**
+
+1. Freeze the reviewed release tree and hashes.
+2. Obtain Sol High’s approval of that exact tree.
+3. Obtain explicit deployment/application authorization.
+4. Back up exact deployed files.
+5. Install module, launcher, docs/skill, and checksums as one reviewed release.
+6. Run launcher help/status checks and the approved live smoke.
+7. Compare deployed hashes to the release manifest.
+
+**Pitfalls and mitigation**
+
+- **Mocks presented as production proof:** report each layer independently.
+- **Installed skill precedes working runtime:** deploy the approved set together.
+- **AGY auto-update invalidates evidence:** require re-audit on identity change.
+- **Deployment fails:** stop new dispatches and restore the reviewed installation backup. Never silently replay an AGY candidate through Aider.
+
+## 4. Final release checklist
+
+Sol High must reject the migration unless all of the following are evidenced:
+
+- [ ] `AgyBuilder` is the only production Builder implementation.
+- [ ] Default model is exactly `gemini-3.8-flash-high`.
+- [ ] `--agy-bin` is resolved, persisted, and correctly used after resume.
+- [ ] No active Aider executable, configuration, history, metadata/settings, LiteLLM, or Builder bridge dependency remains.
+- [ ] AGY permission-skipping execution has an approved isolation boundary.
+- [ ] Every Builder route uses the same durable dispatch and integrity checks.
+- [ ] Per-slice and whole-plan scope gates are independently tested.
+- [ ] Ambiguous/partial execution cannot reach tests, review, commit, or automatic replay.
+- [ ] Budgets, locks, checkpoints, rollback, and failed evidence survive crashes.
+- [ ] Issue history, trajectory, progressive disclosure, and legacy inspection remain functional.
+- [ ] Requested JSONL journals have deterministic recovery and snapshot compatibility.
+- [ ] Sol remains independent and approval binds the tested/staged/committed candidate.
+- [ ] Main/source checkout and unrelated user changes remain preserved.
+- [ ] Offline, installed-CLI, and live end-to-end evidence are reported separately.
+- [ ] Repository and deployed artifacts match the formally approved release.
+
+**Recommended execution order:** approve the baseline and runtime/isolation contract first. Then implement the adapter and provider-neutral guards. Switch the default only after those gates pass; remove the legacy package surface and deploy last.
+
+
+
+SOL REVIEWER CONSTITUTION
+Version: 1.0.0
+SHA-256: 61e6695ee2c45433aee4696e78fbb9bc448c30161da773acd9b39c00ab4d785f
+# Sol Reviewer Constitution
+
+- **Constitution version:** 1.0.0
+- **Status:** canonical persistent reviewer policy
+- **Scope:** all Astra migration step reviews and delta-only rechecks
+
+## 1. Authority and precedence
+
+The authority order is:
+
+1. Explicit current user instruction.
+2. Authoritative Astra Migration Plan.
+3. This Sol Reviewer Constitution.
+4. The current-step acceptance contract.
+5. Prior Sol findings that do not conflict with higher authority.
+6. Builder/Hermes implementation choices.
+
+This constitution MUST NOT override or weaken an explicit Astra requirement. If it conflicts with Astra, Astra wins. If a prior Sol interpretation conflicts with Astra or this constitution, emit a formal `PRECEDENT_CORRECTION`.
+
+## 2. Sol review severity / blocking policy
+
+The reviewer must distinguish CONTRACT-BLOCKING findings from NON-BLOCKING quality findings.
+
+A finding may BLOCK the current step only if at least one is true:
+
+1. It violates an explicit requirement of the authoritative Astra plan.
+2. It makes a machine-verifiable factual claim false.
+3. It weakens a safety, isolation, scope, rollback, resume, budget, test, review, or commit invariant.
+4. It leaves required evidence missing, ambiguous, stale, or unbound to the reviewed candidate.
+5. It creates behavior that can affect execution or release correctness.
+
+The following are NON-BLOCKING unless one of those conditions applies: wording/style, formatting, redundant prose, naming preferences not required by contract, documentation polish, optional refactoring, speculative future hardening, and future-step requirements that are not current-step prerequisites.
+
+If all explicit current-step requirements pass and only non-blocking findings remain, return `verdict=APPROVE`, `step_status=PASS`, and `authorized_for_next_step=true`; list remaining items under `non_blocking_findings`. Do not reject a completed step for future-step work.
+
+Every blocking finding MUST include: `finding_id`, `severity`, `blocking_class`, `contract_source`, `exact_requirement`, `concrete_evidence`, `observed_state`, `expected_state`, `why_it_blocks_current_step`, `required_correction`, and `correction_class`.
+
+Allowed blocking classes: `EXPLICIT_CONTRACT_VIOLATION`, `FACTUAL_INACCURACY`, `SAFETY_INVARIANT_VIOLATION`, `REQUIRED_EVIDENCE_GAP`, `EXECUTION_OR_RELEASE_CORRECTNESS`.
+
+## 3. Non-blocking findings
+
+Use a separate `non_blocking_findings` collection. Each item may include `finding_id`, `status=NON_BLOCKING`, `severity`, `issue`, `rationale`, `suggested_followup`, and `suggested_future_step`. Non-blocking findings MUST NOT change APPROVE to REJECT or silently become prerequisites without higher-authority contract text.
+
+## 4. Micro-fix policy
+
+A bounded defect confined to authorized files, mechanically correctable, and not altering architecture, security boundaries, runtime behavior, or scope should be classified `MICRO_FIX`. Examples include factual documentation errors, stale symbol/path names, missing required documentation entries whose source is known, and small evidence metadata corrections.
+
+Sol MUST NOT edit the candidate. It must return the exact file, incorrect or missing claim, exact correction, and verification command/evidence. Hermes may apply the bounded correction.
+
+After a micro-fix Hermes may request `review_mode=DELTA_ONLY_RECHECK`. The recheck verifies targeted findings resolved, no regression of prior PASS requirements, authorized path boundary, fresh candidate identity/hashes, and affected deterministic verification. Unrelated architecture review is not repeated.
+
+## 5. Finding lifecycle and precedent correction
+
+Finding IDs are stable. Allowed states: `OPEN`, `RESOLVED`, `REGRESSED`, `SUPERSEDED`, `NON_BLOCKING`.
+
+On re-review retain an unresolved finding ID; mark fixed findings RESOLVED; mark later breakage REGRESSED; mark replaced interpretations SUPERSEDED; mark de-gated findings NON_BLOCKING.
+
+If Sol changes a prior contract interpretation rather than discovering a concrete regression, emit:
+
+`PRECEDENT_CORRECTION`
+- Previous requirement:
+- Current corrected interpretation:
+- Why previous wording was wrong or ambiguous:
+- Which interpretation is authoritative going forward:
+
+## 6. Current-step versus future-step discipline
+
+Review the CURRENT STEP. Future-step work MUST NOT block the current step unless the Astra dependency graph explicitly makes it a prerequisite now. Distinguish `FUTURE IMPLEMENTATION WORK` from `CURRENT-STEP REQUIRED PREPARATION/EVIDENCE`. Step 2 isolation, Step 13 removal, and Step 14 deployment do not block Step 1 merely because they are not yet implemented, while a Step 1 inventory/preparation requirement remains current-step work.
+
+## 7. Reviewer independence and candidate identity
+
+Sol remains reviewer only and MUST NOT modify, patch, stage, commit, merge, clean, repair, or silently alter evidence. Any Hermes correction invalidates prior approval and requires a fresh independent review bound to the new HEAD, tree OID, relevant file hashes, and diff SHA-256. A micro-fix may use DELTA_ONLY_RECHECK but remains an independent invocation.
+
+## 8. Approval normalization
+
+A genuine blocking defect yields `verdict=REJECT`, `step_status=FAIL`, `authorized_for_next_step=false`. If all current-step contractual requirements pass and only optional findings remain, yield `verdict=APPROVE`, `step_status=PASS`, `authorized_for_next_step=true`, and `non_blocking_findings`. Contradictory approval states are `REVIEW_PROTOCOL_FAILURE`.
+
+Allowed correction classes: `MICRO_FIX`, `NORMAL_REWORK`, `ARCHITECTURAL_REWORK`, `SAFETY_BLOCKER`, `EVIDENCE_REPAIR`, `NONE`.
+
+## 9. No moving goalposts
+
+After a requirement PASSes for a specific contract interpretation, a later review may not block on a stricter subjective interpretation unless: new concrete evidence shows the previous state factually wrong; the candidate regressed; a higher-authority Astra clause was overlooked; or a PRECEDENT_CORRECTION explains the prior interpretation error. Genuine missed defects remain reportable.
+
+## 10. Required review output
+
+Every review returns an object equivalent to:
+
+```json
+{
+  "review_type": "STEP_CONFORMANCE_REVIEW | DELTA_ONLY_RECHECK",
+  "step": 1,
+  "verdict": "APPROVE | REJECT",
+  "step_status": "PASS | FAIL",
+  "authorized_for_next_step": true,
+  "candidate_identity": {"base_commit": "...", "head_commit": "...", "tree_oid": "...", "diff_sha256": "..."},
+  "checklist": [],
+  "blocking_findings": [],
+  "resolved_findings": [],
+  "non_blocking_findings": [],
+  "precedent_corrections": [],
+  "next_actions": []
+}
+```
+
+If `blocking_findings` is empty and every explicit current-step requirement passes, `verdict` MUST be APPROVE, `step_status` MUST be PASS, and `authorized_for_next_step` MUST be true. Non-blocking findings alone MUST NOT produce REJECT.
+
+## 11. Governance invariants
+
+This governance policy does not weaken execution isolation, shared Git metadata protection, candidate/source/trusted-state separation, per-slice scope, no-Builder-Git authority, deterministic tests, durable budgets, crash/resume, rollback, candidate identity, reviewer independence, or exact tested/staged/approved/committed tree identity. MICRO_FIX never bypasses a failed safety invariant.
+
+## 12. Application and versioning
+
+This constitution applies prospectively to all remaining Astra migration reviews, including the current Step 1 cycle. It does not retroactively convert the current Step 1 REJECT into APPROVE. The constitution is immutable during an individual review cycle. Review metadata MUST persist `constitution_version` and `constitution_sha256`; historical approvals retain their governing hash.
+
+
+CURRENT STEP BOUNDARY
+Step 4 was approved and its exact identity is supplied as predecessor evidence. Review only the Step 5 delta from base commit ce1e881ae9b10d3265116d018c8a6a448d70130c. Allowed paths are exactly:
+[
+  "lib/hermes_factory_v2.py",
+  "tests/test_factory_preflight.py"
+]
+Step 5 is executable resolution and capability preflight. Do not require Step 6 process supervision, Step 7 editing/result parser, Step 8 dispatcher, or Steps 9-14 runtime/deployment/retirement changes. The old Aider class may remain temporarily for Step 13, but AgyBuilder itself must be direct-CLI-only and must not use the legacy HTTP bridge or API-key fallback.
+
+Check, with concrete evidence:
+1. explicit --agy-bin, PATH agy, and Windows LOCALAPPDATA fallback resolution order;
+2. invalid explicit paths never fall back; absolute native executable pinning rejects directories and shell shims;
+3. strict bare semantic version and supported 1.2.0 identity plus binary SHA-256;
+4. required help capabilities and strict model catalog parsing with exact gemini-3.8-flash-high entry;
+5. bounded no-edit disposable-cwd probe with direct AGY argv, fresh stream evidence, exact model/cwd, one init/result, consistent conversation, successful completion, and sanitized persisted preflight_builder.json;
+6. fail-closed negative tests and no source/main/audit mutation.
+The packet's preflight evidence may reuse the approved Step 2 Windows Sandbox
+and authenticated-runtime fixtures when a fresh guest output was already
+host-attested; do not demand an unsafe unrestricted host probe.
+
+CURRENT DETERMINISTIC PACKET
+{
+  "review_mode": "STEP_CONFORMANCE_REVIEW",
+  "step": 5,
+  "base_commit": "ce1e881ae9b10d3265116d018c8a6a448d70130c",
+  "head_commit": "f7e5a6ceaae4477dbc32d1bd72078d9468c18d8a",
+  "parent_commit": "4e2a3e82748be615bcb2c112ceca07252aa8a33d",
+  "tree_oid": "07fdf8c352ca333214b0f49463ca2da5a59807c7",
+  "current_main_checkout": "E:/Downloads/hermes-software-factory-v2-hoh/hermes-software-factory-v2",
+  "current_main_head": "232b5ef78d981dc3a084a2463f105ea42406cc1e",
+  "audit_checkout": "C:/Users/HH18/softfac-audit-worktree",
+  "audit_head": "78feff894dab1b3d546dc01b105cec81e07b0c1b",
+  "exact_allowed_paths": [
+    "lib/hermes_factory_v2.py",
+    "tests/test_factory_preflight.py"
+  ],
+  "changed_paths": [
+    "lib/hermes_factory_v2.py",
+    "tests/test_factory_preflight.py"
+  ],
+  "candidate_file_hashes": {
+    "lib/hermes_factory_v2.py": "0938830fe9febfd7b27c62555486ffdb8cd9ba4a600e3ad50136e038066448c8",
+    "tests/test_factory_preflight.py": "f6ec2598fb72911460a891ae94524c5934d71046e91fd45f7bbde90396f1abb6"
+  },
+  "candidate_file_hash_convention": "sha256 of exact Git blob bytes from git show HEAD:<path> (the reviewed tree representation; checkout line endings are not used)",
+  "candidate_worktree_file_hashes": {
+    "lib/hermes_factory_v2.py": "7e4cdf9e0e3aae5b2673dd02521ec72f0a86afa465eddfc6f8d9ed6aa5411a67",
+    "tests/test_factory_preflight.py": "98bdee2b98a262c710f070acdf2dc1c57bceb04307d23cc19eab55884a0501a9"
+  },
+  "diff_sha256": "39ed462ea92bb5c890d9d247417604c4889892d0a5953ae37458f74dc2ede212",
+  "diff_length": 71881,
+  "test_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONUTF8=1 PYTHONIOENCODING=utf-8 uv run pytest -q tests/test_factory_v2.py tests/test_factory_builder_contract.py tests/test_factory_resume_contract.py tests/test_factory_config.py tests/test_factory_preflight.py",
+  "test_counts": {
+    "tests_run": 75,
+    "tests_passed": 75,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "status": "PASS"
+  },
+  "test_output_sha256": "63226ed0cb3f34028ab0de97cbd52206a1b567505167c8ac6e4d91e67303adcd",
+  "test_output": "........................................................... [ 78%]\n................                                                    [100%]\n75 passed, 18 subtests passed in 55.12s\n",
+  "git_diff_check": "PASS",
+  "preflight_live_evidence": {
+    "status": "SUCCESS",
+    "source": "approved_step2_boundary_and_authenticated_runtime_evidence",
+    "host_attested_after_sandbox_stop": true,
+    "executable_path": "C:/Users/HH18/AppData/Local/Temp/agy-step5-pinned-1.2.0.exe",
+    "executable_version": "1.2.0",
+    "executable_sha256": "a613315a951bfebd588b456143c236de31d9f85e1a73ac82d33105e5baef1a4a",
+    "approved_manifest_executable_path": "C:/Users/HH18/AppData/Local/agy/bin/agy.exe",
+    "approved_manifest_executable_sha256": "a613315a951bfebd588b456143c236de31d9f85e1a73ac82d33105e5baef1a4a",
+    "boundary": "Containers-DisposableClientVM / Windows Sandbox",
+    "boundary_config_path": "C:/Users/HH18/step2_full_oauth.wsb",
+    "boundary_config_sha256": "fd123737dc62279a83170a4d5a125968a463aeb5122bace142025a5c93e09cdd",
+    "host_attestation_path": "C:/Users/HH18/step2_sandbox_evidence.json",
+    "host_attestation_sha256": "94ec9e94305e3b87808c9486e52d665c571960b51e547725fd2861fd5eb52dd1",
+    "effective_model": "gemini-3.8-flash-high",
+    "guest_cwd": "C:/Users/WDAGUtilityAccount",
+    "event_count": 5,
+    "event_sequence": [
+      "init",
+      "step_update:user_input:DONE",
+      "step_update:agent_response:ACTIVE",
+      "step_update:agent_response:DONE",
+      "result:SUCCESS"
+    ],
+    "permission_mode": "always-proceed",
+    "tool_count": 57,
+    "conversation_ids_consistent": true,
+    "result_status": "SUCCESS",
+    "response_sha256": "349b8e194a9c25662d59f4e5a4f24abbcf62eafe0709a5a120fa1cbf9c3268af",
+    "stdout_sha256": null,
+    "step2_manifest_sha256": "6c2b697ffda55375391c087dc7cc32e6e556c6a1b908ece20485ea9d2f0daece",
+    "step2_runtime_probe_sha256": "6cac2b6d0b96665c8e2180bfede51fdb976c337b7c8533056b655973ee0e57c2",
+    "credential_mode": "approved AGY OAuth runtime evidence; no API key fallback"
+  },
+  "protected_checkout_preservation": {
+    "before": {
+      "main": {
+        "path": "E:/Downloads/hermes-software-factory-v2-hoh/hermes-software-factory-v2",
+        "head": "232b5ef78d981dc3a084a2463f105ea42406cc1e",
+        "status": "?? lib/__pycache__/hermes_factory_v2.cpython-311.pyc",
+        "status_sha256": "9245e401aba7e65e4b6aa44a126e1eda313bfba1de7a0ef0435e99b6b4ffa416",
+        "path_hashes": {
+          "lib/__pycache__/hermes_factory_v2.cpython-311.pyc": {
+            "kind": "file",
+            "size": 141886,
+            "sha256": "d5a37b0bd2f7f9443c21d772d597b9ffd74a30b13709f3da2e3e7017cd301471"
+          }
+        }
+      },
+      "audit": {
+        "path": "C:/Users/HH18/softfac-audit-worktree",
+        "head": "78feff894dab1b3d546dc01b105cec81e07b0c1b",
+        "status": " M lib/__pycache__/hermes_factory_v2.cpython-310.pyc\nMM lib/hermes_factory_v2.py\n M tests/__pycache__/test_factory_v2.cpython-310-pytest-9.0.2.pyc\n M tests/__pycache__/test_factory_v2.cpython-311.pyc\nM  tests/test_factory_v2.py\n?? lib/__pycache__/hermes_factory_v2.cpython-311.pyc\n?? run_sol_audit.py\n?? run_sol_compact.py\n?? run_sol_official.py\n?? run_sol_review.py\n?? sol_review_verdict.json\n?? test_sol_direct.py",
+        "status_sha256": "faf2fc7cb56001f6780eb125560fdd2225788984c0cb9a3051f5beb6729ae493",
+        "path_hashes": {
+          "lib/__pycache__/hermes_factory_v2.cpython-310.pyc": {
+            "kind": "file",
+            "size": 92544,
+            "sha256": "d143edd091664db74dc5e56b97aca318a4a04a8fe825fb70f757cf82c525b1aa"
+          },
+          "lib/hermes_factory_v2.py": {
+            "kind": "file",
+            "size": 157366,
+            "sha256": "da04a819892935b5944d0fd580cd3c1011112f7fe507766b00b170c7763b3317"
+          },
+          "tests/__pycache__/test_factory_v2.cpython-310-pytest-9.0.2.pyc": {
+            "kind": "file",
+            "size": 65217,
+            "sha256": "77f6ae5ee615dda3b26a0078ff4840e473024837ea55329b3df3cca90eb6ec92"
+          },
+          "tests/__pycache__/test_factory_v2.cpython-311.pyc": {
+            "kind": "file",
+            "size": 134879,
+            "sha256": "2c5fb9068ab9672e4ec662aa93f24401466c6c2245e299c8784303562483532f"
+          },
+          "tests/test_factory_v2.py": {
+            "kind": "file",
+            "size": 85492,
+            "sha256": "fc26e0eb50678e299e50bb49a11bc0a3edb118258569892887aa088f11b2324f"
+          },
+          "lib/__pycache__/hermes_factory_v2.cpython-311.pyc": {
+            "kind": "file",
+            "size": 177202,
+            "sha256": "5fc4f23c64ade1cd2fddb7a6e0bbdafafabd3b24c0bc310164d0ef36203af13f"
+          },
+          "run_sol_audit.py": {
+            "kind": "file",
+            "size": 3000,
+            "sha256": "ac2838611d6583fd681e7e4b7c92905bad2cb943735d302f76fdb3c8235b37ab"
+          },
+          "run_sol_compact.py": {
+            "kind": "file",
+            "size": 2931,
+            "sha256": "df183f5fde2704a343d913c6ab2cfd3a7983b821fca3f57ca94b97dbdf6885ae"
+          },
+          "run_sol_official.py": {
+            "kind": "file",
+            "size": 2415,
+            "sha256": "cc366ca2aba41589b007dcb36c5571c646a1b47d69b62d1e9408834536c7c513"
+          },
+          "run_sol_review.py": {
+            "kind": "file",
+            "size": 3049,
+            "sha256": "f987cb59ed7a9544b40d3cdbdeef7d4b1e98be4e36aba919b2fe8d3e5ea2a44c"
+          },
+          "sol_review_verdict.json": {
+            "kind": "file",
+            "size": 2732,
+            "sha256": "0d0c5816c00bce2d811fa3c3d6504235b40b8ff7bb48388ed278ee30da54e2dc"
+          },
+          "test_sol_direct.py": {
+            "kind": "file",
+            "size": 871,
+            "sha256": "26b1393b64d5c9ddee44410db20a077326cfbf930b3c43336b12cb61c6e79b10"
+          }
+        }
+      }
+    },
+    "after": {
+      "main": {
+        "path": "E:/Downloads/hermes-software-factory-v2-hoh/hermes-software-factory-v2",
+        "head": "232b5ef78d981dc3a084a2463f105ea42406cc1e",
+        "status": "?? lib/__pycache__/hermes_factory_v2.cpython-311.pyc",
+        "status_sha256": "9245e401aba7e65e4b6aa44a126e1eda313bfba1de7a0ef0435e99b6b4ffa416",
+        "path_hashes": {
+          "lib/__pycache__/hermes_factory_v2.cpython-311.pyc": {
+            "kind": "file",
+            "size": 141886,
+            "sha256": "d5a37b0bd2f7f9443c21d772d597b9ffd74a30b13709f3da2e3e7017cd301471"
+          }
+        }
+      },
+      "audit": {
+        "path": "C:/Users/HH18/softfac-audit-worktree",
+        "head": "78feff894dab1b3d546dc01b105cec81e07b0c1b",
+        "status": " M lib/__pycache__/hermes_factory_v2.cpython-310.pyc\nMM lib/hermes_factory_v2.py\n M tests/__pycache__/test_factory_v2.cpython-310-pytest-9.0.2.pyc\n M tests/__pycache__/test_factory_v2.cpython-311.pyc\nM  tests/test_factory_v2.py\n?? lib/__pycache__/hermes_factory_v2.cpython-311.pyc\n?? run_sol_audit.py\n?? run_sol_compact.py\n?? run_sol_official.py\n?? run_sol_review.py\n?? sol_review_verdict.json\n?? test_sol_direct.py",
+        "status_sha256": "faf2fc7cb56001f6780eb125560fdd2225788984c0cb9a3051f5beb6729ae493",
+        "path_hashes": {
+          "lib/__pycache__/hermes_factory_v2.cpython-310.pyc": {
+            "kind": "file",
+            "size": 92544,
+            "sha256": "d143edd091664db74dc5e56b97aca318a4a04a8fe825fb70f757cf82c525b1aa"
+          },
+          "lib/hermes_factory_v2.py": {
+            "kind": "file",
+            "size": 157366,
+            "sha256": "da04a819892935b5944d0fd580cd3c1011112f7fe507766b00b170c7763b3317"
+          },
+          "tests/__pycache__/test_factory_v2.cpython-310-pytest-9.0.2.pyc": {
+            "kind": "file",
+            "size": 65217,
+            "sha256": "77f6ae5ee615dda3b26a0078ff4840e473024837ea55329b3df3cca90eb6ec92"
+          },
+          "tests/__pycache__/test_factory_v2.cpython-311.pyc": {
+            "kind": "file",
+            "size": 134879,
+            "sha256": "2c5fb9068ab9672e4ec662aa93f24401466c6c2245e299c8784303562483532f"
+          },
+          "tests/test_factory_v2.py": {
+            "kind": "file",
+            "size": 85492,
+            "sha256": "fc26e0eb50678e299e50bb49a11bc0a3edb118258569892887aa088f11b2324f"
+          },
+          "lib/__pycache__/hermes_factory_v2.cpython-311.pyc": {
+            "kind": "file",
+            "size": 177202,
+            "sha256": "5fc4f23c64ade1cd2fddb7a6e0bbdafafabd3b24c0bc310164d0ef36203af13f"
+          },
+          "run_sol_audit.py": {
+            "kind": "file",
+            "size": 3000,
+            "sha256": "ac2838611d6583fd681e7e4b7c92905bad2cb943735d302f76fdb3c8235b37ab"
+          },
+          "run_sol_compact.py": {
+            "kind": "file",
+            "size": 2931,
+            "sha256": "df183f5fde2704a343d913c6ab2cfd3a7983b821fca3f57ca94b97dbdf6885ae"
+          },
+          "run_sol_official.py": {
+            "kind": "file",
+            "size": 2415,
+            "sha256": "cc366ca2aba41589b007dcb36c5571c646a1b47d69b62d1e9408834536c7c513"
+          },
+          "run_sol_review.py": {
+            "kind": "file",
+            "size": 3049,
+            "sha256": "f987cb59ed7a9544b40d3cdbdeef7d4b1e98be4e36aba919b2fe8d3e5ea2a44c"
+          },
+          "sol_review_verdict.json": {
+            "kind": "file",
+            "size": 2732,
+            "sha256": "0d0c5816c00bce2d811fa3c3d6504235b40b8ff7bb48388ed278ee30da54e2dc"
+          },
+          "test_sol_direct.py": {
+            "kind": "file",
+            "size": 871,
+            "sha256": "26b1393b64d5c9ddee44410db20a077326cfbf930b3c43336b12cb61c6e79b10"
+          }
+        }
+      }
+    },
+    "unchanged": true
+  },
+  "step4_approval": {
+    "verdict_path": "C:/Users/HH18/sol_step4_verdict.json",
+    "verdict_sha256": "6fb2dd1c0be9c708975cab4f775168d84347148b36e8751bd1df25e6464fb8b4",
+    "candidate_identity": {
+      "base_commit": "3cff50cac7d0ed2db5b2c76197632755ea419a56",
+      "head_commit": "ce1e881ae9b10d3265116d018c8a6a448d70130c",
+      "tree_oid": "3b751d46fcdf12f10d8d1599e0b41c86c1141149",
+      "diff_sha256": "d496338f87af897447eaeda4242bf8b3517f4c476260ca165de97a29392effed"
+    }
+  },
+  "preflight_contract": {
+    "resolved_executable": "C:/Users/HH18/AppData/Local/Temp/agy-step5-pinned-1.2.0.exe",
+    "supported_version": "1.2.0",
+    "required_model": "gemini-3.8-flash-high",
+    "resolution_order": [
+      "explicit --agy-bin",
+      "PATH agy",
+      "Windows %LOCALAPPDATA%/agy/bin/agy.exe"
+    ],
+    "legacy_aider_builder_retained_only_for_later_step13": true
+  },
+  "production_source_changed": true,
+  "git_status": ""
+}
+
+CURRENT COMPLETE DIFF (against ce1e881ae9b10d3265116d018c8a6a448d70130c)
+DIFF START
+diff --git a/lib/hermes_factory_v2.py b/lib/hermes_factory_v2.py
+index 2c2a8a4..176e4dc 100644
+--- a/lib/hermes_factory_v2.py
++++ b/lib/hermes_factory_v2.py
+@@ -12,6 +12,7 @@ from __future__ import annotations
+ import argparse
+ import hashlib
+ import json
++import math
+ import os
+ import re
+ import shlex
+@@ -23,10 +24,12 @@ import time
+ import urllib.error
+ import urllib.request
+ import uuid
++from contextlib import contextmanager
+ from dataclasses import asdict, dataclass, fields
+ from datetime import datetime, timezone
+ from pathlib import Path, PurePosixPath
+ from typing import Any, Callable, Iterable
++from xml.sax.saxutils import escape as xml_escape
+ 
+ 
+ DEFAULT_STATE_ROOT = Path.home() / ".hermes" / "software-factory" / "runs"
+@@ -42,6 +45,20 @@ LEGACY_AIDER_BRIDGE_URL = "http://127.0.0.1:8045/v1"
+ RUN_CONFIG_VERSION = 2
+ BUILDER_CONTRACT_VERSION = 1
+ SCHEMA_VERSION = 1
++SUPPORTED_AGY_VERSION = "1.2.0"
++APPROVED_AGY_SHA256 = "a613315a951bfebd588b456143c236de31d9f85e1a73ac82d33105e5baef1a4a"
++AGY_PREFLIGHT_PRINT_TIMEOUT_SECONDS = 90
++AGY_REQUIRED_CAPABILITIES = (
++    "--model",
++    "--dangerously-skip-permissions",
++    "--output-format",
++    "--disable-slash-commands",
++    "--print",
++    "--print-timeout",
++)
++AGY_REQUIRED_OUTPUT_FORMAT = "stream-json"
++AGY_REQUIRED_PERMISSION_MODE = "always-proceed"
++AGY_SHELL_SHIMS = {".bat", ".cmd", ".ps1", ".vbs", ".wsf"}
+ FINAL_STATES = {"committed", "failed", "blocked"}
+ 
+ 
+@@ -987,6 +1004,783 @@ def clean_aider_generated_artifacts(worktree: Path) -> None:
+         shutil.rmtree(cache_dir)
+ 
+ 
++def _validate_agy_executable(candidate: str | os.PathLike[str], source: str) -> Path:
++    try:
++        path = Path(candidate).expanduser().resolve(strict=True)
++    except (OSError, RuntimeError) as exc:
++        raise FactoryError(f"AGY executable from {source} is not a valid file: {candidate}", "preflight") from exc
++    if not path.is_file():
++        raise FactoryError(f"AGY executable from {source} is not a file: {path}", "preflight")
++    if path.suffix.lower() in AGY_SHELL_SHIMS:
++        raise FactoryError(f"AGY executable from {source} is an unsupported shell shim: {path}", "preflight")
++    if os.name == "nt" and path.suffix.lower() != ".exe":
++        raise FactoryError(f"AGY executable from {source} is not a native Windows executable: {path}", "preflight")
++    if os.name != "nt" and not os.access(path, os.X_OK):
++        raise FactoryError(f"AGY executable from {source} is not executable: {path}", "preflight")
++    return path
++
++
++def resolve_agy_executable(explicit: str | None) -> Path:
++    """Resolve one native AGY executable without silently changing sources."""
++    if explicit is not None:
++        if not isinstance(explicit, str) or not explicit.strip():
++            raise FactoryError("explicit AGY executable path must be a non-empty string", "preflight")
++        return _validate_agy_executable(explicit, "--agy-bin")
++
++    discovered = shutil.which("agy")
++    if discovered:
++        return _validate_agy_executable(discovered, "PATH")
++
++    if os.name == "nt":
++        local_app_data = os.environ.get("LOCALAPPDATA")
++        if not local_app_data:
++            raise FactoryError(
++                "AGY executable not found: LOCALAPPDATA is unavailable for the Windows fallback",
++                "preflight",
++            )
++        local_root = Path(local_app_data)
++        fallback = local_root / "agy" / "bin" / "agy.exe"
++        return _validate_agy_executable(fallback, "%LOCALAPPDATA%/agy/bin/agy.exe")
++
++    raise FactoryError("AGY executable not found on PATH or the Windows local-app fallback", "preflight")
++
++
++def _parse_agy_model_catalog(raw: str) -> dict[str, str]:
++    """Parse the observed tabular `agy models` output strictly."""
++    catalog: dict[str, str] = {}
++    for line in raw.splitlines():
++        stripped = line.strip()
++        if not stripped or stripped == "Fetching available models...":
++            continue
++        match = re.fullmatch(r"([A-Za-z0-9][A-Za-z0-9._-]*-[A-Za-z0-9][A-Za-z0-9._-]*)\s+(.+\S)", stripped)
++        if not match:
++            raise FactoryError(f"AGY model catalog contains a malformed entry: {line!r}", "preflight")
++        model, description = match.groups()
++        if model in catalog:
++            raise FactoryError(f"AGY model catalog contains a duplicate entry: {model}", "preflight")
++        catalog[model] = description
++    if not catalog:
++        raise FactoryError("AGY model catalog is empty", "preflight")
++    return catalog
++
++
++def _parse_agy_help_capabilities(raw: str) -> dict[str, str]:
++    """Parse option declarations instead of accepting arbitrary substrings."""
++    declarations: dict[str, str] = {}
++    for line in raw.splitlines():
++        match = re.match(r"^\s*(--[A-Za-z0-9][A-Za-z0-9-]*)(?=\s|$)(.*)$", line)
++        if not match:
++            continue
++        option, description = match.groups()
++        if option in declarations:
++            raise FactoryError(f"AGY help contains a duplicate option declaration: {option}", "preflight")
++        declarations[option] = description.strip()
++    if not declarations:
++        raise FactoryError("AGY help contains no parseable option declarations", "preflight")
++    return declarations
++
++
++def _snapshot_probe_tree(root: Path) -> dict[str, dict[str, Any]]:
++    """Hash a private probe root so no-edit behavior is independently checked."""
++    snapshot: dict[str, dict[str, Any]] = {}
++    for item in sorted(root.rglob("*")):
++        relative = item.relative_to(root).as_posix()
++        if item.is_symlink():
++            snapshot[relative] = {
++                "kind": "symlink",
++                "target": os.readlink(item),
++            }
++        elif item.is_dir():
++            snapshot[relative] = {"kind": "directory"}
++        elif item.is_file():
++            snapshot[relative] = {
++                "kind": "file",
++                "size": item.stat().st_size,
++                "sha256": hashlib.sha256(item.read_bytes()).hexdigest(),
++            }
++        else:
++            snapshot[relative] = {"kind": "other"}
++    return snapshot
++
++
++@contextmanager
++def _probe_temp_root() -> Iterable[str]:
++    root = tempfile.mkdtemp(prefix="agy-preflight-sandbox-")
++    try:
++        yield root
++    finally:
++        try:
++            shutil.rmtree(root, ignore_errors=True)
++        except OSError:
++            pass
++
++
++class AgyBuilder:
++    """Direct AGY capability boundary; editing supervision arrives in Step 7."""
++
++    def __init__(
++        self,
++        agy_bin: str | None = None,
++        *,
++        _probe_runner: Callable[[Path, Config, Path], dict[str, Any]] | None = None,
++    ) -> None:
++        self._explicit_agy_bin = agy_bin
++        self._probe_runner = _probe_runner
++        self.agy_bin: Path | None = None
++        self._pinned_sha256: str | None = None
++        if agy_bin is not None:
++            self.agy_bin = resolve_agy_executable(agy_bin)
++            self._pinned_sha256 = hashlib.sha256(self.agy_bin.read_bytes()).hexdigest()
++
++    def _pin_executable(self, config: Config) -> tuple[Path, str]:
++        requested = self._explicit_agy_bin if self._explicit_agy_bin is not None else config.agy_bin
++        resolved = resolve_agy_executable(requested)
++        try:
++            digest = hashlib.sha256(resolved.read_bytes()).hexdigest()
++        except OSError as exc:
++            raise FactoryError(f"could not hash pinned AGY executable: {resolved}", "preflight") from exc
++        if self.agy_bin is not None and resolved != self.agy_bin:
++            raise FactoryError(
++                f"AGY executable path changed during the run: expected {self.agy_bin}, got {resolved}",
++                "preflight",
++            )
++        if self._pinned_sha256 is not None and digest != self._pinned_sha256:
++            raise FactoryError("AGY executable identity changed during the run", "preflight")
++        self.agy_bin = resolved
++        self._pinned_sha256 = digest
++        return resolved, digest
++
++    def _recheck_identity(self, path: Path, expected_sha256: str) -> None:
++        try:
++            current_path = path.resolve(strict=True)
++            current_sha256 = hashlib.sha256(current_path.read_bytes()).hexdigest()
++        except OSError as exc:
++            raise FactoryError(f"could not recheck AGY executable identity: {path}", "preflight") from exc
++        if current_path != path or current_sha256 != expected_sha256:
++            raise FactoryError("AGY executable identity changed during preflight", "preflight")
++
++    @staticmethod
++    def _persisted_identities(run_dir: Path) -> list[tuple[str, Path, str]]:
++        identities: list[tuple[str, Path, str]] = []
++        state_path = run_dir / "run_state.json"
++        if state_path.is_file():
++            try:
++                state = read_json(state_path)
++            except Exception as exc:
++                raise FactoryError(f"run has invalid state while checking AGY identity: {exc}", "state") from exc
++            if not isinstance(state, dict):
++                raise FactoryError("run state must be a JSON object while checking AGY identity", "state")
++            state_path_value = state.get("agy_executable_path")
++            state_sha256 = state.get("agy_executable_sha256")
++            if (state_path_value is None) != (state_sha256 is None):
++                raise FactoryError("run state has an incomplete pinned AGY identity", "state")
++            if state_path_value is not None:
++                if not isinstance(state_path_value, str) or not isinstance(state_sha256, str):
++                    raise FactoryError("run state has an invalid pinned AGY identity", "state")
++                if not Path(state_path_value).expanduser().is_absolute():
++                    raise FactoryError("run state AGY executable path must be absolute", "state")
++                if not re.fullmatch(r"[0-9a-f]{64}", state_sha256):
++                    raise FactoryError("run state has an invalid pinned AGY hash", "state")
++                identities.append(("run_state.json", Path(state_path_value), state_sha256))
++
++        evidence_path = run_dir / "preflight_builder.json"
++        if evidence_path.is_file():
++            try:
++                evidence = read_json(evidence_path)
++            except Exception as exc:
++                raise FactoryError(f"preflight evidence is invalid while checking AGY identity: {exc}", "state") from exc
++            if not isinstance(evidence, dict):
++                raise FactoryError("preflight evidence must be a JSON object", "state")
++            executable = evidence.get("executable")
++            if not isinstance(executable, dict):
++                if evidence.get("status") == "FAIL":
++                    return identities
++                raise FactoryError("preflight evidence is missing its pinned AGY identity", "state")
++            evidence_path_value = executable.get("path")
++            evidence_sha256 = executable.get("sha256")
++            if not isinstance(evidence_path_value, str) or not isinstance(evidence_sha256, str):
++                raise FactoryError("preflight evidence has an invalid pinned AGY identity", "state")
++            if not Path(evidence_path_value).expanduser().is_absolute():
++                raise FactoryError("preflight evidence AGY executable path must be absolute", "state")
++            if not re.fullmatch(r"[0-9a-f]{64}", evidence_sha256):
++                raise FactoryError("preflight evidence has an invalid pinned AGY hash", "state")
++            identities.append(("preflight_builder.json", Path(evidence_path_value), evidence_sha256))
++        return identities
++
++    def _verify_persisted_identity(self, run_dir: Path, path: Path, sha256: str) -> None:
++        for source, persisted_path, persisted_sha256 in self._persisted_identities(run_dir):
++            try:
++                persisted_path = persisted_path.expanduser().resolve(strict=True)
++            except (OSError, RuntimeError) as exc:
++                raise FactoryError(f"{source} points to an unavailable AGY executable", "state") from exc
++            if persisted_path != path or persisted_sha256 != sha256:
++                raise FactoryError(
++                    f"AGY executable identity changed since {source} was recorded",
++                    "preflight",
++                )
++
++    @staticmethod
++    def _parse_probe(
++        raw: str,
++        probe_dir: Path,
++        expected_model: str,
++        expected_cwd: str | Path | None = None,
++    ) -> dict[str, Any]:
++        if "\x00" in raw:
++            raise FactoryError("AGY capability probe output contains NUL", "preflight")
++
++        def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
++            result: dict[str, Any] = {}
++            for key, value in pairs:
++                if key in result:
++                    raise ValueError(f"duplicate JSON key: {key}")
++                result[key] = value
++            return result
++
++        events: list[dict[str, Any]] = []
++        try:
++            for line in raw.splitlines():
++                if not line.strip():
++                    continue
++                event = json.loads(line, object_pairs_hook=reject_duplicate_keys)
++                if not isinstance(event, dict) or not isinstance(event.get("event"), str):
++                    raise ValueError("event must be a JSON object with an event string")
++                events.append(event)
++        except (json.JSONDecodeError, TypeError, ValueError) as exc:
++            raise FactoryError(f"AGY capability probe returned malformed stream JSON: {exc}", "preflight") from exc
++        if not events:
++            raise FactoryError("AGY capability probe returned no events", "preflight")
++
++        init_events = [event for event in events if event.get("event") == "init"]
++        result_events = [event for event in events if event.get("event") == "result"]
++        if len(init_events) != 1:
++            raise FactoryError("AGY capability probe must return exactly one init event", "preflight")
++        if len(result_events) != 1:
++            raise FactoryError("AGY capability probe must return exactly one terminal result", "preflight")
++        if any(event.get("event") not in {"init", "step_update", "result"} for event in events):
++            raise FactoryError("AGY capability probe returned an unsupported event", "preflight")
++        if events[0].get("event") != "init":
++            raise FactoryError("AGY capability probe must begin with init", "preflight")
++        if events[-1].get("event") != "result":
++            raise FactoryError("AGY capability probe result must be the final event", "preflight")
++        if any(event.get("event") not in {"step_update"} for event in events[1:-1]):
++            raise FactoryError("AGY capability probe has an event after initialization and before its terminal result", "preflight")
++
++        init = init_events[0].get("init")
++        if not isinstance(init, dict):
++            raise FactoryError("AGY capability probe init payload is missing", "preflight")
++        conversation_id = init_events[0].get("conversation_id")
++        if not isinstance(conversation_id, str) or not conversation_id:
++            raise FactoryError("AGY capability probe init has no conversation identity", "preflight")
++        if not isinstance(init.get("model"), str) or init.get("model") != expected_model:
++            raise FactoryError("AGY capability probe reported the wrong model", "preflight")
++        init_cwd = init.get("cwd")
++        if not isinstance(init_cwd, str) or not init_cwd:
++            raise FactoryError("AGY capability probe init has no effective cwd", "preflight")
++        if expected_cwd is None:
++            try:
++                effective_cwd = Path(init_cwd).expanduser().resolve()
++            except (OSError, RuntimeError) as exc:
++                raise FactoryError("AGY capability probe reported an invalid cwd", "preflight") from exc
++            expected_cwd_text = str(probe_dir.resolve())
++            effective_cwd_text = str(effective_cwd)
++        else:
++            expected_cwd_text = str(expected_cwd)
++            effective_cwd_text = init_cwd
++        if os.path.normcase(effective_cwd_text.rstrip("\\/")) != os.path.normcase(expected_cwd_text.rstrip("\\/")):
++            raise FactoryError(
++                f"AGY capability probe used the wrong cwd: expected {expected_cwd_text}, got {effective_cwd_text}",
++                "preflight",
++            )
++        tools = init.get("tools")
++        if (
++            not isinstance(tools, list)
++            or not tools
++            or any(not isinstance(tool, str) or not tool for tool in tools)
++        ):
++            raise FactoryError("AGY capability probe init is missing audited capability metadata", "preflight")
++        if init.get("permission_mode") != AGY_REQUIRED_PERMISSION_MODE:
++            raise FactoryError("AGY capability probe reported an unexpected permission mode", "preflight")
++
++        for event in events:
++            if event.get("event") == "step_update":
++                update = event.get("step_update")
++                if (
++                    not isinstance(update, dict)
++                    or update.get("conversation_id") != conversation_id
++                    or isinstance(update.get("step_index"), bool)
++                    or not isinstance(update.get("step_index"), (int, float))
++                    or not math.isfinite(update["step_index"])
++                    or not isinstance(update.get("state"), str)
++                    or not isinstance(update.get("step_type"), str)
++                ):
++                    raise FactoryError("AGY capability probe conversation identity is inconsistent", "preflight")
++
++        result = result_events[0].get("result")
++        if not isinstance(result, dict):
++            raise FactoryError("AGY capability probe result payload is missing", "preflight")
++        required_result_keys = {
++            "conversation_id",
++            "status",
++            "response",
++            "duration_seconds",
++            "num_turns",
++            "usage",
++        }
++        missing_result_keys = sorted(required_result_keys - set(result))
++        if missing_result_keys:
++            raise FactoryError(
++                f"AGY capability probe result is missing required fields: {missing_result_keys}",
++                "preflight",
++            )
++        if result.get("conversation_id") != conversation_id:
++            raise FactoryError("AGY capability probe result has a stale conversation identity", "preflight")
++        if result.get("status") != "SUCCESS":
++            raise FactoryError("AGY capability probe did not complete successfully", "preflight")
++        response = result.get("response")
++        if not isinstance(response, str) or response.strip() != "AGY_PREFLIGHT_OK":
++            raise FactoryError("AGY capability probe returned an unexpected response", "preflight")
++        duration_seconds = result.get("duration_seconds")
++        num_turns = result.get("num_turns")
++        if (
++            isinstance(duration_seconds, bool)
++            or not isinstance(duration_seconds, (int, float))
++            or not math.isfinite(duration_seconds)
++            or duration_seconds < 0
++            or isinstance(num_turns, bool)
++            or not isinstance(num_turns, (int, float))
++            or not math.isfinite(num_turns)
++            or num_turns <= 0
++            or not isinstance(result.get("usage"), dict)
++        ):
++            raise FactoryError("AGY capability probe result has invalid completion metadata", "preflight")
++        if result.get("error"):
++            raise FactoryError("AGY capability probe reported a contradictory error", "preflight")
++
++        return {
++            "status": "SUCCESS",
++            "event_count": len(events),
++            "event_sequence": [event["event"] for event in events],
++            "effective_model": init["model"],
++            "effective_cwd": effective_cwd_text,
++            "permission_mode": init["permission_mode"],
++            "tool_count": len(init["tools"]),
++            "conversation_id_sha256": hashlib.sha256(conversation_id.encode("utf-8")).hexdigest(),
++            "response_sha256": hashlib.sha256(response.encode("utf-8")).hexdigest(),
++        }
++
++    @staticmethod
++    def _powershell_single_quote(value: str) -> str:
++        return "'" + value.replace("'", "''") + "'"
++
++    def _run_windows_sandbox_probe(
++        self,
++        path: Path,
++        config: Config,
++        expected_sha256: str,
++    ) -> dict[str, Any]:
++        """Run the no-edit probe through the audited Windows Sandbox boundary."""
++        sandbox_exe = Path(r"C:\Windows\System32\WindowsSandbox.exe")
++        if not sandbox_exe.is_file():
++            raise FactoryError(
++                "approved Windows Sandbox boundary is unavailable; refusing unrestricted AGY preflight",
++                "preflight",
++            )
++        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", config.builder_model):
++            raise FactoryError("builder_model is not safe for the sandbox argument contract", "preflight")
++
++        auth_mappings = [
++            (
++                Path.home() / ".gemini" / "antigravity",
++                r"C:\Users\WDAGUtilityAccount\.gemini\antigravity",
++            ),
++            (
++                Path.home() / ".antigravity_tools",
++                r"C:\Users\WDAGUtilityAccount\.antigravity_tools",
++            ),
++        ]
++        for host_path, _ in auth_mappings:
++            if not host_path.is_dir():
++                raise FactoryError(
++                    f"required AGY authenticated configuration mapping is unavailable: {host_path}",
++                    "preflight",
++                )
++
++        prompt = "Reply with exactly AGY_PREFLIGHT_OK. Do not call tools and do not read or write any files."
++        guest_prefix = r"C:\softfac-step5"
++        guest_agy = guest_prefix + "\\agy\\" + path.name
++        guest_cwd = guest_prefix + r"\cwd"
++        guest_output = guest_prefix + r"\output"
++        guest_script = guest_prefix + r"\guest\probe.ps1"
++        guest_stdout = guest_output + r"\stdout.ndjson"
++        guest_stderr = guest_output + r"\stderr.txt"
++        guest_done = guest_output + r"\done.json"
++        ps_quote = self._powershell_single_quote
++        arguments = (
++            f'--model "{config.builder_model}" '
++            "--dangerously-skip-permissions "
++            "--output-format stream-json "
++            "--disable-slash-commands "
++            f"--print-timeout {AGY_PREFLIGHT_PRINT_TIMEOUT_SECONDS}s "
++            f'--print "{prompt}"'
++        )
++
++        with _probe_temp_root() as raw_root:
++            host_root = Path(raw_root).resolve()
++            host_cwd = host_root / "cwd"
++            host_output = host_root / "output"
++            host_guest = host_root / "guest"
++            for directory in (host_cwd, host_output, host_guest):
++                directory.mkdir()
++            stdout_path = host_output / "stdout.ndjson"
++            stderr_path = host_output / "stderr.txt"
++            done_path = host_output / "done.json"
++            sandbox_script = f"""$ErrorActionPreference = "Continue"
++$psi = New-Object System.Diagnostics.ProcessStartInfo
++$psi.FileName = {ps_quote(guest_agy)}
++$psi.WorkingDirectory = {ps_quote(guest_cwd)}
++$psi.UseShellExecute = $false
++$psi.CreateNoWindow = $true
++$psi.RedirectStandardInput = $true
++$psi.RedirectStandardOutput = $true
++$psi.RedirectStandardError = $true
++$psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
++$psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
++$psi.Arguments = {ps_quote(arguments)}
++$process = New-Object System.Diagnostics.Process
++$process.StartInfo = $psi
++$stdout = ""
++$stderr = ""
++$exitCode = 125
++$errorText = $null
++try {{
++    [void]$process.Start()
++    $process.StandardInput.Close()
++    $stdout = $process.StandardOutput.ReadToEnd()
++    $stderr = $process.StandardError.ReadToEnd()
++    $process.WaitForExit()
++    $exitCode = $process.ExitCode
++}} catch {{
++    $errorText = $_.Exception.Message
++}} finally {{
++}}
++$utf8 = New-Object System.Text.UTF8Encoding($false)
++[System.IO.File]::WriteAllText({ps_quote(guest_stdout)}, $stdout, $utf8)
++[System.IO.File]::WriteAllText({ps_quote(guest_stderr)}, $stderr, $utf8)
++$done = [ordered]@{{
++    schema_version = 1
++    exit_code = $exitCode
++    error = $errorText
++}}
++[System.IO.File]::WriteAllText({ps_quote(guest_done)}, ($done | ConvertTo-Json -Compress), $utf8)
++shutdown.exe /s /t 0 /f | Out-Null
++"""
++            write_text(host_guest / "probe.ps1", sandbox_script)
++
++            def mapping(host_path: Path, guest_path: str, readonly: bool) -> str:
++                readonly_text = "true" if readonly else "false"
++                return (
++                    "    <MappedFolder>"
++                    f"<HostFolder>{xml_escape(str(host_path))}</HostFolder>"
++                    f"<SandboxFolder>{xml_escape(guest_path)}</SandboxFolder>"
++                    f"<ReadOnly>{readonly_text}</ReadOnly>"
++                    "</MappedFolder>"
++                )
++
++            mappings = [
++                mapping(path.parent, guest_prefix + r"\agy", True),
++                mapping(host_cwd, guest_cwd, False),
++                mapping(host_output, guest_output, False),
++                mapping(host_guest, guest_prefix + r"\guest", True),
++            ]
++            mappings.extend(mapping(host_path, guest_path, True) for host_path, guest_path in auth_mappings)
++            sandbox_config = host_root / "probe.wsb"
++            config_text = (
++                "<Configuration>\n"
++                "  <VGpu>Disable</VGpu>\n"
++                "  <Networking>Enable</Networking>\n"
++                "  <MappedFolders>\n"
++                + "\n".join(mappings)
++                + "\n  </MappedFolders>\n"
++                "  <LogonCommand>\n"
++                f"    <Command>{xml_escape('powershell.exe -NoProfile -ExecutionPolicy Bypass -File ' + guest_script)}</Command>\n"
++                "  </LogonCommand>\n"
++                "</Configuration>\n"
++            )
++            write_text(sandbox_config, config_text)
++            config_sha256 = hashlib.sha256(sandbox_config.read_bytes()).hexdigest()
++            before_probe_tree = _snapshot_probe_tree(host_cwd)
++
++            try:
++                self._recheck_identity(path, expected_sha256)
++                sandbox_process = subprocess.Popen(
++                    [str(sandbox_exe), str(sandbox_config)],
++                    stdout=subprocess.DEVNULL,
++                    stderr=subprocess.DEVNULL,
++                )
++            except OSError as exc:
++                raise FactoryError(f"could not start Windows Sandbox: {exc}", "preflight") from exc
++
++            deadline = time.monotonic() + max(180, AGY_PREFLIGHT_PRINT_TIMEOUT_SECONDS + 60)
++            while not done_path.is_file() and sandbox_process.poll() is None and time.monotonic() < deadline:
++                time.sleep(0.5)
++            timed_out = not done_path.is_file()
++            if sandbox_process.poll() is None:
++                sandbox_process.terminate()
++                try:
++                    sandbox_process.wait(timeout=15)
++                except subprocess.TimeoutExpired:
++                    sandbox_process.kill()
++                    sandbox_process.wait(timeout=15)
++            else:
++                sandbox_process.wait()
++            sandbox_exit_code = sandbox_process.returncode
++            if timed_out:
++                raise FactoryError(
++                    "Windows Sandbox AGY capability probe timed out before host attestation",
++                    "preflight",
++                )
++
++            try:
++                done_payload = json.loads(done_path.read_text(encoding="utf-8"))
++            except (OSError, json.JSONDecodeError) as exc:
++                raise FactoryError("Windows Sandbox probe produced invalid completion evidence", "preflight") from exc
++            if not isinstance(done_payload, dict) or done_payload.get("schema_version") != 1:
++                raise FactoryError("Windows Sandbox probe completion evidence has an invalid schema", "preflight")
++            exit_code = done_payload.get("exit_code")
++            if isinstance(exit_code, bool) or not isinstance(exit_code, int):
++                raise FactoryError("Windows Sandbox probe completion evidence has an invalid exit code", "preflight")
++            try:
++                stdout_bytes = stdout_path.read_bytes()
++                stderr_bytes = stderr_path.read_bytes()
++            except OSError as exc:
++                raise FactoryError("Windows Sandbox probe did not produce host-attested output", "preflight") from exc
++            if exit_code != 0:
++                detail = done_payload.get("error")
++                if not detail:
++                    detail = stderr_bytes.decode("utf-8", errors="replace").strip()[:500]
++                detail = detail or f"guest exit code {exit_code}"
++                detail = re.sub(r"https?://\S+", "<redacted-url>", str(detail))
++                raise FactoryError(f"AGY capability probe failed in Windows Sandbox: {detail}", "preflight")
++            try:
++                stdout = stdout_bytes.decode("utf-8")
++            except UnicodeDecodeError as exc:
++                raise FactoryError("Windows Sandbox probe stdout is not valid UTF-8", "preflight") from exc
++            probe_evidence = self._parse_probe(
++                stdout,
++                host_cwd,
++                config.builder_model,
++                expected_cwd=guest_cwd,
++            )
++            after_probe_tree = _snapshot_probe_tree(host_cwd)
++            if before_probe_tree != after_probe_tree:
++                raise FactoryError(
++                    "AGY capability probe mutated its disposable boundary",
++                    "preflight",
++                )
++            probe_evidence.update(
++                {
++                    "boundary": "Windows Sandbox",
++                    "host_attested": True,
++                    "sandbox_config_sha256": config_sha256,
++                    "sandbox_process_exit_code": sandbox_exit_code,
++                    "guest_cwd": guest_cwd,
++                    "auth_state": "audited host AGY state mapped read-only; no credential writes",
++                    "disposable_files_created": [],
++                    "stdout_sha256": hashlib.sha256(stdout_bytes).hexdigest(),
++                    "stderr_empty": not bool(stderr_bytes),
++                }
++            )
++            return probe_evidence
++
++    @staticmethod
++    def _preflight_error_code(value: str) -> str:
++        lowered = value.lower()
++        if "timed out" in lowered or "timeout" in lowered:
++            return "command_timeout"
++        if "authentication" in lowered or "login" in lowered:
++            return "authentication_unavailable"
++        if "identity" in lowered or "hash" in lowered:
++            return "identity_mismatch"
++        if "model" in lowered:
++            return "model_capability_failed"
++        if "catalog" in lowered:
++            return "model_catalog_failed"
++        if "sandbox" in lowered or "probe" in lowered:
++            return "capability_probe_failed"
++        return "preflight_failed"
++
++    def _write_preflight_failure(self, run_dir: Path, error: str) -> None:
++        target = run_dir / "preflight_builder.json"
++        if target.is_file():
++            try:
++                existing = read_json(target)
++            except Exception:
++                existing = None
++            if isinstance(existing, dict) and (
++                existing.get("status") == "SUCCESS"
++                or (
++                    isinstance(existing.get("probe"), dict)
++                    and existing["probe"].get("status") == "SUCCESS"
++                )
++            ):
++                target = run_dir / "preflight_builder_failure.json"
++        evidence: dict[str, Any] = {
++            "schema_version": 1,
++            "builder_backend": "agy",
++            "status": "FAIL",
++            "stage": "capability_preflight",
++            "error_category": "preflight",
++            "error_code": self._preflight_error_code(error),
++            "error": "preflight_failed",
++            "failure_message_sha256": hashlib.sha256(error.encode("utf-8")).hexdigest(),
++            "credential_mode": "AGY runtime authentication only; no API-key fallback",
++        }
++        if self.agy_bin is not None and self._pinned_sha256 is not None:
++            evidence["executable"] = {
++                "path": str(self.agy_bin),
++                "sha256": self._pinned_sha256,
++            }
++        try:
++            atomic_json(target, evidence)
++        except Exception as exc:
++            raise FactoryError(
++                f"could not persist AGY preflight failure evidence: {exc}",
++                "preflight",
++            ) from exc
++
++    def _preflight_command(
++        self,
++        argv: list[str],
++        *,
++        timeout: int,
++    ) -> subprocess.CompletedProcess[str]:
++        try:
++            return command(argv, timeout=timeout)
++        except FactoryError as exc:
++            raise FactoryError(str(exc), "preflight") from exc
++
++    def preflight(self, config: Config, run_dir: Path) -> dict[str, Any]:
++        try:
++            return self._preflight(config, run_dir)
++        except FactoryError as exc:
++            self._write_preflight_failure(run_dir, str(exc))
++            raise
++
++    def _preflight(self, config: Config, run_dir: Path) -> dict[str, Any]:
++        path, binary_sha256 = self._pin_executable(config)
++        self._verify_persisted_identity(run_dir, path, binary_sha256)
++        if binary_sha256 != APPROVED_AGY_SHA256:
++            raise FactoryError(
++                f"AGY executable hash is not an approved audited identity: {binary_sha256}",
++                "preflight",
++            )
++        self._recheck_identity(path, binary_sha256)
++        version_result = self._preflight_command([str(path), "--version"], timeout=30)
++        if version_result.returncode != 0:
++            raise FactoryError(f"AGY --version failed: {(version_result.stderr or version_result.stdout).strip()}", "preflight")
++        version = (version_result.stdout or "").strip()
++        if not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version):
++            raise FactoryError("AGY --version must be a bare semantic version", "preflight")
++        if version != SUPPORTED_AGY_VERSION:
++            raise FactoryError(f"unsupported AGY version: {version}", "preflight")
++
++        self._recheck_identity(path, binary_sha256)
++        help_result = self._preflight_command([str(path), "--help"], timeout=30)
++        if help_result.returncode != 0:
++            raise FactoryError(f"AGY --help failed: {(help_result.stderr or help_result.stdout).strip()}", "preflight")
++        help_text = (help_result.stdout or "") + "\n" + (help_result.stderr or "")
++        capability_declarations = _parse_agy_help_capabilities(help_text)
++        missing_capabilities = [
++            flag for flag in AGY_REQUIRED_CAPABILITIES if flag not in capability_declarations
++        ]
++        output_format_description = capability_declarations.get("--output-format", "")
++        if (
++                "--output-format" not in missing_capabilities
++            and not re.search(
++                rf"(?<![A-Za-z0-9_.-]){re.escape(AGY_REQUIRED_OUTPUT_FORMAT)}(?![A-Za-z0-9_.-])",
++                output_format_description,
++            )
++        ):
++            missing_capabilities.append("--output-format=stream-json")
++        if missing_capabilities:
++            raise FactoryError(f"AGY is missing required capabilities: {missing_capabilities}", "preflight")
++
++        self._recheck_identity(path, binary_sha256)
++        models_result = self._preflight_command([str(path), "models"], timeout=60)
++        if models_result.returncode != 0:
++            raise FactoryError(f"AGY model catalog failed: {(models_result.stderr or models_result.stdout).strip()}", "preflight")
++        catalog = _parse_agy_model_catalog(models_result.stdout or "")
++        if config.builder_model not in catalog:
++            raise FactoryError(f"AGY model catalog does not contain {config.builder_model}", "preflight")
++
++        prompt = "Reply with exactly AGY_PREFLIGHT_OK. Do not call tools and do not read or write any files."
++        if len(prompt) > 4096 or "\x00" in prompt:
++            raise FactoryError("AGY capability probe prompt is invalid", "preflight")
++        if self._probe_runner is not None:
++            with tempfile.TemporaryDirectory(prefix="agy-preflight-parent-") as raw_probe_parent:
++                probe_parent = Path(raw_probe_parent).resolve()
++                probe_root = probe_parent / "root"
++                probe_root.mkdir()
++                probe_dir = probe_root / "cwd"
++                probe_dir.mkdir()
++                before_probe_tree = _snapshot_probe_tree(probe_parent)
++                self._recheck_identity(path, binary_sha256)
++                probe_result = self._probe_runner(path, config, probe_dir)
++                if not isinstance(probe_result, dict):
++                    raise FactoryError("injected AGY probe runner returned invalid evidence", "preflight")
++                return_code = probe_result.get("returncode")
++                if isinstance(return_code, bool) or not isinstance(return_code, int):
++                    raise FactoryError("injected AGY probe runner returned an invalid exit code", "preflight")
++                if return_code != 0:
++                    raise FactoryError(
++                        f"AGY capability probe failed: {probe_result.get('stderr', '')}",
++                        "preflight",
++                    )
++                raw_probe = probe_result.get("stdout", "")
++                if not isinstance(raw_probe, str):
++                    raise FactoryError("injected AGY probe runner returned invalid stdout", "preflight")
++                probe_evidence = self._parse_probe(raw_probe, probe_dir, config.builder_model)
++                after_probe_tree = _snapshot_probe_tree(probe_parent)
++                if before_probe_tree != after_probe_tree:
++                    raise FactoryError(
++                        "AGY capability probe mutated its disposable boundary",
++                        "preflight",
++                    )
++                probe_evidence["disposable_files_created"] = []
++                probe_evidence["stdout_sha256"] = hashlib.sha256(raw_probe.encode("utf-8")).hexdigest()
++                probe_evidence["stderr_empty"] = not bool(probe_result.get("stderr", ""))
++        else:
++            probe_evidence = self._run_windows_sandbox_probe(path, config, binary_sha256)
++
++        self._verify_persisted_identity(run_dir, path, binary_sha256)
++        self._recheck_identity(path, binary_sha256)
++        evidence = {
++            "schema_version": 1,
++            "builder_backend": "agy",
++            "executable": {
++                "path": str(path),
++                "version": version,
++                "sha256": binary_sha256,
++            },
++            "capabilities": {
++                "required": list(AGY_REQUIRED_CAPABILITIES),
++                "missing": missing_capabilities,
++                "declarations": capability_declarations,
++                "output_format": AGY_REQUIRED_OUTPUT_FORMAT,
++            },
++            "model_catalog": {
++                "requested_model": config.builder_model,
++                "exact_entry": catalog[config.builder_model],
++                "models": catalog,
++            },
++            "probe": probe_evidence,
++            "credential_mode": "AGY runtime authentication only; no API-key fallback",
++        }
++        atomic_json(run_dir / "preflight_builder.json", evidence)
++        return evidence
++
++
+ class AiderBuilder:
+     def __init__(self, aider_bin: str | None = None) -> None:
+         self.aider_bin = aider_bin or shutil.which("aider") or "aider"
+@@ -1130,6 +1924,9 @@ class FactoryEngine:
+     ) -> None:
+         self.state_root = state_root.expanduser().resolve()
+         self.role_client = role_client or CodexRoleClient()
++        # Step 5 only proves the future AGY boundary.  The executable editing
++        # adapter is introduced in Step 7; keep the current default runnable
++        # until that reviewed adapter exists.
+         self.builder = builder or AiderBuilder()
+ 
+     def _run_dir(self, identifier: str) -> Path:
+@@ -1361,7 +2158,30 @@ class FactoryEngine:
+     ) -> None:
+         """Prove every provider/tool capability before planning or execution."""
+         self._save(run_dir, state, "preflight", error=None, error_category=None)
+-        self.builder.preflight(config, run_dir)
++        builder_evidence = self.builder.preflight(config, run_dir)
++        if isinstance(builder_evidence, dict):
++            executable = builder_evidence.get("executable")
++            if isinstance(executable, dict):
++                pinned_path = executable.get("path")
++                pinned_sha256 = executable.get("sha256")
++                if isinstance(pinned_path, str) and isinstance(pinned_sha256, str):
++                    previous_path = state.get("agy_executable_path")
++                    previous_sha256 = state.get("agy_executable_sha256")
++                    if (
++                        (previous_path is not None and previous_path != pinned_path)
++                        or (previous_sha256 is not None and previous_sha256 != pinned_sha256)
++                    ):
++                        raise FactoryError(
++                            "run state AGY executable identity changed",
++                            "preflight",
++                        )
++                    self._save(
++                        run_dir,
++                        state,
++                        "preflight",
++                        agy_executable_path=pinned_path,
++                        agy_executable_sha256=pinned_sha256,
++                    )
+         self._smoke_role(run_dir, "Sol", config.planner_provider or config.sol_provider, config.planner_model or config.sol_model, config.role_timeout)
+         self._smoke_role(run_dir, "Sol", config.reviewer_provider or config.sol_provider, config.reviewer_model or config.sol_model, config.role_timeout)
+         self._smoke_role(run_dir, "Luna", config.luna_provider, config.luna_model, config.role_timeout)
+diff --git a/tests/test_factory_preflight.py b/tests/test_factory_preflight.py
+new file mode 100644
+index 0000000..55e0cd0
+--- /dev/null
++++ b/tests/test_factory_preflight.py
+@@ -0,0 +1,680 @@
++"""Step 5 tests for AGY executable resolution and capability preflight."""
++
++from __future__ import annotations
++
++import hashlib
++import json
++import os
++import subprocess
++import tempfile
++import unittest
++from pathlib import Path
++from unittest.mock import patch
++
++import sys
++
++sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
++
++import hermes_factory_v2 as factory_module
++
++from hermes_factory_v2 import (
++    AGY_REQUIRED_CAPABILITIES,
++    AgyBuilder,
++    AiderBuilder,
++    Config,
++    FactoryError,
++    FactoryEngine,
++    atomic_json,
++    resolve_agy_executable,
++)
++
++
++HELP_TEXT = "\n".join(
++    [
++        "Usage of agy.exe:",
++        *(
++            (
++                f"  {capability}                 "
++                "Output format in print mode (text, json, stream-json)"
++                if capability == "--output-format"
++                else f"  {capability}"
++            )
++            for capability in AGY_REQUIRED_CAPABILITIES
++        ),
++    ]
++)
++MODEL_TEXT = (
++    "Fetching available models...\n"
++    "gemini-3.8-flash-high\tGemini 3.8 Flash (High)\n"
++    "gemini-3.1-pro-high\tGemini 3.1 Pro (High)\n"
++)
++
++
++class CommandFixture:
++    def __init__(
++        self,
++        *,
++        model: str,
++        version: str = "1.2.0",
++        help_text: str = HELP_TEXT,
++        models_text: str = MODEL_TEXT,
++        probe_stdout: str | None = None,
++        probe_returncode: int = 0,
++        probe_stderr: str = "",
++        probe_model: str | None = None,
++        probe_effective_cwd: Path | None = None,
++        probe_result_conversation_id: str | None = None,
++        probe_duplicate_result: bool = False,
++        probe_order: str | None = None,
++        probe_create_file: bool = False,
++        probe_create_parent_file: bool = False,
++        probe_tools: list[object] | None = None,
++        probe_permission_mode: str = "always-proceed",
++        probe_num_turns: int = 1,
++        probe_duration_seconds: object = 0.1,
++        probe_drop_result_keys: tuple[str, ...] = (),
++    ) -> None:
++        self.model = model
++        self.version = version
++        self.help_text = help_text
++        self.models_text = models_text
++        self.probe_stdout = probe_stdout
++        self.probe_returncode = probe_returncode
++        self.probe_stderr = probe_stderr
++        self.probe_model = probe_model or model
++        self.probe_effective_cwd = probe_effective_cwd
++        self.probe_result_conversation_id = probe_result_conversation_id
++        self.probe_duplicate_result = probe_duplicate_result
++        self.probe_order = probe_order
++        self.probe_create_file = probe_create_file
++        self.probe_create_parent_file = probe_create_parent_file
++        self.probe_tools = probe_tools
++        self.probe_permission_mode = probe_permission_mode
++        self.probe_num_turns = probe_num_turns
++        self.probe_duration_seconds = probe_duration_seconds
++        self.probe_drop_result_keys = probe_drop_result_keys
++        self.calls: list[tuple[list[str], dict[str, object]]] = []
++
++    def __call__(self, argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
++        self.calls.append((list(argv), kwargs))
++        if len(argv) > 1 and argv[1] == "--version":
++            return subprocess.CompletedProcess(argv, 0, self.version + "\n", "")
++        if len(argv) > 1 and argv[1] == "--help":
++            return subprocess.CompletedProcess(argv, 0, self.help_text, "")
++        if len(argv) > 1 and argv[1] == "models":
++            return subprocess.CompletedProcess(argv, 0, self.models_text, "")
++        if self.probe_stdout is None:
++            probe_dir = Path(str(kwargs["cwd"])).resolve()
++            self.probe_stdout = make_probe_stream(
++                probe_dir,
++                self.probe_model,
++                effective_cwd=self.probe_effective_cwd,
++                result_conversation_id=self.probe_result_conversation_id,
++                duplicate_result=self.probe_duplicate_result,
++                tools=self.probe_tools,
++                permission_mode=self.probe_permission_mode,
++                num_turns=self.probe_num_turns,
++                duration_seconds=self.probe_duration_seconds,
++                drop_result_keys=self.probe_drop_result_keys,
++            )
++            if self.probe_order:
++                events = [json.loads(line) for line in self.probe_stdout.splitlines() if line.strip()]
++                if self.probe_order == "result_before_init":
++                    events = [events[-1], *events[:-1]]
++                elif self.probe_order == "event_after_result":
++                    events = [events[0], events[-1], *events[1:-1]]
++                else:
++                    raise AssertionError(f"unknown probe order: {self.probe_order}")
++                self.probe_stdout = "\n".join(json.dumps(event) for event in events) + "\n"
++            if self.probe_create_file:
++                (probe_dir / "unexpected.txt").write_text("probe wrote a file\n", encoding="utf-8")
++            if self.probe_create_parent_file:
++                (probe_dir.parent.parent / "escaped.txt").write_text(
++                    "probe escaped its private root\n",
++                    encoding="utf-8",
++                )
++        return subprocess.CompletedProcess(
++            argv,
++            self.probe_returncode,
++            self.probe_stdout,
++            self.probe_stderr,
++        )
++
++
++def make_probe_stream(
++    probe_dir: Path,
++    model: str,
++    *,
++    effective_cwd: Path | None = None,
++    result_status: str = "SUCCESS",
++    response: str = "AGY_PREFLIGHT_OK",
++    conversation_id: str = "fresh-preflight-conversation",
++    result_conversation_id: str | None = None,
++    duplicate_result: bool = False,
++    tools: list[object] | None = None,
++    permission_mode: str = "always-proceed",
++    num_turns: int = 1,
++    duration_seconds: object = 0.1,
++    drop_result_keys: tuple[str, ...] = (),
++) -> str:
++    cwd = effective_cwd or probe_dir
++    result_payload = {
++        "conversation_id": result_conversation_id or conversation_id,
++        "status": result_status,
++        "response": response,
++        "duration_seconds": duration_seconds,
++        "num_turns": num_turns,
++        "usage": {},
++    }
++    for key in drop_result_keys:
++        result_payload.pop(key, None)
++    result = {
++        "event": "result",
++        "result": result_payload,
++    }
++    events = [
++        {
++            "event": "init",
++            "conversation_id": conversation_id,
++            "init": {
++                "model": model,
++                "cwd": str(cwd),
++                "tools": tools if tools is not None else ["terminal"],
++                "permission_mode": permission_mode,
++            },
++        },
++        {
++            "event": "step_update",
++            "step_update": {
++                "conversation_id": conversation_id,
++                "step_index": 0,
++                "state": "DONE",
++                "step_type": "agent_response",
++            },
++        },
++        result,
++    ]
++    if duplicate_result:
++        events.append(result)
++    return "\n".join(json.dumps(event) for event in events) + "\n"
++
++
++def fixture_probe_runner(
++    path: Path,
++    config: Config,
++    probe_dir: Path,
++) -> dict[str, object]:
++    prompt = "Reply with exactly AGY_PREFLIGHT_OK. Do not call tools and do not read or write any files."
++    result = factory_module.command(
++        [
++            str(path),
++            "--model",
++            config.builder_model,
++            "--dangerously-skip-permissions",
++            "--output-format",
++            "stream-json",
++            "--disable-slash-commands",
++            "--print-timeout",
++            "90s",
++            "--print",
++            prompt,
++        ],
++        cwd=probe_dir,
++        timeout=min(max(config.builder_timeout, 1), 120),
++    )
++    return {
++        "returncode": result.returncode,
++        "stdout": result.stdout or "",
++        "stderr": result.stderr or "",
++    }
++
++
++class AgyResolutionTests(unittest.TestCase):
++    def setUp(self) -> None:
++        self.temp = tempfile.TemporaryDirectory()
++        self.root = Path(self.temp.name)
++
++    def tearDown(self) -> None:
++        self.temp.cleanup()
++
++    def executable(self, name: str = "agy.exe") -> Path:
++        path = self.root / name
++        path.write_bytes(b"native agy fixture")
++        return path
++
++    def test_explicit_path_wins_and_invalid_explicit_path_does_not_fall_back(self):
++        explicit = self.executable()
++        with patch("hermes_factory_v2.shutil.which", return_value=str(self.executable("path-agy.exe"))):
++            self.assertEqual(resolve_agy_executable(str(explicit)), explicit.resolve())
++
++        with patch("hermes_factory_v2.shutil.which", return_value=str(explicit)):
++            with self.assertRaisesRegex(FactoryError, "not a valid file"):
++                resolve_agy_executable(str(self.root / "missing.exe"))
++
++    def test_path_then_windows_local_app_data_fallback(self):
++        path_candidate = self.executable("path-agy.exe")
++        with patch("hermes_factory_v2.shutil.which", return_value=str(path_candidate)):
++            self.assertEqual(resolve_agy_executable(None), path_candidate.resolve())
++
++        fallback = self.root / "agy" / "bin" / "agy.exe"
++        fallback.parent.mkdir(parents=True)
++        fallback.write_bytes(b"fallback agy fixture")
++        with patch("hermes_factory_v2.shutil.which", return_value=None), patch(
++            "hermes_factory_v2.os.name", "nt"
++        ), patch.dict(os.environ, {"LOCALAPPDATA": str(self.root)}, clear=False):
++            self.assertEqual(resolve_agy_executable(None), fallback.resolve())
++
++    def test_directories_and_shell_shims_are_rejected(self):
++        directory = self.root / "agy.exe"
++        directory.mkdir()
++        with self.assertRaisesRegex(FactoryError, "not a file"):
++            resolve_agy_executable(str(directory))
++
++        shim = self.executable("agy.cmd")
++        with self.assertRaisesRegex(FactoryError, "unsupported shell shim"):
++            resolve_agy_executable(str(shim))
++
++        non_native = self.executable("agy.md")
++        with self.assertRaisesRegex(FactoryError, "native Windows executable"):
++            resolve_agy_executable(str(non_native))
++
++    def test_windows_fallback_requires_local_app_data(self):
++        with patch("hermes_factory_v2.shutil.which", return_value=None), patch(
++            "hermes_factory_v2.os.name", "nt"
++        ), patch.dict(os.environ, {"LOCALAPPDATA": ""}, clear=False):
++            with self.assertRaisesRegex(FactoryError, "LOCALAPPDATA"):
++                resolve_agy_executable(None)
++
++    def test_factory_default_builder_remains_runnable_until_step7(self):
++        engine = FactoryEngine(state_root=self.root / "state", role_client=object(), builder=None)
++        self.assertIsInstance(engine.builder, AiderBuilder)
++        self.assertTrue(callable(getattr(engine.builder, "run", None)))
++
++
++class AgyPreflightTests(unittest.TestCase):
++    def setUp(self) -> None:
++        self.temp = tempfile.TemporaryDirectory()
++        self.root = Path(self.temp.name)
++        self.run_dir = self.root / "run"
++        self.run_dir.mkdir()
++        self.executable = self.root / "agy.exe"
++        self.executable.write_bytes(b"native agy fixture")
++        self.failure_number = 0
++
++    def tearDown(self) -> None:
++        self.temp.cleanup()
++
++    def config(self, **updates: object) -> Config:
++        values: dict[str, object] = {
++            "repo": str(self.root),
++            "request": "preflight fixture",
++            "requested_files": [],
++            "test_command": None,
++            "agy_bin": str(self.executable),
++        }
++        values.update(updates)
++        return Config(**values)
++
++    def run_preflight(
++        self,
++        fixture: CommandFixture,
++        *,
++        run_dir: Path | None = None,
++        **config_updates: object,
++    ) -> dict[str, object]:
++        builder = AgyBuilder(str(self.executable), _probe_runner=fixture_probe_runner)
++        approved_hash = hashlib.sha256(self.executable.read_bytes()).hexdigest()
++        with patch("hermes_factory_v2.APPROVED_AGY_SHA256", approved_hash), patch(
++            "hermes_factory_v2.command", side_effect=fixture
++        ):
++            return builder.preflight(self.config(**config_updates), run_dir or self.run_dir)
++
++    def assert_preflight_rejected(self, fixture: CommandFixture, pattern: str) -> None:
++        self.failure_number += 1
++        failure_run_dir = self.root / f"failure-{self.failure_number}"
++        failure_run_dir.mkdir()
++        with self.assertRaisesRegex(FactoryError, pattern) as context:
++            self.run_preflight(fixture, run_dir=failure_run_dir)
++        self.assertEqual(context.exception.category, "preflight")
++        failure_evidence = failure_run_dir / "preflight_builder.json"
++        self.assertTrue(failure_evidence.exists())
++        stored = json.loads(failure_evidence.read_text(encoding="utf-8"))
++        self.assertEqual(stored["status"], "FAIL")
++        self.assertEqual(stored["error_category"], "preflight")
++        self.assertNotIn("stdout", stored)
++        self.assertNotIn("stderr", stored)
++        self.assertNotIn("GEMINI_API_KEY", json.dumps(stored))
++
++    def test_success_records_pinned_identity_catalog_capabilities_and_probe(self):
++        fixture = CommandFixture(model="gemini-3.8-flash-high")
++        evidence = self.run_preflight(fixture)
++        stored = json.loads((self.run_dir / "preflight_builder.json").read_text(encoding="utf-8"))
++        expected_hash = hashlib.sha256(self.executable.read_bytes()).hexdigest()
++
++        self.assertEqual(evidence, stored)
++        self.assertEqual(stored["executable"]["path"], str(self.executable.resolve()))
++        self.assertEqual(stored["executable"]["version"], "1.2.0")
++        self.assertEqual(stored["executable"]["sha256"], expected_hash)
++        self.assertEqual(stored["model_catalog"]["requested_model"], "gemini-3.8-flash-high")
++        self.assertEqual(stored["model_catalog"]["exact_entry"], "Gemini 3.8 Flash (High)")
++        self.assertEqual(stored["capabilities"]["missing"], [])
++        self.assertEqual(stored["probe"]["status"], "SUCCESS")
++        self.assertEqual(stored["probe"]["effective_model"], "gemini-3.8-flash-high")
++        self.assertEqual(stored["probe"]["disposable_files_created"], [])
++        self.assertNotIn("GEMINI_API_KEY", json.dumps(stored))
++        self.assertNotIn("sk-", json.dumps(stored))
++
++        probe_argv, probe_kwargs = fixture.calls[-1]
++        self.assertEqual(probe_argv[1:], [
++            "--model",
++            "gemini-3.8-flash-high",
++            "--dangerously-skip-permissions",
++            "--output-format",
++            "stream-json",
++            "--disable-slash-commands",
++            "--print-timeout",
++            "90s",
++            "--print",
++            "Reply with exactly AGY_PREFLIGHT_OK. Do not call tools and do not read or write any files.",
++        ])
++        self.assertIsInstance(probe_kwargs["cwd"], Path)
++        self.assertNotIn("--continue", probe_argv)
++        self.assertNotIn("--conversation", probe_argv)
++        self.assertNotIn("--project", probe_argv)
++
++    def test_bannered_or_unsupported_versions_fail_closed(self):
++        self.assert_preflight_rejected(
++            CommandFixture(model="gemini-3.8-flash-high", version="agy version 1.2.0"),
++            "bare semantic version",
++        )
++        self.assert_preflight_rejected(
++            CommandFixture(model="gemini-3.8-flash-high", version="1.2.1"),
++            "unsupported AGY version",
++        )
++
++    def test_missing_capability_fails_before_model_or_probe(self):
++        help_text = HELP_TEXT.replace("--print-timeout", "")
++        fixture = CommandFixture(model="gemini-3.8-flash-high", help_text=help_text)
++        self.assert_preflight_rejected(fixture, "missing required capabilities")
++        self.assertEqual(len(fixture.calls), 2)
++
++    def test_help_parser_rejects_false_positive_tokens_and_wrong_output_format(self):
++        embedded_only = "\n".join(
++            f"prefix{capability}suffix" for capability in AGY_REQUIRED_CAPABILITIES
++        ) + "\nprefix--output-formatsuffix stream-json"
++        self.assert_preflight_rejected(
++            CommandFixture(model="gemini-3.8-flash-high", help_text=embedded_only),
++            "no parseable option declarations",
++        )
++        self.assert_preflight_rejected(
++            CommandFixture(
++                model="gemini-3.8-flash-high",
++                help_text=HELP_TEXT.replace("stream-json", "ndjson"),
++            ),
++            "output-format=stream-json",
++        )
++
++    def test_malformed_or_missing_model_catalog_fails_closed(self):
++        self.assert_preflight_rejected(
++            CommandFixture(model="gemini-3.8-flash-high", models_text="not a catalog\n"),
++            "malformed entry",
++        )
++        self.assert_preflight_rejected(
++            CommandFixture(
++                model="gemini-3.8-flash-high",
++                models_text="gemini-3.1-pro-high\tGemini 3.1 Pro (High)\n",
++            ),
++            "does not contain",
++        )
++
++    def test_probe_nonzero_exit_and_error_result_fail_closed(self):
++        self.assert_preflight_rejected(
++            CommandFixture(model="gemini-3.8-flash-high", probe_returncode=1, probe_stderr="login required"),
++            "capability probe failed",
++        )
++        def error_runner(
++            path: Path,
++            config: Config,
++            probe_dir: Path,
++        ) -> dict[str, object]:
++            return {
++                "returncode": 0,
++                "stdout": make_probe_stream(
++                    probe_dir,
++                    config.builder_model,
++                    result_status="ERROR",
++                ),
++                "stderr": "",
++            }
++
++        fixture = CommandFixture(model="gemini-3.8-flash-high")
++        approved_hash = hashlib.sha256(self.executable.read_bytes()).hexdigest()
++        with patch("hermes_factory_v2.APPROVED_AGY_SHA256", approved_hash), patch(
++            "hermes_factory_v2.command", side_effect=fixture
++        ):
++            with self.assertRaisesRegex(FactoryError, "did not complete successfully"):
++                AgyBuilder(
++                    str(self.executable),
++                    _probe_runner=error_runner,
++                ).preflight(self.config(), self.run_dir)
++
++    def test_unauthenticated_preflight_does_not_launch_a_browser(self):
++        source = Path(__file__).resolve().parent.parent / "lib" / "hermes_factory_v2.py"
++        source_text = source.read_text(encoding="utf-8")
++        self.assertNotIn("webbrowser", source_text)
++        self.assertNotIn("start https", source_text.lower())
++
++    def test_wrong_model_cwd_conversation_and_duplicate_result_fail_closed(self):
++        self.assert_preflight_rejected(
++            CommandFixture(model="gemini-3.8-flash-high", probe_model="gemini-3.7-flash-high"),
++            "wrong model",
++        )
++        self.assert_preflight_rejected(
++            CommandFixture(model="gemini-3.8-flash-high", probe_effective_cwd=self.root / "wrong-cwd"),
++            "wrong cwd",
++        )
++        self.assert_preflight_rejected(
++            CommandFixture(
++                model="gemini-3.8-flash-high",
++                probe_result_conversation_id="stale-conversation",
++            ),
++            "stale conversation",
++        )
++        self.assert_preflight_rejected(
++            CommandFixture(model="gemini-3.8-flash-high", probe_duplicate_result=True),
++            "exactly one terminal result",
++        )
++
++    def test_probe_requires_init_first_and_result_last(self):
++        self.assert_preflight_rejected(
++            CommandFixture(
++                model="gemini-3.8-flash-high",
++                probe_order="result_before_init",
++            ),
++            "begin with init",
++        )
++        self.assert_preflight_rejected(
++            CommandFixture(
++                model="gemini-3.8-flash-high",
++                probe_order="event_after_result",
++            ),
++            "result must be the final event",
++        )
++
++    def test_probe_requires_audited_field_types_and_completion_metadata(self):
++        invalid_fixtures = [
++            (
++                CommandFixture(model="gemini-3.8-flash-high", probe_tools=[123]),
++                "missing audited capability metadata",
++            ),
++            (
++                CommandFixture(
++                    model="gemini-3.8-flash-high",
++                    probe_permission_mode="request-review",
++                ),
++                "unexpected permission mode",
++            ),
++            (
++                CommandFixture(
++                    model="gemini-3.8-flash-high",
++                    probe_drop_result_keys=("usage",),
++                ),
++                "missing required fields",
++            ),
++            (
++                CommandFixture(model="gemini-3.8-flash-high", probe_num_turns=0),
++                "invalid completion metadata",
++            ),
++            (
++                CommandFixture(
++                    model="gemini-3.8-flash-high",
++                    probe_duration_seconds="unknown",
++                ),
++                "invalid completion metadata",
++            ),
++        ]
++        for fixture, pattern in invalid_fixtures:
++            with self.subTest(pattern=pattern):
++                self.assert_preflight_rejected(fixture, pattern)
++
++    def test_probe_filesystem_mutation_fails_before_success_evidence(self):
++        self.assert_preflight_rejected(
++            CommandFixture(model="gemini-3.8-flash-high", probe_create_file=True),
++            "mutated its disposable boundary",
++        )
++        self.assert_preflight_rejected(
++            CommandFixture(model="gemini-3.8-flash-high", probe_create_parent_file=True),
++            "mutated its disposable boundary",
++        )
++
++    def test_malformed_probe_stream_fails_closed(self):
++        fixture = CommandFixture(model="gemini-3.8-flash-high", probe_stdout="not json\n")
++        self.assert_preflight_rejected(fixture, "malformed stream JSON")
++
++    def test_binary_identity_change_after_probe_is_rejected(self):
++        fixture = CommandFixture(model="gemini-3.8-flash-high")
++        original = fixture.__call__
++
++        def mutate_after_models(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
++            result = original(argv, **kwargs)
++            if len(argv) > 1 and argv[1] == "models":
++                self.executable.write_bytes(b"changed agy fixture")
++            return result
++
++        with self.assertRaisesRegex(FactoryError, "identity changed"):
++            approved_hash = hashlib.sha256(self.executable.read_bytes()).hexdigest()
++            with patch("hermes_factory_v2.APPROVED_AGY_SHA256", approved_hash), patch(
++                "hermes_factory_v2.command", side_effect=mutate_after_models
++            ):
++                AgyBuilder(str(self.executable), _probe_runner=fixture_probe_runner).preflight(
++                    self.config(), self.run_dir
++                )
++        self.assertEqual(
++            [argv[1] for argv, _ in fixture.calls],
++            ["--version", "--help", "models"],
++        )
++
++    def test_pinned_identity_survives_a_new_builder_instance(self):
++        config = self.config(agy_bin=None)
++        fixture = CommandFixture(model="gemini-3.8-flash-high")
++        approved_hash = hashlib.sha256(self.executable.read_bytes()).hexdigest()
++        with patch("hermes_factory_v2.APPROVED_AGY_SHA256", approved_hash), patch(
++            "hermes_factory_v2.shutil.which", return_value=str(self.executable)
++        ), patch("hermes_factory_v2.command", side_effect=fixture):
++            AgyBuilder(_probe_runner=fixture_probe_runner).preflight(config, self.run_dir)
++
++        self.executable.write_bytes(b"changed after first process")
++        with self.assertRaisesRegex(FactoryError, "identity changed"):
++            with patch("hermes_factory_v2.shutil.which", return_value=str(self.executable)), patch(
++                "hermes_factory_v2.APPROVED_AGY_SHA256", approved_hash
++            ):
++                AgyBuilder(_probe_runner=fixture_probe_runner).preflight(config, self.run_dir)
++        original_evidence = json.loads(
++            (self.run_dir / "preflight_builder.json").read_text(encoding="utf-8")
++        )
++        self.assertEqual(original_evidence["executable"]["sha256"], approved_hash)
++        self.assertTrue((self.run_dir / "preflight_builder_failure.json").exists())
++
++        with self.assertRaisesRegex(FactoryError, "since preflight_builder.json"):
++            with patch("hermes_factory_v2.shutil.which", return_value=str(self.executable)), patch(
++                "hermes_factory_v2.APPROVED_AGY_SHA256", approved_hash
++            ):
++                AgyBuilder(_probe_runner=fixture_probe_runner).preflight(config, self.run_dir)
++
++    def test_same_version_but_unapproved_binary_is_rejected_before_invocation(self):
++        fixture = CommandFixture(model="gemini-3.8-flash-high")
++        failure_run_dir = self.root / "unapproved"
++        failure_run_dir.mkdir()
++        with self.assertRaisesRegex(FactoryError, "not an approved audited identity"):
++            with patch("hermes_factory_v2.command", side_effect=fixture):
++                AgyBuilder(
++                    str(self.executable),
++                    _probe_runner=fixture_probe_runner,
++                ).preflight(self.config(), failure_run_dir)
++        self.assertEqual(fixture.calls, [])
++
++    def test_preflight_command_failures_are_preflight_and_persisted(self):
++        def failing_command(argv: list[str], **kwargs: object) -> object:
++            raise FactoryError("command timed out after 30s", "failed")
++
++        approved_hash = hashlib.sha256(self.executable.read_bytes()).hexdigest()
++        with self.assertRaisesRegex(FactoryError, "command timed out"):
++            with patch("hermes_factory_v2.APPROVED_AGY_SHA256", approved_hash), patch(
++                "hermes_factory_v2.command", side_effect=failing_command
++            ):
++                AgyBuilder(str(self.executable), _probe_runner=fixture_probe_runner).preflight(
++                    self.config(), self.run_dir
++                )
++        self.assertEqual(
++            json.loads((self.run_dir / "preflight_builder.json").read_text(encoding="utf-8"))[
++                "status"
++            ],
++            "FAIL",
++        )
++
++    def test_failure_artifact_omits_raw_secret_diagnostics(self):
++        builder = AgyBuilder(str(self.executable), _probe_runner=fixture_probe_runner)
++        builder._write_preflight_failure(
++            self.run_dir,
++            "GEMINI_API_KEY=fixture-secret Bearer bearer-secret oauth_code=oauth-secret Cookie: cookie-secret",
++        )
++        stored = json.loads((self.run_dir / "preflight_builder.json").read_text(encoding="utf-8"))
++        serialized = json.dumps(stored)
++        for secret in ("fixture-secret", "bearer-secret", "oauth-secret", "cookie-secret"):
++            self.assertNotIn(secret, serialized)
++        self.assertEqual(stored["error"], "preflight_failed")
++        self.assertIn("failure_message_sha256", stored)
++
++    def test_engine_persists_pinned_identity_in_run_state(self):
++        executable = self.executable
++
++        class Builder:
++            def preflight(self, config: Config, run_dir: Path) -> dict[str, object]:
++                return {
++                    "executable": {
++                        "path": str(executable.resolve()),
++                        "sha256": "a" * 64,
++                    }
++                }
++
++        class SmokeRoles:
++            def call(self, *, role: str, **kwargs: object) -> dict[str, object]:
++                if role == "Luna":
++                    return {"capability": "debugger", "schema_ok": True}
++                return {"capability": "planner-reviewer", "schema_ok": True}
++
++        state = {"phase": "initializing"}
++        atomic_json(self.run_dir / "run_state.json", state)
++        engine = FactoryEngine(
++            state_root=self.root / "state",
++            role_client=SmokeRoles(),
++            builder=Builder(),
++        )
++        engine._capability_preflight(self.run_dir, state, self.config())
++        persisted = json.loads((self.run_dir / "run_state.json").read_text(encoding="utf-8"))
++        self.assertEqual(persisted["agy_executable_path"], str(self.executable.resolve()))
++        self.assertEqual(persisted["agy_executable_sha256"], "a" * 64)
++
++
++if __name__ == "__main__":
++    unittest.main()
+
+DIFF END
+
+Return ONLY one compact JSON object whose first character is ' and last character is '. Do not emit the word 'codex', a role/channel label, prose, commentary, markdown fences, or any text outside JSON. Use this exact top-level shape:
+{
+  "review_type": "STEP_CONFORMANCE_REVIEW",
+  "step": 5,
+  "verdict": "APPROVE or REJECT",
+  "step_status": "PASS or FAIL",
+  "authorized_for_next_step": true,
+  "candidate_identity": {"base_commit": "...", "head_commit": "...", "tree_oid": "...", "diff_sha256": "..."},
+  "checklist": [],
+  "blocking_findings": [],
+  "resolved_findings": [],
+  "non_blocking_findings": [],
+  "precedent_corrections": [],
+  "next_actions": []
+}
+Blocking findings require every constitution-required field and status OPEN or REGRESSED. If no current-step blockers remain, return APPROVE/PASS/authorized_for_next_step=true. Candidate identity must exactly match the packet.
+
+codex
+{"review_type":"STEP_CONFORMANCE_REVIEW","step":5,"verdict":"APPROVE","step_status":"PASS","authorized_for_next_step":true,"candidate_identity":{"base_commit":"ce1e881ae9b10d3265116d018c8a6a448d70130c","head_commit":"f7e5a6ceaae4477dbc32d1bd72078d9468c18d8a","tree_oid":"07fdf8c352ca333214b0f49463ca2da5a59807c7","diff_sha256":"39ed462ea92bb5c890d9d247417604c4889892d0a5953ae37458f74dc2ede212"},"checklist":[{"requirement":"Authorized Step 5 scope and candidate identity","status":"PASS","evidence":"Complete delta changes only lib/hermes_factory_v2.py and tests/test_factory_preflight.py; packet reports a clean worktree and matching Git-blob hashes."},{"requirement":"Executable resolution and pinning","status":"PASS","evidence":"resolve_agy_executable enforces explicit path, PATH, then Windows LOCALAPPDATA fallback; invalid explicit paths cannot fall through. Resolution is absolute, directories and shell shims are rejected, Windows requires .exe, and path plus SHA-256 are pinned and rechecked."},{"requirement":"Strict version and audited binary identity","status":"PASS","evidence":"Bare semantic versions are enforced with re.fullmatch, only 1.2.0 is supported, and execution is blocked unless SHA-256 equals the Step 2 audited identity. Tests cover bannered versions, unsupported versions, unapproved binaries, and identity changes."},{"requirement":"Capabilities and exact model catalog","status":"PASS","evidence":"Help option declarations are structurally parsed, all required flags and stream-json are required, catalog parsing rejects malformed and duplicate entries, and the exact gemini-3.8-flash-high key must exist."},{"requirement":"Bounded confined no-edit probe","status":"PASS","evidence":"The production path launches the pinned executable directly inside the approved Windows Sandbox boundary with a disposable cwd, bounded CLI and host timeouts, exact model and required flags, read-only executable/auth mappings, and before/after cwd snapshots. Approved Step 2 host-attested evidence is validly reused under the stated review boundary."},{"requirement":"Probe protocol and sanitized evidence","status":"PASS","evidence":"Parsing rejects duplicate JSON keys and requires one leading init, one final result, supported event types, consistent conversation identity, exact model/cwd, audited permission/tool metadata, SUCCESS, and the exact marker response. Persisted evidence hashes conversation/response data and omits credentials and raw failure diagnostics."},{"requirement":"Fail-closed behavior before candidate creation","status":"PASS","evidence":"Resolution, identity, version, help, catalog, authentication/runtime, probe protocol, model, cwd, and mutation failures raise FactoryError during capability preflight. Negative tests cover the required failure classes."},{"requirement":"Deterministic verification and preservation","status":"PASS","evidence":"Packet reports 75 passed plus 18 passed subtests, zero failures/errors/skips, git diff check PASS, and unchanged HEAD/status/content hashes for both protected main and audit checkouts."},{"requirement":"Reviewer governance","status":"PASS","evidence":"Review applies constitution version 1.0.0 with SHA-256 61e6695ee2c45433aee4696e78fbb9bc448c30161da773acd9b39c00ab4d785f and does not gate Step 5 on Steps 6-14."}],"blocking_findings":[],"resolved_findings":[],"non_blocking_findings":[],"precedent_corrections":[],"next_actions":[{"action":"Proceed to Astra Migration Step 6 using the exact approved Step 5 candidate identity as predecessor evidence."}]}
+2026-09-12T00:36:42.002903Z  WARN codex_core::hook_runtime: after_agent hook failed; continuing turn_id=01a09309-1809-7072-9e46-14429daa8fa4 hook_name=legacy_notify error=The filename or extension is too long. (os error 206)
+tokens used
+61,923

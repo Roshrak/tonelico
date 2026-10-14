@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Client-neutral launcher for the AGY Control MCP server.
+#
+# Every MCP client (Claude Code, Codex, OpenCode, Hermes) runs this script instead of a
+# machine-specific `nix develop` command. It resolves the repository from its own location, applies
+# one set of defaults, and execs the server over stdio.
+#
+#   agy-control-mcp --client claude     # persisted state lives in agy-control-mcp-claude
+#
+# The --client flag gives each client its own persisted-state root (so one client never recovers
+# another's workflows) while all clients share the AGY capacity locks. It is passed as an argument
+# rather than an environment variable so every MCP client can express it in its own config format.
+set -euo pipefail
+
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+server="$repo/dist/index.js"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --client)
+      [[ $# -ge 2 ]] || { echo "agy-control-mcp: --client needs a name" >&2; exit 2; }
+      export AGY_CONTROL_CLIENT="$2"; shift 2 ;;
+    --client=*)
+      export AGY_CONTROL_CLIENT="${1#--client=}"; shift ;;
+    *)
+      echo "agy-control-mcp: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+export AGY_CONTROL_LIVE="${AGY_CONTROL_LIVE:-1}"
+export AGY_CONTROL_FAST_BUDGET="${AGY_CONTROL_FAST_BUDGET:-42000}"
+export AGY_CONTROL_REASONING_BUDGET="${AGY_CONTROL_REASONING_BUDGET:-72000}"
+export AGY_CONTROL_EXPERT_BUDGET="${AGY_CONTROL_EXPERT_BUDGET:-100000}"
+export AGY_BIN="${AGY_BIN:-$(command -v agy 2>/dev/null || echo agy)}"
+
+if [[ ! -f "$server" ]]; then
+  echo "agy-control-mcp: $server is missing; run 'npm run build' in $repo" >&2
+  exit 1
+fi
+
+# Warn (on stderr, which MCP clients surface in their logs) when the build is older than the sources.
+if [[ -n "$(find "$repo/src" -newer "$server" -name '*.ts' -print -quit 2>/dev/null)" ]]; then
+  echo "agy-control-mcp: warning: src/ is newer than dist/; run 'npm run build' in $repo" >&2
+fi
+
+node_major() { "$1" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0; }
+
+if command -v node >/dev/null 2>&1 && [[ "$(node_major node)" -ge 22 ]]; then
+  exec node "$server"
+fi
+
+if command -v nix >/dev/null 2>&1; then
+  exec nix develop "$repo" -c node "$server"
+fi
+
+echo "agy-control-mcp: Node.js 22+ is required (found none on PATH, and nix is unavailable)" >&2
+exit 1

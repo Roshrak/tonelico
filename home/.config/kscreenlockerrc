@@ -1,0 +1,8 @@
+[Daemon]
+Autolock=false
+RequirePassword=true
+
+[Greeter][Wallpaper][org.kde.image][General]
+Image=file:///home/aesc/Pictures/Morgan/wallpapersden.com_blue-sky-in-evening_1920x1200.jpg
+PreviewImage=file:///home/aesc/Pictures/Morgan/wallpapersden.com_blue-sky-in-evening_1920x1200.jpg
+SlidePaths=/nix/store/0gj9qmpza3dasncn8iz34c7fc6w8hwjr-breeze-6.6.6/share/wallpapers/,/run/current-system/sw/share/wallpapers/

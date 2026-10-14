@@ -1,0 +1,46 @@
+{
+  "name": "agy-control-mcp",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "study-herd": "dist/studyHerdCli.js",
+    "study-herd-node": "dist/studyHerdCli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json && node scripts/write-build-info.mjs",
+    "start": "node dist/index.js",
+    "test": "npm run build && tsc --project tsconfig.test.json && node --test \"dist-test/tests/**/*.test.js\"",
+    "test:coverage": "npm run build && tsc --project tsconfig.test.json && node --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-include=dist-test/src/study*.js --test-coverage-include=dist-test/src/document*.js --test-coverage-include=dist-test/src/embedding*.js --test-coverage-include=dist-test/src/transcription*.js \"dist-test/tests/**/*.test.js\"",
+    "benchmark:retrieval:performance": "npm run build && node scripts/benchmark-retrieval-performance.mjs",
+    "benchmark:retrieval:quality": "npm run build && node scripts/benchmark-retrieval-quality.mjs",
+    "smoke:mcp-multiclient": "npm run build && node scripts/mcp-multiclient-smoke.mjs",
+    "smoke:agy-live-automatic": "npm run build && node scripts/live-automatic-delegation-smoke.mjs",
+    "eval:agy-model-routing": "npm run build && node scripts/live-model-routing-eval.mjs",
+    "doctor": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1",
+    "install:codex": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-codex.ps1",
+    "doctor:agy": "node scripts/doctor-agy.mjs",
+    "install:clients": "node scripts/install-agent-clients.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.12.1",
+    "onnxruntime-node": "1.27.0",
+    "tesseract.js": "^7.0.0",
+    "tokenizers": "0.13.4-rc2",
+    "unpdf": "^1.8.1",
+    "yaml": "^2.8.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  },
+  "overrides": {
+    "adm-zip": "0.6.1"
+  }
+}

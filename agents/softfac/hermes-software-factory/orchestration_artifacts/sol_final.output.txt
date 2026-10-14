@@ -1,0 +1,933 @@
+{
+  "verdict": "REJECT",
+  "summary": "Preflight validation is strict and documentation reflects direct Agy execution, but filesystem isolation and artifact cleanup are not fail-closed. The cleanup can delete arbitrary user files, while the source-checkout guard misses modifications to pre-existing dirty, untracked, or ignored paths.",
+  "reviewed_files": [
+    "README.md",
+    "SHA256SUMS",
+    "docs/software-factory-SKILL.md",
+    "lib/hermes_factory_v2.py",
+    "tests/test_factory_v2.py"
+  ],
+  "feedback": [
+    "Agy preflight correctly requires a JSON object with exact status SUCCESS and response BUILDER_PREFLIGHT_OK.",
+    "Builder execution correctly rejects empty, malformed, non-object, and non-success JSON output.",
+    "README and software-factory documentation consistently describe direct Agy CLI execution with gemini-3.8-flash-high.",
+    "Checksum entries were updated for every modified tracked file, but their digest accuracy cannot be independently established from the supplied diff alone.",
+    "Replace extension-based cache cleanup with exact allowlisted relative paths and filenames.",
+    "Record content-level source baselines and require them at every post-builder boundary, including resumed runs."
+  ],
+  "concerns": [
+    "--add-dir and prompt instructions do not enforce containment; --dangerously-skip-permissions increases reliance on independently verified sandbox and post-execution guards.",
+    "The source baseline is optional during later checks because missing source_status_before silently disables full-status comparison.",
+    "Full source status is checked only for labels beginning with after_builder, leaving other execution boundaries dependent on narrower guards.",
+    "Git porcelain status does not prove unchanged contents for ignored files or paths that were already dirty.",
+    "Tests do not independently run a SHA256SUMS verification command.",
+    "The preflight tests reject plaintext and incorrect fields but do not explicitly test non-dictionary JSON payloads in preflight."
+  ],
+  "blocking_issues": [
+    "clean_builder_generated_artifacts deletes any direct .agy or .gemini file having a broad allowed suffix, including user_notes.db and my_cache.cache. These paths are exempted from the pre-cleanup scope violation and are then deleted, concealing the violation.",
+    "The implementation does not support the required .gemini/logs/* cleanup: the logs subdirectory is classified as unexpected and raises FactoryError.",
+    "The Aider cleanup deletes tags.db-journal, cache.db, and cache.db-journal even though the specified exact allowlist contains only .aider.tags.cache.v4/tags.db.",
+    "_assert_source_unchanged compares path sets rather than content snapshots. Changes to an already-dirty or already-untracked source path, removal of such a path, and modifications to ignored files can pass undetected.",
+    "No test exercises an Agy process attempting to modify the original source checkout, nor modifications to pre-existing dirty, untracked, or ignored source files.",
+    "The cleanup preservation test checks a user database only at the worktree root; it does not test user_notes.db or my_cache.cache inside .agy or .gemini, where the implementation actually deletes them."
+  ]
+}
+
+STDERR:
+OpenAI Codex v0.153.1
+--------
+workdir: C:\Users\HH18
+model: gpt-5.6-sol
+provider: codex_local_access
+approval: never
+sandbox: danger-full-access
+reasoning effort: high
+reasoning summaries: none
+session id: 01a08a7b-33a4-7791-b19a-f22b38e6d5c9
+--------
+user
+You are Sol, the relentless, fail-closed principal software engineer and security reviewer for Hermes Software Factory v2 (HOH architecture).
+Your task is to thoroughly review the changes made to completely replace Aider with Agy CLI (`gemini-3.8-flash-high`) while preserving the HOH protocol.
+CRITICAL REVIEW DIRECTIVES:
+1. Fail-closed Isolation: Verify how AgyBuilder enforces filesystem boundaries. Since Agy CLI runs with `--sandbox` and `--dangerously-skip-permissions`, verify that Hermes actively tracks and asserts the source checkout (`repo`) and worktree containment (`_assert_source_unchanged`), so that ANY escape or untracked modification to the source repository fails closed with FactoryError.
+2. Strict Artifact Cleanup: Verify `clean_builder_generated_artifacts`. Check that only known builder cache files (`.gemini/logs/*`, `.agy/*`, `.aider.tags.cache.v4/tags.db`) are deleted in disposable worktrees, and that user files (like `user_notes.db`, `my_cache.cache`) or directories are strictly preserved and never clobbered.
+3. Builder Preflight: Verify that preflight strictly requires a valid JSON payload with `status == 'SUCCESS'` and `response == 'BUILDER_PREFLIGHT_OK'`, rejecting raw plaintext or non-dict payloads.
+4. SHA256SUMS and Documentation: Verify that SHA256SUMS accurately tracks modified files and README reflects Agy direct execution.
+5. Test Coverage & Integrity: Verify test suite covers preflight rejection, safe cache cleaning, and unchanged source checkout.
+6. Output Verdict: You MUST output a valid JSON object ONLY (no surrounding text or markdown, or fenced with ```json) with keys:
+   "verdict": "APPROVED" or "REJECT",
+   "summary": "concise summary",
+   "reviewed_files": ["list", "of", "files"],
+   "feedback": ["feedback items"],
+   "concerns": ["concerns"],
+   "blocking_issues": ["blocking issues if any"]
+
+
+---
+
+Here is the complete git diff against main:
+
+```diff
+diff --git a/README.md b/README.md
+index 10bfe51..a0fcf64 100644
+--- a/README.md
++++ b/README.md
+@@ -7,7 +7,7 @@ Hermes
+   -> capability preflight
+   -> Sol Planner
+   -> isolated Git worktree
+-  -> Aider + Gemini Medium Lean Builder
++  -> Agy CLI + Gemini Flash High Lean Builder
+   -> scope check and tests
+   -> Luna diagnosis only when tests fail
+   -> fresh Sol Reviewer with staged source context
+@@ -29,7 +29,7 @@ run artifacts, or repository contents.
+ 
+ ## Install the factory CLI
+ 
+-Requirements: Python 3.10+, Git, Hermes CLI, Aider, and a working provider.
++Requirements: Python 3.10+, Git, Hermes CLI, Agy CLI (`gemini-3.8-flash-high`), and a working provider.
+ 
+ ```bash
+ mkdir -p "$HOME/.local/bin" "$HOME/.local/lib"
+@@ -58,10 +58,11 @@ python3 tests/test_factory_v2.py
+ The tests use temporary repositories and fake providers. They do not consume
+ API quota.
+ 
+-## Configure the Gemini bridge
++## Direct Agy Builder & Optional Bridge
+ 
+-The bridge requires the `agy` CLI and its Google AI Pro authentication. Copy
+-the bridge file and edit the example service for the recipient's environment:
++The Lean Builder invokes the `agy` CLI directly using `gemini-3.8-flash-high` within the isolated Git worktree, without requiring an external HTTP bridge proxy.
++
++If using the legacy HTTP bridge (`bridge/agy_bridge.py`) for custom tooling, note that the bridge can run as an OpenAI-compatible proxy on `http://127.0.0.1:8765/v1` or `8045/v1`:
+ 
+ ```bash
+ mkdir -p "$HOME/.hermes" "$HOME/.config/systemd/user"
+@@ -73,7 +74,6 @@ systemctl --user enable --now agy-bridge.service
+ curl -fsS http://127.0.0.1:8765/v1/models
+ ```
+ 
+-The bridge must return `gemini-3.8-flash-medium` for the normal Builder path.
+ The service template uses the recipient's home directory (`%h`) and resolves
+ `agy` through `PATH`; it does not assume `/home/aesc` or a Nix store path.
+ 
+@@ -109,7 +109,7 @@ git -C /path/to/repo cherry-pick COMMIT_HASH
+ ## Provider roles
+ 
+ - Sol: planning and independent review, fresh tool-less Hermes processes.
+-- Gemini Medium + Aider: the only AI write authority.
++- Gemini Flash High + Agy CLI: the only AI write authority.
+ - Luna: failure diagnosis and repair instructions, no file writes.
+ - Hermes/runner: scope, tests, hashes, Git worktrees, and commits.
+ 
+diff --git a/SHA256SUMS b/SHA256SUMS
+index 0696c7a..fef6c7e 100644
+--- a/SHA256SUMS
++++ b/SHA256SUMS
+@@ -1,7 +1,7 @@
+-b4c183eda5466774f515ced753890e4b43dad6135eddf2767f9c30cc0b0346a1  README.md
++3555f379b270b28fa1759ea18457f95bceaf897e6312862ae4cecf279417cddf  README.md
+ 1ad5903336180b38176c5d3c8f508910b94d1892db333f899e597f2aa93b1c3f  bin/hermes-code-factory-v2
+ 34fef2349d95f57feb584d64e286c6adc716284bd1a1b5120d70f02123a8280a  bridge/agy_bridge.py
+-490d3ce374de5e4a8515ae50b03505fb2d24d3ee12dc3396bce412534e6cc02a  docs/software-factory-SKILL.md
+-48ab62606c9a863b23a4d838712c7b65a225495f1c2838d3ff79b18fdee5ea1a  lib/hermes_factory_v2.py
++8acba2f86e3f449a6ac624a9b6898d6488ec236996429da58fb2c9a152696838  docs/software-factory-SKILL.md
++8e623311cadfb19b15f93c6cd5635cb39ba3277ed00c119d2f4b80db47630f21  lib/hermes_factory_v2.py
+ df97b7ce08ffe248274111389864f77609b77df1b1af66a7ec4c5f2499763928  systemd/agy-bridge.service.example
+-d3c228e1febd0d593ba93eed43866f61a7275456df97bd831dc2d629a79724f1  tests/test_factory_v2.py
++58619e7318cb7283573d48a78c5874ea97a93c9c29ee4a431e05e8d73ff67c7c  tests/test_factory_v2.py
+diff --git a/docs/software-factory-SKILL.md b/docs/software-factory-SKILL.md
+index 3f115d3..f809a32 100644
+--- a/docs/software-factory-SKILL.md
++++ b/docs/software-factory-SKILL.md
+@@ -1,19 +1,19 @@
+ ---
+ name: software-factory
+-description: "Build and fix code with Sol planning/review, lean Aider/Gemini building, Luna debugging, strict scope/tests, and a hash-checked Git commit gate."
+-version: 2.1.0
++description: "Build and fix code with Sol planning/review, lean Agy/Gemini building, Luna debugging, strict scope/tests, and a hash-checked Git commit gate."
++version: 2.2.0
+ author: Hermes Agent
+ license: MIT
+-platforms: [linux]
++platforms: [linux, windows]
+ metadata:
+   hermes:
+-    tags: [coding, builder, aider, sol, git, workflow]
++    tags: [coding, builder, agy, sol, git, workflow]
+ ---
+ 
+ # Software Factory v2
+ 
+ ## Overview
+-This skill routes implementation through the fail-closed v2 factory. Hermes orchestrates; capability preflight runs before planning; fresh Sol contexts plan and review through the `openai-codex` ChatGPT/Codex OAuth route by default; Aider is a lean single-model Gemini Medium builder using `diff-fenced`; fresh Luna diagnoses failures through the same subscription route; Git commits only the exact staged diff approved by Sol. Sol is not injected into Aider's context, and Aider does not run a second architect pass. The installed `prompt-master` skill is applied to every role prompt: explicit goal, context, constraints, output contract, and done criteria, without hidden chain-of-thought requests.
++This skill routes implementation through the fail-closed v2 factory. Hermes orchestrates; capability preflight runs before planning; fresh Sol contexts plan and review through the `openai-codex` ChatGPT/Codex OAuth route by default; Agy CLI is a lean single-model Gemini Flash High builder (`gemini-3.8-flash-high`) operating under sandboxed headless mode; fresh Luna diagnoses failures through the same subscription route; Git commits only the exact staged diff approved by Sol. Sol is not injected into Agy's context, and Agy does not run a second architect pass. The installed `prompt-master` skill is applied to every role prompt: explicit goal, context, constraints, output contract, and done criteria, without hidden chain-of-thought requests.
+ 
+ ## When to Use
+ - The user requests building a new feature, refactoring code, or fixing bugs in a repository.
+diff --git a/lib/hermes_factory_v2.py b/lib/hermes_factory_v2.py
+index 1f39c19..017b453 100644
+--- a/lib/hermes_factory_v2.py
++++ b/lib/hermes_factory_v2.py
+@@ -3,7 +3,7 @@
+ """Hermes Software Factory v2.
+ 
+ Fail-closed orchestration for:
+-Hermes -> Sol planner -> Aider/Gemini builder -> tests -> Luna repair ->
++Hermes -> Sol planner -> Agy/Gemini builder -> tests -> Luna repair ->
+ fresh Sol reviewer -> hash-checked Git commit.
+ """
+ 
+@@ -37,8 +37,9 @@ DEFAULT_LUNA_MODEL = "gpt-5.6-luna"
+ DEFAULT_PLANNER_REASONING = "high"
+ DEFAULT_REVIEWER_REASONING = "high"
+ DEFAULT_LUNA_REASONING = "xhigh"
+-DEFAULT_BUILDER_MODEL = "openai/gemini-3.8-flash-high"
+-DEFAULT_BUILDER_ARCHITECT_MODEL = "openai/gemini-3.8-flash-high"
++DEFAULT_BUILDER_MODEL = "gemini-3.8-flash-high"
++DEFAULT_BUILDER_ARCHITECT_MODEL = "gemini-3.8-flash-high"
++DEFAULT_AGY_MODEL = DEFAULT_BUILDER_MODEL
+ DEFAULT_AIDER_MODEL = DEFAULT_BUILDER_MODEL
+ DEFAULT_AIDER_URL = "http://127.0.0.1:8045/v1"
+ DEFAULT_BRIDGE_URL = "http://127.0.0.1:8045/v1"
+@@ -787,6 +788,10 @@ class Config:
+     builder_timeout: int = 900
+     test_timeout: int = 900
+ 
++    def __post_init__(self) -> None:
++        if self.builder_model.startswith("openai/"):
++            self.builder_model = self.builder_model.removeprefix("openai/")
++
+ 
+ class CodexRoleClient:
+     """Invokes Codex CLI directly for Sol/Astra/Luna calls."""
+@@ -908,60 +913,146 @@ class HermesRoleClient:
+         return parse_json_object(result.stdout)
+ 
+ 
++def clean_builder_generated_artifacts(worktree: Path, is_disposable_worktree: bool = True) -> None:
++    """Fail-closed cleanup for builder cache artifacts.
++    Only deletes explicitly matched known builder cache paths after scope verification,
++    never deleting arbitrary directories or files that might be user data or scope violations.
++    """
++    if not is_disposable_worktree:
++        return
++    # An isolated disposable worktree created by git worktree add has a .git file or linked worktree directory.
++    # To be strictly fail-closed, verify it is a linked worktree (git rev-parse --git-dir != --git-common-dir).
++    try:
++        git_dir_res = git(worktree, "rev-parse", "--git-dir")
++        common_dir_res = git(worktree, "rev-parse", "--git-common-dir")
++        if git_dir_res.returncode != 0 or common_dir_res.returncode != 0:
++            return
++        g_dir = Path(git_dir_res.stdout.strip()).resolve()
++        c_dir = Path(common_dir_res.stdout.strip()).resolve()
++        if g_dir == c_dir:
++            # Main repository! NEVER clean artifacts from a main checkout!
++            return
++    except Exception:
++        return
++
++    res = git(worktree, "ls-files")
++    if res.returncode != 0:
++        raise FactoryError(f"Failed to inspect tracked files before cleanup: {res.stderr.strip()}", "cleanup")
++    tracked_files = {normalize_path(p) for p in res.stdout.splitlines() if p.strip()}
++
++    exact_cache_items = (
++        ".aider.tags.cache.v4",
++    )
++    for fname in exact_cache_items:
++        fpath = worktree / fname
++        if fpath.exists() and not fpath.is_symlink():
++            rel_prefix = normalize_path(fname)
++            if any(p == rel_prefix or p.startswith(rel_prefix + "/") for p in tracked_files):
++                continue
++            try:
++                if fpath.is_file():
++                    fpath.unlink()
++                elif fpath.is_dir():
++                    # Inspect directory contents: strictly require ONLY known aider tag cache names
++                    known_aider_tag_filenames = {"tags.db", "tags.db-journal", "cache.db", "cache.db-journal"}
++                    entries = list(fpath.iterdir())
++                    if not entries:
++                        fpath.rmdir()
++                        continue
++                    # Fail closed if ANY entry is a directory or an unexpected file name
++                    non_cache = [e for e in entries if e.is_dir() or e.name not in known_aider_tag_filenames]
++                    if non_cache:
++                        raise FactoryError(f"Unexpected user content in cache dir {fname}: {[str(p.name) for p in non_cache]}", "cleanup")
++                    for e in entries:
++                        e.unlink()
++                    fpath.rmdir()
++            except OSError as exc:
++                raise FactoryError(f"Failed to remove builder cache {fname}: {exc}", "cleanup")
++
++    # For directory caches (.gemini, .agy), if they exist and are untracked:
++    # Fail closed if they contain subdirectories or unknown file types
++    for dirname in (".gemini", ".agy"):
++        cdir = worktree / dirname
++        if cdir.exists() and not cdir.is_symlink():
++            if not cdir.is_dir():
++                # If someone created a regular file named .gemini or .agy, do not touch it
++                continue
++            rel_prefix = normalize_path(dirname)
++            if any(p == rel_prefix or p.startswith(rel_prefix + "/") for p in tracked_files):
++                continue
++            # Inspect contents
++            entries = list(cdir.iterdir())
++            if not entries:
++                cdir.rmdir()
++                continue
++            # Fail closed if there are subdirectories or unexpected file types
++            unexpected = [e.name for e in entries if e.is_dir() or e.suffix.lower() not in {".json", ".cache", ".tmp", ".log", ".lock", ".db", ".bin", ".txt"}]
++            if unexpected:
++                raise FactoryError(f"Unknown or unexpected content in builder cache directory {dirname}: {unexpected}", "cleanup")
++            for e in entries:
++                e.unlink()
++            cdir.rmdir()
++
++
+ def clean_aider_generated_artifacts(worktree: Path) -> None:
+-    """Remove only the known untracked repo-map cache from a task worktree."""
+-    cache_dir = worktree / ".aider.tags.cache.v4"
+-    if cache_dir.is_dir() and not cache_dir.is_symlink():
+-        shutil.rmtree(cache_dir)
++    """Backward compatibility alias for clean_builder_generated_artifacts."""
++    clean_builder_generated_artifacts(worktree)
+ 
+ 
+-class AiderBuilder:
+-    def __init__(self, aider_bin: str | None = None) -> None:
+-        self.aider_bin = aider_bin or shutil.which("aider") or "aider"
++class AgyBuilder:
++    def __init__(self, agy_bin: str | None = None) -> None:
++        self.agy_bin = agy_bin or shutil.which("agy") or "agy"
+ 
+     def preflight(self, config: Config, run_dir: Path) -> dict[str, Any]:
+-        version = command([self.aider_bin, "--version"], timeout=30)
++        version = command([self.agy_bin, "--version"], timeout=30)
+         if version.returncode != 0:
+-            raise FactoryError(f"Aider unavailable: {version.stderr.strip()}", "preflight")
++            raise FactoryError(f"agy unavailable: {version.stderr.strip()}", "preflight")
++
++        probe_cmd = [
++            self.agy_bin,
++            "--sandbox",
++            "--model",
++            config.builder_model,
++            "--output-format",
++            "json",
++            "--disable-slash-commands",
++            "--print",
++            "Reply with exactly BUILDER_PREFLIGHT_OK",
++        ]
++        preflight_dir = run_dir / "preflight_sandbox"
++        preflight_dir.mkdir(parents=True, exist_ok=True)
++        probe = command(probe_cmd, cwd=preflight_dir, timeout=config.builder_timeout)
++        if probe.returncode != 0:
++            detail = (probe.stderr or probe.stdout or "no output").strip()
++            raise FactoryError(
++                f"agy builder model preflight failed: {detail}",
++                "preflight",
++            )
+ 
+-        # Sol owns planning. Aider is deliberately a single-model Lean
+-        # Builder, so preflight only the Gemini editor model used by Aider.
+-        bridge_models = {config.builder_model.removeprefix("openai/")}
++        raw_out = probe.stdout.strip()
+         try:
+-            model_docs = {}
+-            completions = {}
+-            api_key = os.environ.get("GEMINI_API_KEY") or "REDACTED-API-KEY"
+-            for bridge_model in sorted(bridge_models):
+-                payload = json.dumps(
+-                    {
+-                        "model": bridge_model,
+-                        "messages": [{"role": "user", "content": "Reply with exactly BUILDER_OK"}],
+-                        "stream": False,
+-                        "temperature": 0,
+-                    }
+-                ).encode("utf-8")
+-                request = urllib.request.Request(
+-                    f"{config.bridge_url}/chat/completions",
+-                    data=payload,
+-                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+-                    method="POST",
++            parsed_payload = json.loads(raw_out)
++            if not isinstance(parsed_payload, dict):
++                raise FactoryError(
++                    f"agy builder preflight probe did not return a JSON object: {raw_out[:200]}",
++                    "preflight",
+                 )
+-                with urllib.request.urlopen(request, timeout=min(config.role_timeout, 240)) as response:
+-                    completion = json.loads(response.read().decode("utf-8"))
+-                completions[bridge_model] = completion
+-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+-            raise FactoryError(f"Gemini bridge capability preflight failed: {exc}", "preflight") from exc
+-        for bridge_model, completion in completions.items():
+-            if completion.get("model") != bridge_model:
+-                raise FactoryError("Gemini bridge chat completion returned the wrong model", "preflight")
+-            choices = completion.get("choices")
+-            content = choices[0].get("message", {}).get("content", "") if isinstance(choices, list) and choices else ""
+-            if not isinstance(content, str) or not content.strip():
+-                raise FactoryError(f"Gemini bridge returned no chat content for {bridge_model}", "preflight")
++            status = str(parsed_payload.get("status", "")).strip()
++            resp = str(parsed_payload.get("response", "")).strip()
++            if status != "SUCCESS" or resp != "BUILDER_PREFLIGHT_OK":
++                raise FactoryError(
++                    f"agy builder preflight probe returned unexpected payload (status={status!r}, response={resp!r})",
++                    "preflight",
++                )
++        except json.JSONDecodeError as exc:
++            raise FactoryError(
++                f"agy builder preflight probe returned invalid JSON: {exc} (output: {raw_out[:200]})",
++                "preflight",
++            ) from exc
+         evidence = {
+-            "aider_version": version.stdout.strip(),
+-            "models": model_docs,
+-            "chat_models": {key: value.get("model") for key, value in completions.items()},
++            "agy_version": version.stdout.strip(),
++            "builder_model": config.builder_model,
++            "probe_output": probe.stdout.strip(),
+         }
+         atomic_json(run_dir / "preflight_builder.json", evidence)
+         return evidence
+@@ -976,76 +1067,64 @@ class AiderBuilder:
+         run_dir: Path,
+         label: str,
+     ) -> None:
+-        message_path = run_dir / f"{label}.md"
+-        write_text(message_path, instruction)
+-        metadata_file = run_dir / "gemini_metadata.json"
+-        metadata_content = {
+-            config.builder_model: {
+-                "max_tokens": 8192,
+-                "max_input_tokens": 1048576,
+-                "max_output_tokens": 8192,
+-                "input_cost_per_token": 0.0000003,
+-                "output_cost_per_token": 0.0000025,
+-                "litellm_provider": "openai",
+-                "mode": "chat",
+-            }
+-        }
+-        write_text(metadata_file, json.dumps(metadata_content, indent=2))
+-
+-        settings_file = run_dir / "gemini_settings.yml"
+-        settings_content = (
+-            f"- name: {config.builder_model}\n"
+-            f"  edit_format: diff-fenced\n"
+-            f"  weak_model_name: {config.builder_model}\n"
+-            f"  use_repo_map: true\n"
++        scope_prefix = ""
++        if allowed_files:
++            scope_prefix = (
++                f"Target worktree: {worktree}\n"
++                f"Allowed files: {', '.join(allowed_files)}\n"
++                f"You are strictly confined to the directory {worktree}. Do not read, write, touch, or execute anything outside this root.\n"
++                f"You must strictly modify only the allowed files specified within this worktree. If an allowed file does not yet exist, create it inside the worktree.\n\n"
++            )
++        full_instruction = (
++            f"{scope_prefix}{instruction}\n\n"
++            f"CRITICAL CONSTRAINT:\n"
++            f"- Operate STRICTLY inside current working directory: {worktree}.\n"
++            f"- DO NOT read, inspect, create, or modify any files in parent repositories or source repositories.\n"
++            f"- Any modification outside {worktree} is an immediate fatal violation."
+         )
+-        write_text(settings_file, settings_content)
+ 
+-        env = os.environ.copy()
+-        gemini_token = os.environ.get("OPENAI_API_KEY") or os.environ.get("GEMINI_API_KEY") or ("sk-" + "cbc3af9098ec49759c5b0643acc1573b")
+-        env["OPENAI_API_KEY"] = gemini_token
+-        argv = [
+-            self.aider_bin,
++        cmd = [
++            self.agy_bin,
++            "--sandbox",
+             "--model",
+             config.builder_model,
+-            "--model-metadata-file",
+-            str(metadata_file),
+-            "--model-settings-file",
+-            str(settings_file),
+-            "--edit-format",
+-            "diff-fenced",
+-            "--yes-always",
+-            "--no-stream",
+-            "--no-auto-commits",
+-            "--no-gitignore",
+-            "--no-add-gitignore-files",
+-            "--no-check-update",
+-            "--no-analytics",
+-            "--no-show-model-warnings",
+-            "--no-restore-chat-history",
+-            "--openai-api-base",
+-            config.bridge_url,
+-            "--input-history-file",
+-            str(run_dir / "aider.input.history"),
+-            "--chat-history-file",
+-            str(run_dir / "aider.chat.history.md"),
+-            "--llm-history-file",
+-            str(run_dir / "aider.llm.history"),
+-            "--message-file",
+-            str(message_path),
+-            "--",
+-            *allowed_files,
++            "--output-format",
++            "json",
++            "--disable-slash-commands",
++            "--add-dir",
++            str(worktree),
++            "--dangerously-skip-permissions",
++            "--print",
++            full_instruction,
+         ]
+-        result = command(argv, cwd=worktree, env=env, timeout=config.builder_timeout)
++        result = command(cmd, cwd=worktree, timeout=config.builder_timeout)
+         write_text(run_dir / f"{label}.log", (result.stdout or "") + ("\n" + result.stderr if result.stderr else ""))
+-        # Aider's repo-map implementation creates this cache in the project
+-        # root even when all history files are redirected. It is generated
+-        # metadata, not a candidate edit, so remove this exact known artifact
+-        # before the factory's strict scope gate runs. Never sweep arbitrary
+-        # untracked files here.
+-        clean_aider_generated_artifacts(worktree)
+         if result.returncode != 0:
+-            raise FactoryError(f"Aider/Gemini builder failed in {label}; see {label}.log", "builder")
++            raise FactoryError(f"agy builder failed in {label}; see {label}.log", "builder")
++
++        out_str = (result.stdout or "").strip()
++        if not out_str:
++            raise FactoryError(f"agy builder returned empty output in {label}; see {label}.log", "builder")
++        try:
++            payload = json.loads(out_str)
++            if not isinstance(payload, dict):
++                raise FactoryError(f"agy builder returned non-dict JSON output in {label}; see {label}.log", "builder")
++            if payload.get("status") != "SUCCESS":
++                raise FactoryError(
++                    f"agy builder returned non-success payload status {payload.get('status')!r} in {label}; see {label}.log",
++                    "builder",
++                )
++        except json.JSONDecodeError as exc:
++            raise FactoryError(f"agy builder returned malformed JSON output in {label}; see {label}.log", "builder") from exc
++
++
++class AiderBuilder(AgyBuilder):
++    """Backward compatibility alias for AgyBuilder."""
++    def __init__(self, builder_bin: str | None = None, aider_bin: str | None = None) -> None:
++        bin_to_use = builder_bin or aider_bin
++        super().__init__(agy_bin=bin_to_use)
++        self.aider_bin = self.agy_bin
++
+ 
+ 
+ class FactoryEngine:
+@@ -1058,7 +1137,7 @@ class FactoryEngine:
+     ) -> None:
+         self.state_root = state_root.expanduser().resolve()
+         self.role_client = role_client or CodexRoleClient()
+-        self.builder = builder or AiderBuilder()
++        self.builder = builder or AgyBuilder()
+ 
+     def _run_dir(self, identifier: str) -> Path:
+         if not re.fullmatch(r"[A-Za-z0-9_.-]+", identifier):
+@@ -1098,10 +1177,12 @@ class FactoryEngine:
+         expected_head = state.get("source_head_before")
+         guard_paths = state.get("source_guard_paths")
+         expected_status = state.get("source_allowed_status_before")
++        expected_full_status = state.get("source_status_before")
+         if expected_head is None or not isinstance(guard_paths, list) or expected_status is None:
+             raise FactoryError("run is missing its source checkout guard baseline", "state")
+         actual_head = git(repo, "rev-parse", "HEAD").stdout.strip()
+         actual_status = self._source_status(repo, guard_paths)
++        actual_full_status = self._source_status(repo)
+         atomic_json(
+             run_dir / f"source_status_{label}.json",
+             {
+@@ -1111,6 +1192,8 @@ class FactoryEngine:
+                 "actual_head": actual_head,
+                 "expected_allowed_status": expected_status,
+                 "actual_allowed_status": actual_status,
++                "expected_full_status": expected_full_status,
++                "actual_full_status": actual_full_status,
+             },
+         )
+         if actual_head != expected_head or actual_status != expected_status:
+@@ -1118,6 +1201,38 @@ class FactoryEngine:
+                 "planned base or allowed source paths changed during isolated factory run; refusing to continue",
+                 "isolation",
+             )
++        # Verify source checkout did not receive unexpected out-of-scope mutations after builder phases
++        # Specifically: guard paths must match expected_status, HEAD must match expected_head.
++        # If expected_full_status was recorded at worktree creation, check that any difference
++        # between actual_full_status and expected_full_status is NOT due to files modified inside
++        # the main checkout during builder execution without permission.
++        if expected_full_status is not None and label.startswith("after_builder") and actual_full_status != expected_full_status:
++            # Parse changed paths from git status porcelain
++            def parse_status_paths(status_text: str) -> set[str]:
++                paths = set()
++                for line in status_text.splitlines():
++                    line = line.strip()
++                    if len(line) >= 3:
++                        # Porcelain v1: XY filename or XY orig -> new
++                        path_part = line[2:].strip()
++                        if " -> " in path_part:
++                            path_part = path_part.split(" -> ")[-1].strip()
++                        paths.add(normalize_path(path_part))
++                return paths
++
++            before_paths = parse_status_paths(expected_full_status)
++            after_paths = parse_status_paths(actual_full_status)
++            new_mutations = after_paths - before_paths
++            # Exclude standard benign artifacts (.pyc, worktree dirs, etc.)
++            suspicious = [
++                p for p in new_mutations
++                if not (p.endswith(".pyc") or p.startswith("__pycache__/") or "/__pycache__/" in p)
++            ]
++            if suspicious:
++                raise FactoryError(
++                    f"unrelated source checkout paths mutated during isolated factory run: {suspicious}; refusing to continue",
++                    "isolation",
++                )
+ 
+     def _candidate_files(self, repo: Path) -> list[str]:
+         tracked = git(repo, "ls-files").stdout.splitlines()
+@@ -1382,6 +1497,20 @@ class FactoryEngine:
+         # Revalidate after every builder/test boundary. A builder can replace a
+         # previously safe file with a symlink before staging.
+         ensure_paths_confined(worktree, allowed)
++        # Collect changed files BEFORE cache cleanup so any out-of-scope files are detected
++        changed_before_cleanup = self._changed_files(worktree)
++        outside_before = sorted(set(changed_before_cleanup) - set(allowed))
++        if outside_before:
++            # Check if any outside files are legitimate builder cache artifacts
++            known_cache_patterns = {".aider.tags.cache.v4", ".gemini", ".agy"}
++            rogue_files = [
++                p for p in outside_before
++                if not any(p == cp or p.startswith(cp + "/") for cp in known_cache_patterns)
++            ]
++            if rogue_files:
++                raise FactoryError(f"scope violation after {label}: {rogue_files}", "scope")
++
++        clean_builder_generated_artifacts(worktree)
+         changed = self._changed_files(worktree)
+         outside = sorted(set(changed) - set(allowed))
+         evidence = {"label": label, "changed_files": changed, "allowed_files": allowed, "outside_scope": outside}
+@@ -1440,7 +1569,7 @@ class FactoryEngine:
+         return (
+             "Goal:\nImplement the approved Sol plan.\n\n"
+             f"Context:\nOriginal request: {config.request}\n"
+-            "Aider is the Lean Builder. Sol already owns architecture and planning; apply the approved plan "
++            "Agy is the Lean Builder. Sol already owns architecture and planning; apply the approved plan "
+             "without inventing a second design.\n\n"
+             "Scope:\nAllowed files (hard boundary):\n"
+             + "\n".join(f"- {p}" for p in plan["allowed_files"])
+@@ -1485,7 +1614,7 @@ class FactoryEngine:
+             "- Do not request files outside allowed_files.\n- Do not reveal hidden reasoning.\n\n"
+             "Output:\nReturn only strict JSON with exactly: root_cause (string), repair_steps (string array), "
+             "files (array subset of allowed_files), tests_to_rerun (string array).\n\n"
+-            "Done when:\nThe repair instructions are concrete enough for Aider/Gemini to apply and retest.\n\n"
++            "Done when:\nThe repair instructions are concrete enough for Agy/Gemini to apply and retest.\n\n"
+             "Input:\n" + json.dumps(payload, indent=2)
+         )
+         diagnosis = self._role_call(
+@@ -1876,13 +2005,15 @@ class FactoryEngine:
+             ledger.record_event(phase="preflight_execution", action="capability_preflight", result="success")
+             self._assert_source_unchanged(Path(config.repo), state, run_dir, "before_worktree")
+             worktree = self._create_worktree(run_dir, state, config)
++            # Record clean baseline of source checkout at worktree creation time
++            state["source_status_before"] = self._source_status(Path(config.repo))
+             ledger.record_event(
+                 phase="worktree",
+                 action="create_worktree",
+                 result="success",
+                 details={"branch": state.get("branch")},
+             )
+-            clean_aider_generated_artifacts(worktree)
++            clean_builder_generated_artifacts(worktree)
+             ensure_paths_confined(worktree, allowed)
+             self._scope_check(worktree, allowed, "before_builder", run_dir)
+             cp_initial = self._create_checkpoint(worktree, run_dir, "initial")
+@@ -2437,6 +2568,7 @@ def add_common(parser: argparse.ArgumentParser) -> None:
+     parser.add_argument("--luna-model", default=DEFAULT_LUNA_MODEL)
+     parser.add_argument("--luna-reasoning", default=DEFAULT_LUNA_REASONING)
+     parser.add_argument("--builder-model", default=DEFAULT_BUILDER_MODEL)
++    parser.add_argument("--agy-model", dest="builder_model", default=argparse.SUPPRESS, help="Alias for --builder-model")
+     parser.add_argument(
+         "--builder-architect-model",
+         default=None,
+diff --git a/tests/test_factory_v2.py b/tests/test_factory_v2.py
+index ac90659..08cf754 100644
+--- a/tests/test_factory_v2.py
++++ b/tests/test_factory_v2.py
+@@ -5,6 +5,7 @@ from __future__ import annotations
+ 
+ import json
+ import re
++import shutil
+ import subprocess
+ import sys
+ import tempfile
+@@ -16,6 +17,9 @@ sys.path.insert(0, "/home/aesc/.local/lib")
+ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+ 
+ from hermes_factory_v2 import (
++    DEFAULT_AGY_MODEL,
++    DEFAULT_BUILDER_MODEL,
++    AgyBuilder,
+     AiderBuilder,
+     Config,
+     FactoryEngine,
+@@ -25,6 +29,7 @@ from hermes_factory_v2 import (
+     atomic_json,
+     build_file_tree_skeleton,
+     classify_objective,
++    clean_builder_generated_artifacts,
+     load_prior_run_context,
+     make_debug_evidence_packet,
+     make_review_evidence_packet,
+@@ -382,17 +387,21 @@ class FactoryIntegrationTests(unittest.TestCase):
+         self.assertEqual(argv[argv.index("--toolsets") + 1], "bot_room")
+         self.assertEqual(invoked.call_args.kwargs["cwd"], run_dir)
+ 
+-    def test_aider_runs_lean_gemini_builder(self):
+-        builder = AiderBuilder("/fake/aider")
++    def test_agy_runs_lean_gemini_builder(self):
++        builder = AgyBuilder("/fake/agy")
+         run_dir = self.root / "builder"
+         run_dir.mkdir()
+         captured = []
+ 
+         def fake_command(argv, **kwargs):
+             captured.append(argv)
+-            return subprocess.CompletedProcess(argv, 0, "ok", "")
++            if "--print" in argv and "Reply with exactly BUILDER_PREFLIGHT_OK" in argv:
++                payload = json.dumps({"status": "SUCCESS", "response": "BUILDER_PREFLIGHT_OK"})
++                return subprocess.CompletedProcess(argv, 0, payload, "")
++            return subprocess.CompletedProcess(argv, 0, json.dumps({"status": "SUCCESS"}), "")
+ 
+         with patch("hermes_factory_v2.command", side_effect=fake_command):
++            builder.preflight(self.config(), run_dir)
+             builder.run(
+                 worktree=self.repo,
+                 instruction="make change",
+@@ -401,12 +410,30 @@ class FactoryIntegrationTests(unittest.TestCase):
+                 run_dir=run_dir,
+                 label="builder_test",
+             )
+-        argv = captured[0]
+-        self.assertNotIn("--architect", argv)
+-        self.assertNotIn("--editor-model", argv)
+-        self.assertNotIn("--editor-edit-format", argv)
+-        self.assertIn("--no-auto-commits", argv)
+-        self.assertEqual(argv[argv.index("--model") + 1], "openai/gemini-3.8-flash-high")
++        self.assertEqual(captured[0][:2], ["/fake/agy", "--version"])
++        self.assertEqual(
++            captured[1][:7],
++            [
++                "/fake/agy",
++                "--sandbox",
++                "--model",
++                "gemini-3.8-flash-high",
++                "--output-format",
++                "json",
++                "--disable-slash-commands",
++            ],
++        )
++        argv = captured[2]
++        self.assertEqual(argv[0], "/fake/agy")
++        self.assertEqual(argv[argv.index("--model") + 1], "gemini-3.8-flash-high")
++        self.assertIn("--add-dir", argv)
++        self.assertEqual(argv[argv.index("--add-dir") + 1], str(self.repo))
++        self.assertIn("--sandbox", argv)
++        self.assertIn("--print", argv)
++        self.assertIn("--dangerously-skip-permissions", argv)
++        instruction_arg = argv[argv.index("--print") + 1]
++        self.assertIn("Allowed files: calc.py", instruction_arg)
++        self.assertIn("make change", instruction_arg)
+ 
+     def test_planning_reads_committed_head_and_preserves_dirty_checkout(self):
+         (self.repo / "calc.py").write_text("def value():\n    return 99\n", encoding="utf-8")
+@@ -682,5 +709,139 @@ class FactoryIntegrationTests(unittest.TestCase):
+         self.assertEqual(len(ctx["selected_issues"]), 1)
+ 
+ 
++class AgyBuilderEdgeCaseTests(unittest.TestCase):
++    def test_clean_builder_generated_artifacts_removes_known_files_and_preserves_user_files(self):
++        with tempfile.TemporaryDirectory() as td:
++            root = Path(td)
++            # Create a mock base git repo and worktree
++            main_repo = root / "main_repo"
++            main_repo.mkdir()
++            subprocess.run(["git", "init"], cwd=main_repo, check=True, capture_output=True)
++            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=main_repo, check=True)
++            subprocess.run(["git", "config", "user.name", "Test"], cwd=main_repo, check=True)
++            (main_repo / "README.md").write_text("hello", encoding="utf-8")
++            subprocess.run(["git", "add", "README.md"], cwd=main_repo, check=True)
++            subprocess.run(["git", "commit", "-m", "init"], cwd=main_repo, check=True)
++
++            worktree = root / "wt"
++            subprocess.run(["git", "worktree", "add", str(worktree), "HEAD"], cwd=main_repo, check=True)
++
++            # Case 1: Known cache files in a worktree
++            cache_dir = worktree / ".aider.tags.cache.v4"
++            cache_dir.mkdir()
++            (cache_dir / "tags.db").write_text("dummy", encoding="utf-8")
++
++            clean_builder_generated_artifacts(worktree)
++            self.assertFalse((cache_dir / "tags.db").exists())
++            self.assertFalse(cache_dir.exists())
++
++            # Case 2: Untracked non-cache user file in cache dir raises FactoryError (fail closed)
++            cache_dir.mkdir()
++            (cache_dir / "user_notes.txt").write_text("do not delete", encoding="utf-8")
++            with self.assertRaises(FactoryError):
++                clean_builder_generated_artifacts(worktree)
++            self.assertTrue((cache_dir / "user_notes.txt").exists())
++            (cache_dir / "user_notes.txt").unlink()
++            cache_dir.rmdir()
++
++            # Case 3: Deceptive user file (e.g. user_data.db) in worktree root must NOT be deleted
++            user_db = worktree / "user_data.db"
++            user_db.write_text("sqlite format", encoding="utf-8")
++            clean_builder_generated_artifacts(worktree)
++            self.assertTrue(user_db.exists())
++
++            # Case 4: Known builder artifacts .agy and .gemini are cleaned
++            dot_agy = worktree / ".agy"
++            dot_gemini = worktree / ".gemini"
++            dot_agy.mkdir()
++            dot_gemini.mkdir()
++            (dot_agy / "state.json").write_text("{}", encoding="utf-8")
++            (dot_gemini / "tmp.json").write_text("{}", encoding="utf-8")
++            clean_builder_generated_artifacts(worktree)
++            self.assertFalse(dot_agy.exists())
++            self.assertFalse(dot_gemini.exists())
++
++            # Case 5: Main repository checkout (not disposable worktree) is protected
++            dot_agy_main = main_repo / ".agy"
++            dot_agy_main.mkdir()
++            clean_builder_generated_artifacts(main_repo, is_disposable_worktree=False)
++            self.assertTrue(dot_agy_main.exists())
++
++            # Case 6: Tracked cache file must not be deleted
++            tracked_cache_dir = worktree / ".aider.tags.cache.v4"
++            tracked_cache_dir.mkdir()
++            tracked_tag_file = tracked_cache_dir / "tags.db"
++            tracked_tag_file.write_text("tracked tags", encoding="utf-8")
++            subprocess.run(["git", "add", ".aider.tags.cache.v4/tags.db"], cwd=worktree, check=True)
++            clean_builder_generated_artifacts(worktree)
++            self.assertTrue(tracked_tag_file.exists())
++            subprocess.run(["git", "rm", "-f", ".aider.tags.cache.v4/tags.db"], cwd=worktree, check=True)
++
++            # Case 7: Agy preflight strictly requires status=SUCCESS and exact response in JSON
++            test_builder = AgyBuilder(agy_bin="/fake/agy")
++            test_config = Config(repo=str(worktree), request="req", requested_files=["README.md"], test_command="pytest")
++            with tempfile.TemporaryDirectory() as p_td:
++                # Malformed JSON
++                p_run_dir = Path(p_td)
++                with unittest.mock.patch("subprocess.run") as mock_sub:
++                    mock_sub.return_value = subprocess.CompletedProcess([], 0, "BUILDER_PREFLIGHT_OK", "")
++                    with self.assertRaises(FactoryError):
++                        test_builder.preflight(test_config, p_run_dir)
++                    # Valid JSON but status not SUCCESS
++                    mock_sub.return_value = subprocess.CompletedProcess([], 0, json.dumps({"status": "ERROR", "response": "BUILDER_PREFLIGHT_OK"}), "")
++                    with self.assertRaises(FactoryError):
++                        test_builder.preflight(test_config, p_run_dir)
++                    # Valid JSON but response mismatch
++                    mock_sub.return_value = subprocess.CompletedProcess([], 0, json.dumps({"status": "SUCCESS", "response": "OTHER"}), "")
++                    with self.assertRaises(FactoryError):
++                        test_builder.preflight(test_config, p_run_dir)
++                    # Valid JSON SUCCESS passes
++                    mock_sub.return_value = subprocess.CompletedProcess([], 0, json.dumps({"status": "SUCCESS", "response": "BUILDER_PREFLIGHT_OK"}), "")
++                    test_builder.preflight(test_config, p_run_dir)
++
++    def test_agy_builder_raises_on_invalid_and_non_dict_json(self):
++        builder = AgyBuilder(agy_bin="/fake/agy")
++        config = Config(repo=".", request="req", requested_files=["calc.py"], test_command="pytest")
++        with tempfile.TemporaryDirectory() as td:
++            run_dir = Path(td)
++
++            # Case 1: non-json
++            with patch("hermes_factory_v2.command", return_value=subprocess.CompletedProcess([], 0, "not json", "")):
++                with self.assertRaises(FactoryError):
++                    builder.run(
++                        worktree=Path("."),
++                        instruction="task",
++                        allowed_files=["calc.py"],
++                        config=config,
++                        run_dir=run_dir,
++                        label="builder_test",
++                    )
++
++            # Case 2: valid JSON but non-dict (e.g. list, string, null)
++            for non_dict_val in ["[]", "null", "\"success\""]:
++                with patch("hermes_factory_v2.command", return_value=subprocess.CompletedProcess([], 0, non_dict_val, "")):
++                    with self.assertRaises(FactoryError):
++                        builder.run(
++                            worktree=Path("."),
++                            instruction="task",
++                            allowed_files=["calc.py"],
++                            config=config,
++                            run_dir=run_dir,
++                            label="builder_test",
++                        )
++
++            # Case 3: status is not SUCCESS
++            with patch("hermes_factory_v2.command", return_value=subprocess.CompletedProcess([], 0, "{\"status\": \"ERROR\", \"error\": \"failed\"}", "")):
++                with self.assertRaises(FactoryError):
++                    builder.run(
++                        worktree=Path("."),
++                        instruction="task",
++                        allowed_files=["calc.py"],
++                        config=config,
++                        run_dir=run_dir,
++                        label="builder_test",
++                    )
++
++
+ if __name__ == "__main__":
+     unittest.main(verbosity=2)
+
+```
+
+Please evaluate the entire solution across all dimensions (isolation, cleanup, preflight, tests, docs, checksums) and provide your final verdict JSON.
+codex
+{
+  "verdict": "REJECT",
+  "summary": "Preflight validation is strict and documentation reflects direct Agy execution, but filesystem isolation and artifact cleanup are not fail-closed. The cleanup can delete arbitrary user files, while the source-checkout guard misses modifications to pre-existing dirty, untracked, or ignored paths.",
+  "reviewed_files": [
+    "README.md",
+    "SHA256SUMS",
+    "docs/software-factory-SKILL.md",
+    "lib/hermes_factory_v2.py",
+    "tests/test_factory_v2.py"
+  ],
+  "feedback": [
+    "Agy preflight correctly requires a JSON object with exact status SUCCESS and response BUILDER_PREFLIGHT_OK.",
+    "Builder execution correctly rejects empty, malformed, non-object, and non-success JSON output.",
+    "README and software-factory documentation consistently describe direct Agy CLI execution with gemini-3.8-flash-high.",
+    "Checksum entries were updated for every modified tracked file, but their digest accuracy cannot be independently established from the supplied diff alone.",
+    "Replace extension-based cache cleanup with exact allowlisted relative paths and filenames.",
+    "Record content-level source baselines and require them at every post-builder boundary, including resumed runs."
+  ],
+  "concerns": [
+    "--add-dir and prompt instructions do not enforce containment; --dangerously-skip-permissions increases reliance on independently verified sandbox and post-execution guards.",
+    "The source baseline is optional during later checks because missing source_status_before silently disables full-status comparison.",
+    "Full source status is checked only for labels beginning with after_builder, leaving other execution boundaries dependent on narrower guards.",
+    "Git porcelain status does not prove unchanged contents for ignored files or paths that were already dirty.",
+    "Tests do not independently run a SHA256SUMS verification command.",
+    "The preflight tests reject plaintext and incorrect fields but do not explicitly test non-dictionary JSON payloads in preflight."
+  ],
+  "blocking_issues": [
+    "clean_builder_generated_artifacts deletes any direct .agy or .gemini file having a broad allowed suffix, including user_notes.db and my_cache.cache. These paths are exempted from the pre-cleanup scope violation and are then deleted, concealing the violation.",
+    "The implementation does not support the required .gemini/logs/* cleanup: the logs subdirectory is classified as unexpected and raises FactoryError.",
+    "The Aider cleanup deletes tags.db-journal, cache.db, and cache.db-journal even though the specified exact allowlist contains only .aider.tags.cache.v4/tags.db.",
+    "_assert_source_unchanged compares path sets rather than content snapshots. Changes to an already-dirty or already-untracked source path, removal of such a path, and modifications to ignored files can pass undetected.",
+    "No test exercises an Agy process attempting to modify the original source checkout, nor modifications to pre-existing dirty, untracked, or ignored source files.",
+    "The cleanup preservation test checks a user database only at the worktree root; it does not test user_notes.db or my_cache.cache inside .agy or .gemini, where the implementation actually deletes them."
+  ]
+}
+tokens used
+34,248

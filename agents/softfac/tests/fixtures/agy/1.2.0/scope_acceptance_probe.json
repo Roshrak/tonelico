@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "deterministic_candidate_scope_gate_probe",
+  "sanitized": true,
+  "status": "PASS_SCOPE_REJECTED",
+  "candidate_root": "C:/fixture/candidate",
+  "observed_files": [
+    "agy_allowed.txt",
+    "agy_out_of_scope.txt"
+  ],
+  "allowed_files": [
+    "agy_allowed.txt"
+  ],
+  "detected_out_of_scope": [
+    "agy_out_of_scope.txt"
+  ],
+  "accepted_files": [
+    "agy_allowed.txt"
+  ],
+  "rejected_files": [
+    "agy_out_of_scope.txt"
+  ],
+  "downstream_gates_invoked": false,
+  "verifier": "C:/Users/HH18/verify_step2_scope_probe.py"
+}

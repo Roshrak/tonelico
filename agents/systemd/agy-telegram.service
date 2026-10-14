@@ -1,0 +1,19 @@
+[Unit]
+Description=Direct Antigravity Telegram Bot Gateway (Google AI Pro Gemini 3.8 Flash)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/aesc/.local/share/nix-roots/hermes-agent-env/bin/python3 /home/aesc/.local/bin/agy_telegram_bot.py
+WorkingDirectory=/home/aesc
+Environment="PATH=/run/current-system/sw/bin:/home/aesc/.local/bin:/home/aesc/.nix-profile/bin:/usr/bin:/bin"
+Environment="HOME=/home/aesc"
+Environment="WAYLAND_DISPLAY=wayland-1"
+Environment="DISPLAY=:0"
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,72 @@
+{
+  "review_type": "STEP_CONFORMANCE_REVIEW",
+  "step": 4,
+  "verdict": "APPROVE",
+  "step_status": "PASS",
+  "authorized_for_next_step": true,
+  "candidate_identity": {
+    "base_commit": "3cff50cac7d0ed2db5b2c76197632755ea419a56",
+    "head_commit": "ce1e881ae9b10d3265116d018c8a6a448d70130c",
+    "tree_oid": "3b751d46fcdf12f10d8d1599e0b41c86c1141149",
+    "diff_sha256": "d496338f87af897447eaeda4242bf8b3517f4c476260ca165de97a29392effed"
+  },
+  "checklist": [
+    {
+      "requirement": "Candidate identity and allowed-path boundary",
+      "status": "PASS",
+      "evidence": "HEAD, tree OID, three changed paths, file hashes, clean status, 19231-byte diff, and diff SHA-256 independently match the packet."
+    },
+    {
+      "requirement": "AGY configuration fields and defaults",
+      "status": "PASS",
+      "evidence": "Config uses builder_model='gemini-3.8-flash-high' and agy_bin=None; CLI exposes --builder-model and --agy-bin with matching defaults."
+    },
+    {
+      "requirement": "Legacy active configuration and CLI removal",
+      "status": "PASS",
+      "evidence": "bridge_url and builder_architect_model are absent from Config; --bridge-url, --builder-architect-model, and --aider-bin are rejected."
+    },
+    {
+      "requirement": "Strict configuration validation",
+      "status": "PASS",
+      "evidence": "Invalid integer and budget values fail instead of being coerced; empty AGY paths and obsolete openai-prefixed Builder models are rejected."
+    },
+    {
+      "requirement": "Versioned new-run configuration",
+      "status": "PASS",
+      "evidence": "New states persist run_config_version=2, builder_backend='agy', builder_contract_version=1, and serialized agy_bin."
+    },
+    {
+      "requirement": "Historical status inspection",
+      "status": "PASS",
+      "evidence": "status reads raw run_state.json through read_run_state without constructing current Config or resolving AGY."
+    },
+    {
+      "requirement": "Fail-closed execution loading",
+      "status": "PASS",
+      "evidence": "execute and resume share load_config_for_execution, which rejects legacy or unknown configuration versions, unknown state schemas, wrong backend or contract versions, and unknown active configuration keys."
+    },
+    {
+      "requirement": "Historical prior-run compatibility",
+      "status": "PASS",
+      "evidence": "Legacy schema-1 state and ledger data remain readable through the raw prior-run context loader without becoming executable configuration."
+    },
+    {
+      "requirement": "Deterministic verification",
+      "status": "PASS",
+      "evidence": "Independent rerun completed with exit code 0: 52 tests passed and 13 subtests passed; git diff --check passed."
+    },
+    {
+      "requirement": "Current-step boundary",
+      "status": "PASS",
+      "evidence": "Temporary Aider runtime artifacts are deferred to Steps 5-13 and do not restore legacy fields or options to active Config/CLI."
+    }
+  ],
+  "blocking_findings": [],
+  "resolved_findings": [],
+  "non_blocking_findings": [],
+  "precedent_corrections": [],
+  "next_actions": [
+    "Proceed to Astra Migration Step 5 using this exact approved Step 4 identity as the predecessor baseline."
+  ]
+}

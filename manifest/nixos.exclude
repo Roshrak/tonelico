@@ -1,0 +1,11 @@
+# rsync patterns for copying /etc/nixos into nixos/.
+.git/
+result
+result-*
+backup-*/
+*.bak
+*.bak.*
+*.before-*
+*.backup.*
+# nixos-generate-config's root compatibility file. Each machine generates its own.
+/hardware-configuration.nix

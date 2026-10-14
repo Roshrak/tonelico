@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "observed_windows_sandbox_outer_cancellation_probe",
+  "sanitized": true,
+  "status": "PASS_OUTER_STOP_NO_LATE_WRITE",
+  "boundary": "Windows Sandbox",
+  "ready_marker_observed": true,
+  "descendant": {
+    "armed_target": "C:/step2/candidate/late.txt",
+    "delay_seconds": 15,
+    "host_stopped_sandbox_after_ready": true,
+    "wait_after_stop_seconds": 20,
+    "late_write_exists": false,
+    "writer_stopped": true
+  },
+  "sandbox_process_stopped": true,
+  "unrelated_sentinel_unchanged": true,
+  "interpretation": "The tested Windows Sandbox stop path prevented the delayed child write. Hermes supervisor ownership still requires implementation and direct regression tests."
+}

@@ -1,0 +1,69 @@
+{
+  "review_type": "DELTA_ONLY_RECHECK",
+  "step": 7,
+  "verdict": "REJECT",
+  "step_status": "FAIL",
+  "authorized_for_next_step": false,
+  "release_status": "FAIL",
+  "authorized_for_release": false,
+  "candidate_identity": {
+    "base_commit": "bbfe7a8410e79fc1460be0d92908c67776af4e1f",
+    "head_commit": "bbfe7a8410e79fc1460be0d92908c67776af4e1f",
+    "tree_oid": "a8ead80be8dd34b8e10c9e27dbd9a31ded65db06",
+    "diff_sha256": "899ae3d894527fda60d88133a43761a74fef06d3677b5c163cfa6b3c114d4723"
+  },
+  "checklist": [
+    {
+      "finding_id": "FINAL-F005",
+      "status": "FAIL",
+      "evidence": "Independent pre-bind probe mutated test_*.json command after Runner completion but before _prepare_verification_artifact. execute still returned phase=complete, and both the bound result and Sol approval recorded attacker-controlled-command. _bind_verification_artifact independently compares only sequence; command and original log identity are adopted from the mutable artifact."
+    },
+    {
+      "finding_id": "FINAL-F007",
+      "status": "FAIL",
+      "evidence": "Independent probe showed a Sol reason containing only generic artifact_ref/kind/verified metadata authorized ASSUMPTION_DISPROVED and increased Astra count to 2 without assumption_id or current run/plan/request/task fields. After completion, sol_review_1.json had been overwritten: its actual SHA-256 differed from replan_reason_1.json artifact_sha256 and no longer contained replan_reason, while the run still reported COMPLETE."
+    },
+    {
+      "requirement": "affected deterministic evidence",
+      "status": "PASS",
+      "evidence": "Independent full run passed 156 tests and 51 subtests in 289.89s. HEAD, tree OID, staged diff SHA-256, repair delta SHA-256/length, staged checksum entries, git diff --cached --check, and absence of bytecode paths were verified."
+    }
+  ],
+  "blocking_findings": [
+    {
+      "finding_id": "FINAL-F005",
+      "status": "OPEN",
+      "severity": "CRITICAL",
+      "blocking_class": "EXECUTION_OR_RELEASE_CORRECTNESS",
+      "contract_source": "Authoritative plan Sections 7, 8 and 11; Milestone 3 T6; previous FINAL-F005; current FINAL-F005 verification contract",
+      "exact_requirement": "Runner sequence, passed status, return code, normalized command, result artifact hash, log reference, and log hash must be independently bound to the exact candidate before Sol approval and Hermes commit; Sol must copy the complete contract exactly, and terminal paths must reject tampering.",
+      "concrete_evidence": "_prepare_verification_artifact passes only tests[-1].sequence as an independent expected value. _bind_verification_artifact merely requires command to be a string and accepts the artifact's log reference/hash. An independent _stage-adjacent mutation changed command to attacker-controlled-command; execute committed and returned COMPLETE, and the Sol verification object copied that value.",
+      "observed_state": "Sequence, pass=true, returncode=0, filename shape, and current log hash are checked, but normalized command and original Runner result/log identity are not compared with independently retained Runner output before review. The binder hashes the already-mutated artifact and turns it into accepted provenance.",
+      "expected_state": "Retain the normalized Runner command and original result/log identities independently of test_*.json, compare every required field during pre-review binding, and reject mismatches before invoking Sol or committing. The same immutable contract must validate on execute, resume, reconciliation, and status.",
+      "why_it_blocks_current_step": "A mutable verification artifact can redefine what command was allegedly executed and still become the exact Sol-approved and committed provenance, making the verified-release claim false.",
+      "required_correction": "Pass an independently derived expected verification structure into the binder, including normalized command, sequence, return code, pass state, canonical log reference, original log digest, and expected result identity. Reject any pre-bind mismatch and add adversarial command and log-content/hash probes before Sol plus execute/resume/status terminal probes.",
+      "correction_class": "SAFETY_BLOCKER"
+    },
+    {
+      "finding_id": "FINAL-F007",
+      "status": "OPEN",
+      "severity": "HIGH",
+      "blocking_class": "EXECUTION_OR_RELEASE_CORRECTNESS",
+      "contract_source": "Authoritative plan Sections 4, 5 and 6; Milestone 2 T4; acceptance scenario 5; previous FINAL-F007; current FINAL-F007 verification contract",
+      "exact_requirement": "Non-user replans must resolve only bounded host-produced Sol/Hermes artifacts with exact code-specific schemas and current run, plan, request, base, candidate, task, sequence, and freshness identity; fabricated or stale evidence must not invoke Astra.",
+      "concrete_evidence": "The Sol-review resolver validates candidate/base/diff/verification but accepts generic replan_reason evidence without assumption_id, gap identity, dependency identity, run_id, master_plan_ref, request_ref, or task_id. The checked-in positive fake deliberately supplies only artifact_ref=model-asserted.json, kind, and verified. An independent run accepted this as ASSUMPTION_DISPROVED and invoked Astra. The referenced sol_review_1.json was subsequently overwritten, so its SHA-256 no longer matched the persisted reason, yet completion succeeded.",
+      "observed_state": "Arbitrary filenames are rejected and Hermes completion artifacts have a strict schema, but Sol-trigger schemas remain generic and replan evidence freshness is not preserved or revalidated. Artifact numbering permits the authoritative Sol evidence file to be overwritten after replanning.",
+      "expected_state": "Define code-specific Sol reason schemas tied to current master-plan entities and current run/request/plan/task/candidate/verification identities. Allocate immutable, non-colliding review artifacts, preserve their recorded digest, and revalidate durable replan history on execute, resume, and terminal status. User replacement-request binding must remain immutable.",
+      "why_it_blocks_current_step": "A generic model assertion can authorize strategic replanning without identifying or proving the claimed trigger, and the accepted evidence can later disappear through overwrite while the run reports COMPLETE.",
+      "required_correction": "Require and validate assumption_id, uncovered requirement identity, or dependency-conflict identity as appropriate against the current plan; bind run_id, master_plan_ref, request_ref, task_id, base, candidate, sequence, and verification. Prevent artifact-name reuse across replans and add stale/overwritten Sol-evidence regressions covering execute, resume, and status without extra Astra or Luna calls.",
+      "correction_class": "NORMAL_REWORK"
+    }
+  ],
+  "resolved_findings": [],
+  "non_blocking_findings": [],
+  "precedent_corrections": [],
+  "next_actions": [
+    "Repair FINAL-F005 by independently validating the entire Runner contract before Sol and commit, then add pre-bind command/log adversarial coverage.",
+    "Repair FINAL-F007 by enforcing code-specific current-plan identities and immutable non-colliding Sol evidence, then test stale/overwritten evidence across execute, resume, and status."
+  ]
+}

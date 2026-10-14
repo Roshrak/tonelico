@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "observed_windows_sandbox_boundary_probe",
+  "sanitized": true,
+  "status": "PASS_BOUNDARY_PROBES_LIVE_RUNTIME_SEPARATE",
+  "controller": {
+    "path": "C:/Users/HH18/run_step2_sandbox_probe.ps1",
+    "sha256": "f6aaa8857290778f260acbccba584e1850eef352472aa0ed22cb5f6f0d540d73",
+    "exit_code": 0,
+    "report_ready": true,
+    "report_sha256": "94ec9e94305e3b87808c9486e52d665c571960b51e547725fd2861fd5eb52dd1"
+  },
+  "boundary": {
+    "name": "Containers-DisposableClientVM / Windows Sandbox",
+    "networking": "enabled",
+    "protected_mappings": "read_only",
+    "candidate_and_output_mappings": "read_write"
+  },
+  "write_results": [
+    {
+      "id": "allowed_candidate_edit",
+      "observed": "WROTE",
+      "interpretation": "boundary allows candidate writes"
+    },
+    {
+      "id": "out_of_scope_candidate_edit",
+      "observed": "WROTE",
+      "interpretation": "must be rejected by independent acceptance scope gate"
+    },
+    {
+      "id": "source_checkout_write",
+      "observed": "BLOCKED"
+    },
+    {
+      "id": "trusted_state_write",
+      "observed": "BLOCKED"
+    },
+    {
+      "id": "trusted_review_artifact_write",
+      "observed": "BLOCKED"
+    },
+    {
+      "id": "git_metadata_mutation",
+      "observed": "BLOCKED"
+    },
+    {
+      "id": "unrelated_host_write",
+      "observed": "BLOCKED"
+    }
+  ],
+  "protected_sentinels_unchanged": true,
+  "main_checkout": {
+    "head_before": "232b5ef78d981dc3a084a2463f105ea42406cc1e",
+    "head_after": "232b5ef78d981dc3a084a2463f105ea42406cc1e",
+    "status_unchanged": true
+  },
+  "migration_worktree": {
+    "head_before": "f2cb5a46300e2aaeb60bb54f9517d18c1173e9e8",
+    "head_after": "f2cb5a46300e2aaeb60bb54f9517d18c1173e9e8",
+    "status_unchanged": true
+  },
+  "agy_version": {
+    "exit_code": 0,
+    "stdout": "1.2.0"
+  },
+  "live_no_edit_probe": {
+    "exit_code": 1,
+    "ndjson_line_count": 1,
+    "event_sequence": [
+      "result:ERROR"
+    ],
+    "error": "authentication failed or timed out",
+    "stderr_signals": [
+      "Authentication required",
+      "Waiting for authentication",
+      "Error: authentication timed out"
+    ],
+    "stdout_content_sha256": "346b551064f50eb37d4829251daad4354f98b83287cdeedf4cab9d1a0956bbf1",
+    "stdout_file_sha256": "623846388f615678fb7b47c2284ce855b97d03e009c59299b4b8ee1c0667043b",
+    "stderr_file_sha256": "41b9fcdfdbdc39dbc13fbcf537d29f698269ab65ec8fcefa226a0f3d1770746c",
+    "authenticated_runtime_proven": false,
+    "sensitive_auth_url": "redacted"
+  },
+  "delayed_descendant_probe": {
+    "observed": "BLOCKED",
+    "child_writer_stopped": true,
+    "outer_sandbox_cancellation_proven": false,
+    "sandbox_close": "operator_stopped_after_report"
+  },
+  "remaining_gaps": [
+    "malformed output and output-overflow behavior",
+    "future Hermes supervisor ownership beyond the tested Windows Sandbox stop path"
+  ]
+}

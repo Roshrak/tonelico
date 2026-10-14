@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "observed_windows_sandbox_authenticated_no_edit_probe",
+  "sanitized": true,
+  "status": "PASS_NO_EDIT_ONLY",
+  "environment": {
+    "boundary": "Windows Sandbox",
+    "networking": "enabled",
+    "candidate_mapping": "scratch_only",
+    "protected_source_or_git_mappings": "none_in_this_probe"
+  },
+  "argv_shape": [
+    "agy.exe",
+    "--model",
+    "gemini-3.8-flash-high",
+    "--dangerously-skip-permissions",
+    "--output-format",
+    "stream-json",
+    "--disable-slash-commands",
+    "--print-timeout",
+    "90s",
+    "--print",
+    "Reply exactly STEP2_AUTH_OK. Do not call tools and do not read or write files."
+  ],
+  "exit_code": 0,
+  "stderr_empty": true,
+  "ndjson_line_count": 5,
+  "event_sequence": [
+    "init",
+    "step_update:user_input:DONE",
+    "step_update:agent_response:ACTIVE",
+    "step_update:agent_response:DONE",
+    "result:SUCCESS"
+  ],
+  "init": {
+    "model": "gemini-3.8-flash-high",
+    "cwd": "C:/Users/WDAGUtilityAccount",
+    "tool_count": 57,
+    "tools_sha256": "4b32bc58a9074435465893cd31dc3466cfceea98f0528567824fe6c4a74165f9",
+    "permission_mode": "always-proceed"
+  },
+  "conversation": {
+    "id_present": true,
+    "ids_consistent_across_events": true,
+    "num_turns": 1
+  },
+  "result": {
+    "status": "SUCCESS",
+    "response": "STEP2_AUTH_OK\\n"
+  },
+  "raw_output_sha256": "d3d5abb8c0a9b0c16694919894c053c5bdb89824dde72600f7ca9c5a3fcffa33",
+  "limitations": [
+    "prompt prohibited tool calls",
+    "this probe used scratch-only mapping and is not the protected-root isolation matrix",
+    "timeout, outer cancellation, descendant quiescence, and discovery isolation remain unverified"
+  ]
+}

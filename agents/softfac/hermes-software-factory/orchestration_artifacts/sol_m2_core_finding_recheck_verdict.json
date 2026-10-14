@@ -1,0 +1,54 @@
+{
+  "review_type": "FINDING_ONLY_RECHECK",
+  "milestone": "M2-Core",
+  "step": 8,
+  "target_findings": [
+    "M2-S8-F003"
+  ],
+  "verdict": "APPROVE",
+  "step_status": "PASS",
+  "authorized_for_next_step": true,
+  "candidate_identity": {
+    "base_commit": "0a2e4ef97e22acdddbd11515353c66c09169b5b4",
+    "tree_oid": "d35542b47190dad8da87ccbc4f32a2292e7ee0c4",
+    "diff_sha256": "e5df2296f0f88dfd944661f80b3c56cd6931847ed02f533da19c14c9040fe4ca"
+  },
+  "checklist": [
+    {
+      "requirement": "Exact M2-S8-F003 repair scope",
+      "status": "PASS",
+      "evidence": "The exact repair delta is confined to tests/test_factory_v2.py and adds only the deterministic regressions required by the predecessor."
+    },
+    {
+      "requirement": "Predecessor-bound negative regressions",
+      "status": "PASS",
+      "evidence": "Committed assertions now reject missing finding_records, stale unstructured resolution evidence, mismatched repair_delta_sha256, and an invented verification_ref using predecessor- and target-bound validation inputs."
+    },
+    {
+      "requirement": "Narrow finding-only packet regression",
+      "status": "PASS",
+      "evidence": "Committed assertions require acceptance_criteria and global_criteria to be empty and original_request to be absent from the finding-only packet."
+    },
+    {
+      "requirement": "Affected deterministic evidence",
+      "status": "PASS",
+      "evidence": "The supplied full deterministic command completed successfully with 174 tests and 73 subtests passing; exit code 0 and output SHA-256 2872e8c6ef62def331fe7a9fd78cae4438fb66f11a62d611df1f4e2cec7cf6f6."
+    }
+  ],
+  "blocking_findings": [],
+  "resolved_findings": [
+    {
+      "finding_id": "M2-S8-F003",
+      "status": "RESOLVED",
+      "severity": "HIGH",
+      "correction_class": "NORMAL_REWORK",
+      "concrete_evidence": "The exact repair delta adds durable regressions for every predecessor-required case: missing records, stale resolution evidence, mismatched repair hashes, invented verification references, and exclusion of unrelated full-review inputs. The complete deterministic suite passes.",
+      "affected_path": "tests/test_factory_v2.py",
+      "affected_symbol": "FactoryIntegrationTests.test_review_protocol_has_stable_findings_and_single_candidate_authority"
+    }
+  ],
+  "non_blocking_findings": [],
+  "next_actions": [
+    "Proceed to the next authorized step using candidate identity {0a2e4ef97e22acdddbd11515353c66c09169b5b4, d35542b47190dad8da87ccbc4f32a2292e7ee0c4}."
+  ]
+}

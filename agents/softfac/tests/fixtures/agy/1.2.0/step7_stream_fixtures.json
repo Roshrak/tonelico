@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "step7_builder_stream_contract",
+  "sanitized": true,
+  "source": {
+    "executable_version": "1.2.0",
+    "output_format": "stream-json",
+    "model": "gemini-3.8-flash-high"
+  },
+  "valid_event_sequence": [
+    "init",
+    "step_update",
+    "result:SUCCESS"
+  ],
+  "required_init_keys": [
+    "model",
+    "cwd",
+    "tools",
+    "permission_mode"
+  ],
+  "required_result_keys": [
+    "conversation_id",
+    "status",
+    "response",
+    "duration_seconds",
+    "num_turns",
+    "usage"
+  ],
+  "negative_cases": [
+    "malformed_utf8",
+    "duplicate_json_key",
+    "missing_terminal_result",
+    "duplicate_terminal_result",
+    "wrong_model",
+    "wrong_cwd",
+    "stale_conversation",
+    "error_result",
+    "zero_turn_success",
+    "nonzero_process_exit",
+    "cli_timeout_with_zero_exit"
+  ],
+  "acceptance": "Only a fresh, complete, successful stream with matching model/cwd and exit zero is accepted; generated response prose is not a completion signal."
+}

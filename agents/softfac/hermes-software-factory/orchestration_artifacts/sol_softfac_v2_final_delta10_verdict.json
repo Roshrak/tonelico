@@ -1,0 +1,65 @@
+{
+  "review_type": "DELTA_ONLY_RECHECK",
+  "step": 7,
+  "verdict": "REJECT",
+  "step_status": "FAIL",
+  "authorized_for_next_step": false,
+  "release_status": "FAIL",
+  "authorized_for_release": false,
+  "candidate_identity": {
+    "base_commit": "bbfe7a8410e79fc1460be0d92908c67776af4e1f",
+    "head_commit": "bbfe7a8410e79fc1460be0d92908c67776af4e1f",
+    "tree_oid": "4b2bad2b8802c821fd00b5f7e7eeb4f72bc65b15",
+    "diff_sha256": "0d39ec3367250027d3b806c7e0246db266d8828f12b390e30f66190da7eccf1e"
+  },
+  "checklist": [
+    {
+      "requirement": "candidate identity and affected deterministic evidence",
+      "status": "PASS",
+      "evidence": "Independently reproduced tree_oid 4b2bad2b8802c821fd00b5f7e7eeb4f72bc65b15, staged diff SHA-256 0d39ec3367250027d3b806c7e0246db266d8828f12b390e30f66190da7eccf1e, repair delta SHA-256 87016ed13877473e7cc25e3a565aaf2e01b63f108458c9d1909966c03ec86f32 and length 21370. Staged hashes match the packet; git diff --cached --check and tracked-bytecode checks pass. Packet suite reports 168 passed and 73 subtests passed; independent affected run passed 17 tests and 19 subtests."
+    },
+    {
+      "finding_id": "FINAL-F005",
+      "status": "PASS",
+      "evidence": "Frozen as RESOLVED. The current delta adds pre-attestation Runner-result digest/schema validation; no reproducible regression against the previously approved invariant was found."
+    },
+    {
+      "finding_id": "FINAL-F007",
+      "status": "FAIL",
+      "evidence": "Historical plan/request pairing and exact Hermes schemas improved, but historical freshness remains self-rehashable. Two independent completed-run status probes were accepted with phase=complete and Astra count unchanged at 3: one replaced a historical Hermes base with a different valid repository source_head_before commit; the other changed historical request.json content, recomputed the digest in the evidence artifact, and rehashed both evidence and history record."
+    },
+    {
+      "requirement": "USER_OBJECTIVE_OR_SCOPE_CHANGE, all trigger types, and no-Luna routing",
+      "status": "PASS",
+      "evidence": "Affected tests retain all five trigger codes, immutable current replacement-request checks, AGY/BLOCKED ordinary-failure routing, and zero-Luna assertions."
+    }
+  ],
+  "blocking_findings": [
+    {
+      "finding_id": "FINAL-F007",
+      "status": "OPEN",
+      "severity": "HIGH",
+      "blocking_class": "REQUIRED_EVIDENCE_GAP",
+      "contract_source": "Authoritative plan Sections 5, 6, 8 and 11; Milestone 2 T4 and Milestone 3 T6; FINAL-F007 verification contract",
+      "exact_requirement": "Every non-user replan, including historical entries, must resolve only an exact code-appropriate host-produced Sol or Hermes artifact bound to its contemporaneous run, plan, request, base, candidate and freshness identities; internally rehashed substitutions must be rejected without Astra invocation.",
+      "concrete_evidence": "lib/hermes_factory_v2.py:7001-7015 accepts any source_head_before or any current completed_commits entry as a historical Hermes base rather than the exact contemporaneous base. Lines 6937-6941 validate historical request bytes only against a digest stored in the same replaceable evidence artifact, while lines 7083-7095 permit run_state to select an internally rehashed replacement record. Independent probes therefore accepted (1) substitution of the real historical base with a different valid source_head_before commit and (2) mutation of historical request.json followed by recomputation of its evidence digest and history hashes; status() returned complete and Astra remained at 3 invocations.",
+      "observed_state": "Well-formed, internally rehashed historical Hermes records can still substitute a different valid run commit for the true trigger base and rewrite the historical request payload while remaining authoritative.",
+      "expected_state": "Historical validation must derive or verify the exact trigger-time plan, request digest, completed-commit prefix, base and required-null candidate from an immutable contemporaneous transition identity or equivalently anchored lineage; membership in the run's aggregate commit set and self-contained recomputable hashes are insufficient.",
+      "why_it_blocks_current_step": "A historical strategy transition can remain accepted without proving the base and request that actually existed when Hermes reserved the trigger, violating durable provenance and fail-closed terminal/resume correctness.",
+      "required_correction": "Anchor every replan record to an immutable trigger-time transition snapshot or tamper-evident chained lineage that fixes the exact plan ref, request digest, completed-commit prefix, base and candidate-null value. Reject substitution with another valid known run commit and reject historical request-byte plus digest/record rehashing. Add base-only valid-commit and request-payload internally rehashed probes through execute, resume and status, asserting rejection and zero new Astra or Luna calls.",
+      "correction_class": "NORMAL_REWORK"
+    }
+  ],
+  "resolved_findings": [
+    {
+      "finding_id": "FINAL-F005",
+      "status": "RESOLVED",
+      "evidence": "Frozen; no concrete current-delta regression found."
+    }
+  ],
+  "non_blocking_findings": [],
+  "precedent_corrections": [],
+  "next_actions": [
+    "Repair FINAL-F007 by adding immutable trigger-time lineage for historical Hermes base/request freshness, then rerun the valid-alternate-base and historical-request-rehash matrix through execute, resume and status."
+  ]
+}

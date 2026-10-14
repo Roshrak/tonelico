@@ -1,0 +1,56 @@
+{
+  "review_type": "DELTA_ONLY_RECHECK",
+  "milestone": "M3",
+  "step": 14,
+  "verdict": "APPROVE",
+  "step_status": "PASS",
+  "authorized_for_next_step": true,
+  "candidate_identity": {
+    "base_commit": "190596c4fe74fba8a1e477a01e3ac1130e7ae65b",
+    "head_commit": "190596c4fe74fba8a1e477a01e3ac1130e7ae65b",
+    "tree_oid": "d2bfe8f764cacd06782690650e29e12e25736276",
+    "diff_sha256": "2114e67a5b39b262ebff0645400bca4c00756facb2d5d16e9eed646933c7795e"
+  },
+  "checklist": [
+    {
+      "requirement": "Bounded repair delta",
+      "status": "PASS",
+      "evidence": "The predecessor-to-current tree diff changes exactly two lines in the two declared files: the --mode declaration in tests/fixtures/agy/1.2.2/preflight_evidence.json and the staged whitespace command in docs/agy-migration-acceptance.md. No runtime code changed relative to the predecessor candidate."
+    },
+    {
+      "requirement": "M3-S14-F001 evidence fidelity",
+      "status": "PASS",
+      "evidence": "The staged fixture now records `Set the agent execution mode for this session (accept-edits, plan)`. The exact local executable independently reproduced version 1.2.2, SHA-256 80a029a8f22dccc123fd39453bd4d51c93d6384d4f365993a3d5accfa4af4b47, and that exact --mode help declaration."
+    },
+    {
+      "requirement": "Fresh exact candidate identity and hashes",
+      "status": "PASS",
+      "evidence": "Independently reproduced HEAD/base 190596c4fe74fba8a1e477a01e3ac1130e7ae65b, staged tree d2bfe8f764cacd06782690650e29e12e25736276, staged binary diff SHA-256 2114e67a5b39b262ebff0645400bca4c00756facb2d5d16e9eed646933c7795e, and every supplied staged-file SHA-256."
+    },
+    {
+      "requirement": "Affected deterministic verification and regression safety",
+      "status": "PASS",
+      "evidence": "Independent affected preflight verification passed 24 tests and 5 subtests; `git diff --cached --check` passed. The packet's full-suite output hash was reproduced as 63f33635e7c437d1a9a456762c431a5a00b0a9b0cf22934b8b23d8ad6a478254 for 175 passed and 73 subtests passed. All five SHA256SUMS index-to-index checks matched."
+    },
+    {
+      "requirement": "Candidate cleanliness and preserved predecessor boundaries",
+      "status": "PASS",
+      "evidence": "There are no unstaged changes, tracked bytecode, or filesystem bytecode. The two-line repair contains no concrete regression evidence against any predecessor PASS, so the direct-AGY, isolation, exact-candidate, no-Luna, Hermes-only commit, documentation, credential-exclusion, and separately-authorized deployment boundaries remain preserved."
+    }
+  ],
+  "blocking_findings": [],
+  "resolved_findings": [
+    {
+      "finding_id": "M3-S14-F001",
+      "status": "RESOLVED",
+      "severity": "MEDIUM",
+      "correction_class": "MICRO_FIX",
+      "evidence": "The inaccurate fixture declaration was replaced with the exact declaration emitted by the pinned AGY 1.2.2 executable, and the refreshed staged candidate identity and affected deterministic gates were verified."
+    }
+  ],
+  "non_blocking_findings": [],
+  "next_actions": [
+    "Hermes may commit exactly staged tree d2bfe8f764cacd06782690650e29e12e25736276 with parent 190596c4fe74fba8a1e477a01e3ac1130e7ae65b after revalidating that neither identity changed.",
+    "Keep merge, push, installation, and deployment separately authorized."
+  ]
+}

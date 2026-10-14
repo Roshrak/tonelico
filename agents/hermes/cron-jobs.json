@@ -1,0 +1,9 @@
+[
+  {
+    "name": "Hermes & System 12h Cleanup",
+    "script": "clean-system.py",
+    "no_agent": true,
+    "schedule": "every 720m",
+    "deliver": "telegram:@TELEGRAM_USER_ID@"
+  }
+]

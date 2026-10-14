@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "observed_agy_stream_json_schema",
+  "sanitized": true,
+  "status": "PASS_SCHEMA_BOUND",
+  "source": {
+    "executable_version": "1.2.0",
+    "output_format": "stream-json"
+  },
+  "event_shapes": {
+    "init": {
+      "required_top_level_keys": [
+        "event",
+        "conversation_id",
+        "init"
+      ],
+      "required_init_keys": [
+        "model",
+        "cwd",
+        "tools",
+        "permission_mode"
+      ],
+      "types": {
+        "event": "string",
+        "conversation_id": "string",
+        "init": "object",
+        "init.model": "string",
+        "init.cwd": "string",
+        "init.tools": "array[string]",
+        "init.permission_mode": "string"
+      }
+    },
+    "step_update": {
+      "required_top_level_keys": [
+        "event",
+        "step_update"
+      ],
+      "required_step_update_keys": [
+        "conversation_id",
+        "step_index",
+        "state",
+        "step_type"
+      ],
+      "optional_step_update_keys": [
+        "tool_name",
+        "tool_info",
+        "text_delta",
+        "duration_seconds",
+        "usage"
+      ],
+      "types": {
+        "step_update.step_index": "number",
+        "step_update.state": "string",
+        "step_update.step_type": "string"
+      }
+    },
+    "result_success": {
+      "required_top_level_keys": [
+        "event",
+        "result"
+      ],
+      "required_result_keys": [
+        "conversation_id",
+        "status",
+        "response",
+        "duration_seconds",
+        "num_turns",
+        "usage"
+      ],
+      "status_value": "SUCCESS",
+      "types": {
+        "result.conversation_id": "string",
+        "result.status": "string",
+        "result.response": "string",
+        "result.duration_seconds": "number",
+        "result.num_turns": "number",
+        "result.usage": "object"
+      }
+    },
+    "result_error": {
+      "required_top_level_keys": [
+        "event",
+        "result"
+      ],
+      "required_result_keys": [
+        "conversation_id",
+        "status",
+        "response",
+        "error",
+        "duration_seconds",
+        "num_turns",
+        "usage"
+      ],
+      "status_value": "ERROR",
+      "types": {
+        "result.conversation_id": "string",
+        "result.status": "string",
+        "result.response": "string",
+        "result.error": "string",
+        "result.duration_seconds": "number",
+        "result.num_turns": "number",
+        "result.usage": "object"
+      }
+    }
+  },
+  "timeout_observation": {
+    "exit_code": 0,
+    "stderr_contains": "print timeout after 1s with turn in progress; returning partial output",
+    "result_status": "SUCCESS",
+    "num_turns": 0,
+    "acceptance": "fail closed; do not treat exit code zero as completed work"
+  },
+  "acceptance_rules": [
+    "Require one terminal result event.",
+    "Require consistent conversation_id across one invocation.",
+    "Require model and cwd evidence from init.",
+    "Treat result.status=ERROR, non-zero exit, timeout signal, malformed JSON, or missing terminal result as failure/ambiguous.",
+    "Do not accept generated response prose as protocol evidence."
+  ]
+}

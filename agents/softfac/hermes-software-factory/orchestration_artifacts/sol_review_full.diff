@@ -1,0 +1,997 @@
+diff --git a/lib/hermes_factory_v2.py b/lib/hermes_factory_v2.py
+index 778aabf..d424f3f 100644
+--- a/lib/hermes_factory_v2.py
++++ b/lib/hermes_factory_v2.py
+@@ -13,6 +13,7 @@ import argparse
+ import base64
+ import hashlib
+ import json
++import math
+ import os
+ import re
+ import shlex
+@@ -157,15 +158,16 @@ class MemoryLedger:
+                 ledger_data = read_json(self.ledger_path)
+                 trajectory_data = read_json(self.trajectory_path)
+                 if isinstance(ledger_data, dict) and isinstance(trajectory_data, dict):
+-                    self.sync_seq = max(
+-                        ledger_data.get("sync_seq", 0), trajectory_data.get("sync_seq", 0)
+-                    )
+-                    self.events = trajectory_data.get("events", [])
+-                    for issue in ledger_data.get("issues", []):
+-                        fp = issue.get("fingerprint") or issue.get("id")
+-                        if fp:
+-                            self.issues[fp] = issue
+-                    return
++                    s_l = ledger_data.get("sync_seq", 0)
++                    s_t = trajectory_data.get("sync_seq", 0)
++                    if abs(s_l - s_t) <= 1:
++                        self.sync_seq = max(s_l, s_t)
++                        self.events = trajectory_data.get("events", [])
++                        for issue in ledger_data.get("issues", []):
++                            fp = issue.get("fingerprint") or issue.get("id")
++                            if fp:
++                                self.issues[fp] = issue
++                        return
+             except Exception:
+                 pass
+         self._flush()
+@@ -529,7 +531,9 @@ def normalize_test_command(cmd: str) -> str:
+     if sys.platform == "win32":
+         if cmd.startswith("python3 "):
+             return f'"{sys.executable}" ' + cmd[8:]
+-        elif cmd == "python3":
++        elif cmd.startswith("python "):
++            return f'"{sys.executable}" ' + cmd[7:]
++        elif cmd in {"python3", "python"}:
+             return f'"{sys.executable}"'
+     return cmd
+ 
+@@ -621,7 +625,205 @@ def string_list(value: Any, field: str, *, allow_empty: bool = False) -> list[st
+     return [item.strip() for item in value]
+ 
+ 
+-def validate_plan(value: dict[str, Any], requested_files: list[str] | None) -> dict[str, Any]:
++def _is_pid_alive(pid: int) -> bool:
++    if pid <= 0:
++        return False
++    try:
++        import psutil
++        p = psutil.Process(pid)
++        return p.is_running() and p.status() != psutil.STATUS_ZOMBIE
++    except (ImportError, Exception):
++        pass
++    if sys.platform == "win32":
++        try:
++            import ctypes
++            from ctypes import wintypes
++            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
++            kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
++            kernel32.OpenProcess.restype = wintypes.HANDLE
++            kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
++            kernel32.WaitForSingleObject.restype = wintypes.DWORD
++            kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
++            kernel32.CloseHandle.restype = wintypes.BOOL
++
++            SYNCHRONIZE = 0x00100000
++            handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
++            if not handle:
++                # If access denied, process definitely exists!
++                err = ctypes.get_last_error()
++                ERROR_ACCESS_DENIED = 5
++                if err == ERROR_ACCESS_DENIED:
++                    return True
++                return False
++            try:
++                # 258 is WAIT_TIMEOUT, meaning process is still active; 0 means signaled/terminated
++                wait_res = kernel32.WaitForSingleObject(handle, 0)
++                if wait_res == 258:
++                    return True
++                if wait_res == 0:
++                    return False
++                # Any other wait result (WAIT_FAILED, etc.): fail closed!
++                return True
++            finally:
++                kernel32.CloseHandle(handle)
++        except Exception:
++            return True  # Fail-closed on error: assume alive to prevent race
++    else:
++        try:
++            os.kill(pid, 0)
++            return True
++        except PermissionError:
++            # Process exists but owned by different user
++            return True
++        except ProcessLookupError:
++            # Explicit: no such process
++            return False
++        except OSError:
++            # Unexpected OS error: fail closed
++            return True
++
++
++class SingleWriterLock:
++    def __init__(self, lock_file: Path, identifier: str):
++        self.lock_file = lock_file
++        self.identifier = identifier
++        self.fd: int | None = None
++        self.acquired = False
++        self.pid = os.getpid()
++
++    def acquire(self) -> None:
++        self.lock_file.parent.mkdir(parents=True, exist_ok=True)
++        try:
++            fd = os.open(str(self.lock_file), os.O_CREAT | os.O_RDWR)
++        except OSError as e:
++            raise FactoryError(f"run {self.identifier} lock open failed: {e}", "lock")
++
++        if sys.platform == "win32":
++            import msvcrt
++            try:
++                os.lseek(fd, 0, os.SEEK_SET)
++                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
++            except OSError:
++                owner_pid = self._read_owner_pid(fd)
++                os.close(fd)
++                if owner_pid > 0 and _is_pid_alive(owner_pid):
++                    raise FactoryError(f"run {self.identifier} is locked by active process {owner_pid}", "lock")
++                raise FactoryError(f"run {self.identifier} is locked by active process", "lock")
++        else:
++            import fcntl
++            try:
++                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
++            except OSError:
++                owner_pid = self._read_owner_pid(fd)
++                os.close(fd)
++                if owner_pid > 0 and _is_pid_alive(owner_pid):
++                    raise FactoryError(f"run {self.identifier} is locked by active process {owner_pid}", "lock")
++                raise FactoryError(f"run {self.identifier} is locked by active process", "lock")
++
++        self.fd = fd
++        self.acquired = True
++        try:
++            lock_payload = json.dumps({"pid": self.pid, "time": time.time()}).encode("utf-8")
++            os.lseek(fd, 1, os.SEEK_SET)
++            os.write(fd, lock_payload)
++            os.fsync(fd)
++        except Exception:
++            pass
++
++    def _read_owner_pid(self, fd: int) -> int:
++        try:
++            os.lseek(fd, 1, os.SEEK_SET)
++            data = os.read(fd, 512).decode("utf-8", errors="ignore")
++            if data:
++                return int(json.loads(data).get("pid", 0))
++        except Exception:
++            pass
++        return 0
++
++    def release(self) -> None:
++        if self.acquired and self.fd is not None:
++            try:
++                if sys.platform == "win32":
++                    import msvcrt
++                    try:
++                        os.lseek(self.fd, 0, os.SEEK_SET)
++                        msvcrt.locking(self.fd, msvcrt.LK_UNLCK, 1)
++                    except Exception:
++                        pass
++                else:
++                    import fcntl
++                    try:
++                        fcntl.flock(self.fd, fcntl.LOCK_UN)
++                    except Exception:
++                        pass
++                os.close(self.fd)
++            except Exception:
++                pass
++            finally:
++                self.fd = None
++                self.acquired = False
++
++def extract_step_contract(request: str) -> tuple[int, int]:
++    req_lower = request.lower()
++    # 1. Exact "one step" keywords
++    if (
++        "one implementation step only" in req_lower
++        or "exactly one implementation step" in req_lower
++        or "one step only" in req_lower
++        or "single implementation step" in req_lower
++        or "single step" in req_lower
++    ):
++        return 1, 1
++
++    # 2. Range: between N and M steps / N to M steps
++    m_between = re.search(r"\bbetween\s+(\d+)\s+and\s+(\d+)\s+steps?\b", req_lower)
++    if m_between:
++        low, high = int(m_between.group(1)), int(m_between.group(2))
++        if low < 1 or high < low:
++            raise FactoryError(f"invalid step range contract: between {low} and {high}", "contract")
++        return max(1, low), min(8, high)
++
++    m_range = re.search(r"\b(\d+)\s*(?:to|-)\s*(\d+)\s+steps?\b", req_lower)
++    if m_range:
++        low, high = int(m_range.group(1)), int(m_range.group(2))
++        if low < 1 or high < low:
++            raise FactoryError(f"invalid step range contract: {low} to {high}", "contract")
++        return max(1, low), min(8, high)
++
++    # 3. Min bound: at least N steps / min N steps / minimum N steps
++    m_min = re.search(r"\b(?:at least|min(?:imum)?)\s+(\d+)\s+steps?\b", req_lower)
++    if m_min:
++        n = int(m_min.group(1))
++        if n < 1:
++            raise FactoryError(f"invalid min steps contract: {n}", "contract")
++        return max(1, min(8, n)), 8
++
++    # 4. Max bound: at most N steps / no more than N steps / max N steps / maximum N steps
++    m_max = re.search(r"\b(?:at most|no more than|max(?:imum)?)\s+(\d+)\s+steps?\b", req_lower)
++    if m_max:
++        n = int(m_max.group(1))
++        if n < 1:
++            raise FactoryError(f"invalid max steps contract: {n}", "contract")
++        return 1, min(8, n)
++
++    # 5. Exact: in N steps / exactly N steps / N implementation steps
++    m_exact = re.search(r"\b(?:in|exactly)\s+(\d+)\s+(?:implementation\s+)?steps?\b", req_lower)
++    if not m_exact:
++        m_exact = re.search(r"\b(\d+)\s+implementation\s+steps?\b", req_lower)
++    if m_exact:
++        n = int(m_exact.group(1))
++        if n < 1:
++            raise FactoryError(f"invalid exact steps contract: {n}", "contract")
++        return min(8, n), min(8, n)
++
++    return 1, 8
++
++def validate_plan(
++    value: dict[str, Any],
++    requested_files: list[str] | None,
++    min_steps: int = 1,
++    max_steps: int = 8,
++) -> dict[str, Any]:
+     require_keys(
+         value,
+         {
+@@ -637,10 +839,44 @@ def validate_plan(value: dict[str, Any], requested_files: list[str] | None) -> d
+     if not isinstance(value["objective"], str) or not value["objective"].strip():
+         raise FactoryError("Sol plan objective must be a non-empty string", "contract")
+     value["allowed_files"] = normalized_paths(string_list(value["allowed_files"], "allowed_files"))
+-    for key in ("implementation_steps", "acceptance_criteria", "recommended_tests"):
++    raw_steps = value.get("implementation_steps")
++    if not isinstance(raw_steps, list) or not raw_steps:
++        raise FactoryError("implementation_steps must be a non-empty array", "contract")
++    parsed_steps = []
++    for s_item in raw_steps:
++        if isinstance(s_item, str):
++            if not s_item.strip():
++                raise FactoryError("implementation_steps entry must be non-empty", "contract")
++            parsed_steps.append(s_item.strip())
++        elif isinstance(s_item, dict):
++            require_keys(s_item, {"step"}, "structured implementation step")
++            if not isinstance(s_item["step"], str) or not s_item["step"].strip():
++                raise FactoryError("structured step instruction must be a non-empty string", "contract")
++            if "editable_files" in s_item:
++                raw_ef = s_item["editable_files"]
++                if not isinstance(raw_ef, list) or not raw_ef:
++                    raise FactoryError("structured editable_files must be a non-empty list of paths", "contract")
++                s_item["editable_files"] = normalized_paths(string_list(raw_ef, "editable_files"))
++                outside_ef = sorted(set(s_item["editable_files"]) - set(value["allowed_files"]))
++                if outside_ef:
++                    raise FactoryError(f"structured step editable_files outside allowed_files: {outside_ef}", "scope")
++            parsed_steps.append(s_item)
++        else:
++            raise FactoryError("implementation_steps entry must be string or structured object", "contract")
++    value["implementation_steps"] = parsed_steps
++    for key in ("acceptance_criteria", "recommended_tests"):
+         value[key] = string_list(value[key], key)
+-    if len(value["implementation_steps"]) > 8:
+-        raise FactoryError("Sol plan exceeds maximum of 8 implementation steps", "contract")
++    steps_count = len(value["implementation_steps"])
++    if steps_count < min_steps:
++        raise FactoryError(
++            f"Sol plan violated step contract: expected at least {min_steps} implementation step(s), got {steps_count}",
++            "contract",
++        )
++    if steps_count > max_steps:
++        raise FactoryError(
++            f"Sol plan exceeds maximum of {max_steps} implementation steps: expected at most {max_steps}, got {steps_count}",
++            "contract",
++        )
+     value["risks"] = string_list(value["risks"], "risks", allow_empty=True)
+     if requested_files is not None:
+         outside = sorted(set(value["allowed_files"]) - set(requested_files))
+@@ -1030,13 +1266,18 @@ class AiderBuilder:
+         settings_content = (
+             f"- name: {SUPPORTED_BUILDER_MODEL}\n"
+             "  edit_format: diff-fenced\n"
+-            "  use_repo_map: true\n"
++            "  use_repo_map: false\n"
+             "  examples_as_sys_msg: true\n"
+         )
+         write_text(settings_file, settings_content)
+ 
+         config_file = run_dir / "aider.config.yml"
+-        write_text(config_file, "{}\n")
++        config_content = (
++            "map-tokens: 0\n"
++            "restore-chat-history: false\n"
++            "gitignore: false\n"
++        )
++        write_text(config_file, config_content)
+         env_file = run_dir / "aider.env"
+         write_text(env_file, "")
+         return metadata_file, settings_file, config_file, env_file
+@@ -1179,8 +1420,13 @@ class AiderBuilder:
+             env_file=env_file,
+         )
+ 
+-        chat_history_path = run_dir / "aider.chat.history.md"
+-        history_offset = chat_history_path.stat().st_size if chat_history_path.is_file() else 0
++        # Measure baseline offset before launch across per-label and legacy shared chat history
++        chat_history_path = run_dir / f"{label}.aider.chat.history.md"
++        legacy_path = run_dir / "aider.chat.history.md"
++        measured_file = chat_history_path if chat_history_path.is_file() else (
++            legacy_path if legacy_path.is_file() else chat_history_path
++        )
++        history_offset = measured_file.stat().st_size if measured_file.is_file() else 0
+         argv = [
+             self.aider_bin,
+             "--model",
+@@ -1208,14 +1454,16 @@ class AiderBuilder:
+             "--no-analytics",
+             "--no-show-model-warnings",
+             "--no-restore-chat-history",
++            "--map-tokens",
++            "0",
+             "--openai-api-base",
+             config.bridge_url,
+             "--input-history-file",
+-            str(run_dir / "aider.input.history"),
++            str(run_dir / f"{label}.aider.input.history"),
+             "--chat-history-file",
+             str(chat_history_path),
+             "--llm-history-file",
+-            str(run_dir / "aider.llm.history"),
++            str(run_dir / f"{label}.aider.llm.history"),
+             "--message-file",
+             str(message_path),
+             "--",
+@@ -1230,10 +1478,18 @@ class AiderBuilder:
+         # untracked files here.
+         clean_aider_generated_artifacts(worktree)
+ 
++        effective_chat_history = chat_history_path
++        if not effective_chat_history.is_file():
++            # If per-label does not exist, check fallback and its offset safely
++            fallback_path = run_dir / "aider.chat.history.md"
++            if fallback_path.is_file():
++                effective_chat_history = fallback_path
++
+         appended_text = ""
+-        if chat_history_path.is_file():
+-            with chat_history_path.open("rb") as handle:
+-                handle.seek(history_offset)
++        if effective_chat_history.is_file():
++            read_offset = history_offset if effective_chat_history == measured_file else 0
++            with effective_chat_history.open("rb") as handle:
++                handle.seek(read_offset)
+                 appended_bytes = handle.read()
+             appended_text = appended_bytes.decode("utf-8", errors="replace")
+ 
+@@ -1348,7 +1604,8 @@ class FactoryEngine:
+ 
+     def _repo_context(self, repo: Path, files: list[str] | None) -> dict[str, Any]:
+         selected = files or self._candidate_files(repo)
+-        tracked = set(git(repo, "ls-tree", "-r", "--name-only", "HEAD").stdout.splitlines())
++        raw_tracked = command(["git", "ls-tree", "-r", "-z", "--name-only", "HEAD"], cwd=repo, timeout=30).stdout
++        tracked = set(p for p in raw_tracked.split("\0") if p)
+         skeleton = build_file_tree_skeleton(repo)
+         contents: dict[str, str] = {}
+         remaining = 60_000 if files else 20_000
+@@ -1370,7 +1627,7 @@ class FactoryEngine:
+             if p in tracked
+         ]
+         return {
+-            "base_commit": git(repo, "rev-parse", "HEAD").stdout.strip(),
++            "base_commit": command(["git", "rev-parse", "HEAD"], cwd=repo, timeout=30).stdout.strip(),
+             "source": "committed HEAD tree",
+             "candidate_files": selected,
+             "manifests": manifests,
+@@ -1459,7 +1716,7 @@ class FactoryEngine:
+         prompt = (
+             "You are Sol Planner. You may plan but must not edit files or call tools. "
+             "Return only strict JSON with exactly these keys: objective (string), allowed_files "
+-            "(repository-relative string array), implementation_steps (string array), acceptance_criteria "
++            "(repository-relative string array), implementation_steps (string array or array of objects with step: string, editable_files: string array), acceptance_criteria "
+             "(string array), recommended_tests (string array), risks (string array). Keep allowed_files minimal. "
+             "If user_file_boundary is non-null, allowed_files must be a subset. Input:\n"
+             + json.dumps(planner_input, indent=2)
+@@ -1475,7 +1732,8 @@ class FactoryEngine:
+             timeout=config.role_timeout,
+             reasoning=config.planner_reasoning,
+         )
+-        plan = validate_plan(plan, config.requested_files)
++        min_steps, max_steps = extract_step_contract(config.request)
++        plan = validate_plan(plan, config.requested_files, min_steps=min_steps, max_steps=max_steps)
+         ensure_paths_confined(repo, plan["allowed_files"])
+         ensure_head_paths_not_symlinks(repo, plan["allowed_files"])
+         atomic_json(run_dir / "sol_plan.json", plan)
+@@ -1645,18 +1903,52 @@ class FactoryEngine:
+             shell=True,
+         )
+         log_path = run_dir / f"test_{sequence}.log"
+-        write_text(log_path, (executed.stdout or "") + ("\n" + executed.stderr if executed.stderr else ""))
+-        result = {"sequence": sequence, "command": test_command, "returncode": executed.returncode, "passed": executed.returncode == 0, "log": str(log_path)}
++        # Canonical test provenance
++        resolved_test_cmd = normalize_test_command(test_command)
++        stdout_content = executed.stdout or ""
++        stderr_content = executed.stderr or ""
++        stdout_bytes = stdout_content.encode("utf-8")
++        stdout_hash = hashlib.sha256(stdout_bytes).hexdigest()
++        log_content = stdout_content + ("\n" + stderr_content if stderr_content else "")
++        write_text(log_path, log_content)
++        combined_bytes = log_path.read_bytes()
++        combined_hash = hashlib.sha256(combined_bytes).hexdigest()
++        default_shell = os.environ.get("COMSPEC") if sys.platform == "win32" else "/bin/sh"
++        result = {
++            "sequence": sequence,
++            "command": test_command,
++            "command_resolved": resolved_test_cmd,
++            "cwd": str(worktree),
++            "returncode": executed.returncode,
++            "passed": executed.returncode == 0,
++            "log": str(log_path),
++            "provenance": {
++                "cwd": str(worktree),
++                "exit_code": executed.returncode,
++                "stdout_sha256": stdout_hash,
++                "combined_sha256": combined_hash,
++                "shell": default_shell,
++            },
++        }
+         atomic_json(run_dir / f"test_{sequence}.json", result)
+         return result
+ 
+     def _builder_slice_instruction(
+-        self, plan: dict[str, Any], step: str, step_index: int
++        self,
++        plan: dict[str, Any],
++        step: str,
++        step_index: int,
++        editable_files: list[str] | None = None,
+     ) -> str:
+         allowed = "\n".join(f"- {p}" for p in plan["allowed_files"])
++        editable_section = ""
++        if editable_files and sorted(editable_files) != sorted(plan["allowed_files"]):
++            editable_list = "\n".join(f"- {p}" for p in editable_files)
++            editable_section = f"Step target files:\n{editable_list}\n\n"
+         return (
+             f"Objective:\n{plan['objective']}\n\n"
+             f"Scope:\nAllowed files (hard boundary):\n{allowed}\n\n"
++            f"{editable_section}"
+             "Constraints:\n"
+             "- Do not redesign the plan.\n"
+             "- Do not add dependencies.\n"
+@@ -2077,11 +2369,20 @@ class FactoryEngine:
+         return gate_record
+ 
+     def execute(self, identifier: str) -> dict[str, Any]:
+-        run_dir, state, config = self._load(identifier)
+-        if state["phase"] == "committed":
+-            return state
+-        if not (run_dir / "sol_plan.json").is_file():
+-            raise FactoryError("run has no valid Sol plan; create a new run", "state")
++        run_dir = self._run_dir(identifier)
++        run_lock = SingleWriterLock(run_dir / ".run.lock", identifier)
++        run_lock.acquire()
++        try:
++            run_dir, state, config = self._load(identifier)
++            if state["phase"] == "committed":
++                return state
++            if not (run_dir / "sol_plan.json").is_file():
++                raise FactoryError("run has no valid Sol plan; create a new run", "state")
++            return self._execute_locked(run_dir, state, config, identifier)
++        finally:
++            run_lock.release()
++
++    def _execute_locked(self, run_dir: Path, state: dict[str, Any], config: Config, identifier: str) -> dict[str, Any]:
+         plan = read_json(run_dir / "sol_plan.json")
+         allowed = plan["allowed_files"]
+         ensure_paths_confined(Path(config.repo), allowed)
+@@ -2093,6 +2394,14 @@ class FactoryEngine:
+         root_obj_class = state.get("objective_class") or classify_objective(config.request)["classification"]
+         ledger = MemoryLedger(run_dir, identifier, config.repo, root_obj_class)
+ 
++        raw_builder_calls = state.get("builder_calls_used", 0)
++        if isinstance(raw_builder_calls, bool) or not isinstance(raw_builder_calls, int):
++            raise FactoryError(f"invalid non-integer builder_calls_used: {raw_builder_calls!r}", "state")
++        builder_calls = raw_builder_calls
++        if builder_calls < 0:
++            raise FactoryError(f"corrupted negative builder_calls_used: {builder_calls}", "state")
++        state["builder_calls_used"] = builder_calls
++
+         try:
+             self._save(run_dir, state, "preflight_execution", error=None, error_category=None)
+             # All three capabilities are proven before creating or changing the task worktree.
+@@ -2116,21 +2425,43 @@ class FactoryEngine:
+ 
+             steps = plan.get("implementation_steps", [])
+             slices_records: list[dict[str, Any]] = []
+-            slice_instructions: list[tuple[str, str]] = []
++            slice_instructions: list[tuple[str, str, list[str]]] = []
+             for i, step in enumerate(steps):
+                 idx = i + 1
+                 label = f"builder_step_{idx:03d}"
+-                instruction = self._builder_slice_instruction(plan, step, idx)
++                # Deduce step-specific editable files with strict boundary checking across normalized slash & backslash
++                # Step can be a string instruction or a structured dict {"step": ..., "editable_files": [...]}
++                step_files = []
++                if isinstance(step, dict) and "editable_files" in step:
++                    raw_step_files = step["editable_files"]
++                    if isinstance(raw_step_files, list):
++                        step_files = [p for p in raw_step_files if p in allowed]
++                if not step_files:
++                    step_text = str(step).replace("\\", "/")
++                    for p in allowed:
++                        norm_p = str(p).replace("\\", "/")
++                        basename = norm_p.split("/")[-1]
++                        pattern_full = r"(?<![A-Za-z0-9_./-])" + re.escape(norm_p) + r"(?![A-Za-z0-9_./-])"
++                        pattern_base = r"(?<![A-Za-z0-9_./-])" + re.escape(basename) + r"(?![A-Za-z0-9_./-])"
++                        if re.search(pattern_full, step_text) or re.search(pattern_base, step_text):
++                            if p not in step_files:
++                                step_files.append(p)
++                # If no specific files identified in step text, default to full allowed_files
++                deduped_step_files = list(dict.fromkeys(step_files)) if step_files else []
++                effective_step_files = deduped_step_files if deduped_step_files else list(allowed)
++
++                instruction = self._builder_slice_instruction(plan, step, idx, editable_files=effective_step_files)
+                 instruction_bytes = instruction.encode("utf-8")
+                 h = hashlib.sha256(instruction_bytes).hexdigest()
+                 slices_records.append({
+                     "index": idx,
+                     "label": label,
+-                    "allowed_files": list(allowed),
++                    "allowed_files": effective_step_files,
++                    "editable_files": effective_step_files,
+                     "instruction_sha256": h,
+                     "sha256": h,
+                 })
+-                slice_instructions.append((label, instruction))
++                slice_instructions.append((label, instruction, effective_step_files))
+ 
+             slices_payload = {
+                 "schema_version": SCHEMA_VERSION,
+@@ -2152,13 +2483,16 @@ class FactoryEngine:
+                 artifacts=["builder_slices.json"],
+             )
+ 
+-            for label, instruction in slice_instructions:
++            for label, instruction, step_target_files in slice_instructions:
++                builder_calls += 1
++                state["builder_calls_used"] = builder_calls
++                self._save(run_dir, state, "building", builder_calls_used=builder_calls)
+                 call_error: Exception | None = None
+                 try:
+                     self.builder.run(
+                         worktree=worktree,
+                         instruction=instruction,
+-                        allowed_files=allowed,
++                        allowed_files=step_target_files,
+                         config=config,
+                         run_dir=run_dir,
+                         label=label,
+@@ -2266,10 +2600,47 @@ class FactoryEngine:
+                     artifacts=[f"test_{test_sequence}.log"],
+                 )
+ 
+-            debug_attempt = 0
++            # Monotonic budget accounting across resume with strict non-negative validation
++            raw_debug_attempts = state.get("debug_attempts_used", 0)
++            if isinstance(raw_debug_attempts, bool) or not isinstance(raw_debug_attempts, int):
++                raise FactoryError(f"invalid non-integer debug_attempts_used: {raw_debug_attempts!r}", "state")
++            debug_attempt = raw_debug_attempts
++            if debug_attempt < 0:
++                raise FactoryError(f"corrupted negative debug_attempts_used: {debug_attempt}", "state")
++            state["debug_attempts_used"] = debug_attempt
+             while not test_result["passed"] and debug_attempt < config.max_debug_attempts:
+-                debug_attempt += 1
++                # Item 8: Pre-dispatch no-progress fingerprint detection
++                cmd_str = str(test_result.get("command") or test_result.get("command_resolved") or "")
++                stdout_h = str(test_result.get("provenance", {}).get("stdout_sha256") or "")
++                combined_h = str(test_result.get("provenance", {}).get("combined_sha256") or "")
++                failing_sig = f"{test_result.get('returncode', -1)}:{cmd_str}:{stdout_h}:{combined_h}"
+                 current_diff = git(worktree, "diff", "--binary", "HEAD", "--").stdout
++                diff_norm = hashlib.sha256(current_diff.encode("utf-8")).hexdigest()
++                pre_fingerprint = hashlib.sha256(f"{failing_sig}:{diff_norm}".encode("utf-8")).hexdigest()
++
++                seen_pre_fingerprints = state.setdefault("failing_state_fingerprints", [])
++                if pre_fingerprint in seen_pre_fingerprints:
++                    ledger.record_event(
++                        phase="luna_debug",
++                        action=f"pre_luna_no_progress_{debug_attempt + 1}",
++                        result="blocked",
++                        details={"fingerprint": pre_fingerprint, "attempt": debug_attempt + 1},
++                    )
++                    raise FactoryError(
++                        f"no-progress detected before Luna repair attempt {debug_attempt + 1}: "
++                        "identical failing test command, output hash, and worktree diff repeated without progress",
++                        "repair_loop",
++                    )
++                seen_pre_fingerprints.append(pre_fingerprint)
++                debug_attempt += 1
++                state["debug_attempts_used"] = debug_attempt
++                self._save(
++                    run_dir,
++                    state,
++                    "debugging",
++                    debug_attempts_used=debug_attempt,
++                    failing_state_fingerprints=seen_pre_fingerprints,
++                )
+                 failure_log = Path(test_result["log"]).read_text(encoding="utf-8")[-12_000:]
+                 diagnosis = self._luna_repair(
+                     run_dir=run_dir,
+@@ -2296,14 +2667,45 @@ class FactoryEngine:
+                     issue_links=[luna_issue],
+                     artifacts=[f"luna_debug_{debug_attempt}.json"],
+                 )
++                # Item 8: No-progress fingerprint detection
++                cmd_str = str(test_result.get("command") or test_result.get("command_resolved") or "")
++                failing_sig = f"{test_result.get('returncode', -1)}:{cmd_str}"
++                diff_norm = hashlib.sha256(current_diff.encode("utf-8")).hexdigest()
++                target_files = ",".join(sorted(diagnosis.get("files", [])))
++                intent_norm = hashlib.sha256("".join(diagnosis.get("repair_steps", [])).encode("utf-8")).hexdigest()
++                fp_payload = f"{failing_sig}:{diff_norm}:{target_files}:{intent_norm}"
++                fingerprint = hashlib.sha256(fp_payload.encode("utf-8")).hexdigest()
++
++                seen_fingerprints = state.setdefault("luna_fingerprints", [])
++                if fingerprint in seen_fingerprints:
++                    ledger.record_event(
++                        phase="luna_debug",
++                        action=f"luna_no_progress_{debug_attempt}",
++                        result="blocked",
++                        details={"fingerprint": fingerprint, "attempt": debug_attempt},
++                    )
++                    raise FactoryError(
++                        f"no-progress detected in Luna repair attempt {debug_attempt}: "
++                        "identical failing test signature, diff, and repair intent repeated",
++                        "repair_loop",
++                    )
++                seen_fingerprints.append(fingerprint)
++                # Immediately persist fingerprint to disk so crashes do not lose it
++                self._save(run_dir, state, "debugging", luna_fingerprints=seen_fingerprints)
+                 instruction = (
+                     "Apply Luna's approved repair diagnosis without redesigning the solution. Hard file boundary remains unchanged.\n\n"
+                     + json.dumps(diagnosis, indent=2)
+                 )
++                # Deduce editable files specific to Luna diagnosis if explicitly mentioned
++                luna_files = [f for f in diagnosis.get("files", []) if f in allowed]
++                debug_allowed_files = list(dict.fromkeys(luna_files)) if luna_files else allowed
++                builder_calls += 1
++                state["builder_calls_used"] = builder_calls
++                self._save(run_dir, state, "debugging", builder_calls_used=builder_calls)
+                 self.builder.run(
+                     worktree=worktree,
+                     instruction=instruction,
+-                    allowed_files=allowed,
++                    allowed_files=debug_allowed_files,
+                     config=config,
+                     run_dir=run_dir,
+                     label=f"builder_debug_{debug_attempt}",
+@@ -2367,8 +2769,18 @@ class FactoryEngine:
+             if not test_result["passed"]:
+                 raise FactoryError("tests still fail after Luna repair budget", "test")
+ 
+-            review_sequence = 1
++            # Monotonic review cycles accounting across resume with strict non-negative validation
++            raw_review_cycles = state.get("review_cycles_used", 0)
++            if isinstance(raw_review_cycles, bool) or not isinstance(raw_review_cycles, int):
++                raise FactoryError(f"invalid non-integer review_cycles_used: {raw_review_cycles!r}", "state")
++            base_review_cycles = raw_review_cycles
++            if base_review_cycles < 0:
++                raise FactoryError(f"corrupted negative review_cycles_used: {base_review_cycles}", "state")
++            review_sequence = base_review_cycles + 1
+             while review_sequence <= config.max_review_cycles + 1:
++                capped_review_cycles = min(review_sequence, config.max_review_cycles)
++                state["review_cycles_used"] = capped_review_cycles
++                self._save(run_dir, state, "reviewing", review_cycles_used=capped_review_cycles)
+                 diff_text, digest, changed = self._stage(worktree, allowed, run_dir, review_sequence)
+                 # Deterministic Pre-Review Gate before calling Sol Reviewer
+                 gate_record = self._pre_review_gate(worktree, allowed, changed, diff_text, tests, run_dir, review_sequence)
+@@ -2443,7 +2855,8 @@ class FactoryEngine:
+                         reviewed_diff_sha256=current_hash,
+                         changed_files=changed,
+                         test_results=tests,
+-                        review_cycles=review_sequence,
++                        review_cycles=min(review_sequence, config.max_review_cycles),
++                        review_cycles_used=min(review_sequence, config.max_review_cycles),
+                         checkpoints=checkpoints,
+                     )
+                     # The branch is retained. The now-clean worktree is removed to avoid accumulation.
+@@ -2520,10 +2933,16 @@ class FactoryEngine:
+                     rework = "Apply Luna's repair plan for the rejected candidate:\n" + json.dumps(diagnosis, indent=2)
+                 else:
+                     rework = "Sol rejected the candidate. Apply only these required changes:\n" + required
++                # Deduce editable files specific to Sol / Luna rework
++                rework_files = [f for f in diagnosis.get("files", []) if f in allowed] if review["route"] == "luna" else []
++                rework_allowed_files = list(dict.fromkeys(rework_files)) if rework_files else list(allowed)
++                builder_calls += 1
++                state["builder_calls_used"] = builder_calls
++                self._save(run_dir, state, "reviewing", builder_calls_used=builder_calls)
+                 self.builder.run(
+                     worktree=worktree,
+                     instruction=rework,
+-                    allowed_files=allowed,
++                    allowed_files=rework_allowed_files,
+                     config=config,
+                     run_dir=run_dir,
+                     label=f"builder_review_rework_{review_sequence}",
+@@ -2585,8 +3004,38 @@ class FactoryEngine:
+                     )
+ 
+                 while not test_result["passed"] and debug_attempt < config.max_debug_attempts:
+-                    debug_attempt += 1
++                    cmd_str = str(test_result.get("command") or test_result.get("command_resolved") or "")
++                    stdout_h = str(test_result.get("provenance", {}).get("stdout_sha256") or "")
++                    combined_h = str(test_result.get("provenance", {}).get("combined_sha256") or "")
++                    failing_sig = f"{test_result.get('returncode', -1)}:{cmd_str}:{stdout_h}:{combined_h}"
+                     current_diff = git(worktree, "diff", "--binary", "HEAD", "--").stdout
++                    diff_norm = hashlib.sha256(current_diff.encode("utf-8")).hexdigest()
++                    pre_fingerprint = hashlib.sha256(f"{failing_sig}:{diff_norm}".encode("utf-8")).hexdigest()
++
++                    seen_pre_fingerprints = state.setdefault("failing_state_fingerprints", [])
++                    if pre_fingerprint in seen_pre_fingerprints:
++                        ledger.record_event(
++                            phase="luna_debug",
++                            action=f"pre_luna_review_no_progress_{review_sequence}_{debug_attempt + 1}",
++                            result="blocked",
++                            details={"fingerprint": pre_fingerprint, "attempt": debug_attempt + 1},
++                        )
++                        raise FactoryError(
++                            f"no-progress detected before Luna review repair attempt {debug_attempt + 1}: "
++                            "identical failing test command, output hash, and worktree diff repeated without progress",
++                            "repair_loop",
++                        )
++                    seen_pre_fingerprints.append(pre_fingerprint)
++                    debug_attempt += 1
++                    state["debug_attempts_used"] = debug_attempt
++                    self._save(
++                        run_dir,
++                        state,
++                        "debugging",
++                        debug_attempts_used=debug_attempt,
++                        failing_state_fingerprints=seen_pre_fingerprints,
++                    )
++
+                     failure_log = Path(test_result["log"]).read_text(encoding="utf-8")[-12_000:]
+                     diagnosis = self._luna_repair(
+                         run_dir=run_dir,
+@@ -2613,13 +3062,39 @@ class FactoryEngine:
+                         issue_links=[luna_issue],
+                         artifacts=[f"luna_review_debug_{review_sequence}_{debug_attempt}.json"],
+                     )
++                    target_files = ",".join(sorted(diagnosis.get("files", [])))
++                    intent_norm = hashlib.sha256("".join(diagnosis.get("repair_steps", [])).encode("utf-8")).hexdigest()
++                    fp_payload = f"{failing_sig}:{diff_norm}:{target_files}:{intent_norm}"
++                    fingerprint = hashlib.sha256(fp_payload.encode("utf-8")).hexdigest()
++
++                    seen_fingerprints = state.setdefault("luna_fingerprints", [])
++                    if fingerprint in seen_fingerprints:
++                        ledger.record_event(
++                            phase="luna_debug",
++                            action=f"luna_review_no_progress_{review_sequence}_{debug_attempt}",
++                            result="blocked",
++                            details={"fingerprint": fingerprint, "attempt": debug_attempt},
++                        )
++                        raise FactoryError(
++                            f"no-progress detected in Luna review repair attempt {debug_attempt}: "
++                            "identical failing test signature, diff, and repair intent repeated",
++                            "repair_loop",
++                        )
++                    seen_fingerprints.append(fingerprint)
++                    self._save(run_dir, state, "debugging", luna_fingerprints=seen_fingerprints)
++                    # Deduce editable files specific to Luna review repair
++                    luna_repair_files = [f for f in diagnosis.get("files", []) if f in allowed]
++                    luna_repair_allowed = list(dict.fromkeys(luna_repair_files)) if luna_repair_files else allowed
++                    builder_calls += 1
++                    state["builder_calls_used"] = builder_calls
++                    self._save(run_dir, state, "debugging", builder_calls_used=builder_calls)
+                     self.builder.run(
+                         worktree=worktree,
+                         instruction=(
+                             "The reviewer-requested rework failed tests. Apply Luna's diagnosis within the unchanged file boundary:\n"
+                             + json.dumps(diagnosis, indent=2)
+                         ),
+-                        allowed_files=allowed,
++                        allowed_files=luna_repair_allowed,
+                         config=config,
+                         run_dir=run_dir,
+                         label=f"builder_review_debug_{review_sequence}_{debug_attempt}",
+@@ -2693,6 +3168,8 @@ class FactoryEngine:
+             raise FactoryError("review loop ended without approval", "review")
+         except FactoryError as exc:
+             phase = "blocked" if exc.category in {"preflight", "provider", "base"} else "failed"
++            if exc.category == "builder" and list(run_dir.glob("*.token_limit.json")):
++                state["non_resumable"] = True
+             ledger.record_event(
+                 phase=phase,
+                 action="execution_aborted",
+@@ -2707,9 +3184,28 @@ class FactoryEngine:
+         return state
+ 
+     def resume(self, identifier: str) -> dict[str, Any]:
+-        run_dir, state, config = self._load(identifier)
+-        if state["phase"] == "committed":
+-            return state
++        run_dir = self._run_dir(identifier)
++        run_lock = SingleWriterLock(run_dir / ".run.lock", identifier)
++        run_lock.acquire()
++        try:
++            run_dir, state, config = self._load(identifier)
++            if state["phase"] == "committed":
++                return state
++            return self._resume_locked(run_dir, state, config, identifier)
++        finally:
++            run_lock.release()
++
++    def _resume_locked(self, run_dir: Path, state: dict[str, Any], config: Config, identifier: str) -> dict[str, Any]:
++        if state.get("non_resumable") or state.get("error_category") == "builder":
++            # Discard partial worktree from truncated Builder runs
++            worktree_dir = run_dir / "worktree"
++            if worktree_dir.exists():
++                shutil.rmtree(worktree_dir, ignore_errors=True)
++            raise FactoryError(
++                "run cannot be resumed: previous Builder execution hit output truncation or builder error; "
++                "candidate state was discarded to prevent partial code propagation",
++                "state",
++            )
+         if state["phase"] not in {"planned", "blocked", "failed", "worktree_ready"}:
+             raise FactoryError(f"run cannot be resumed safely from phase {state['phase']!r}", "state")
+         if not (run_dir / "sol_plan.json").is_file():
+@@ -2724,7 +3220,7 @@ class FactoryEngine:
+             state["warm_start"] = True
+             atomic_json(run_dir / "warm_start.json", {"warm_start": True, "resumed_from": state.get("phase"), "timestamp": now_iso()})
+             atomic_json(run_dir / "run_state.json", state)
+-        return self.execute(identifier)
++        return self._execute_locked(run_dir, state, config, identifier)
+ 
+ 
+ def split_files(raw_values: list[str] | None) -> list[str] | None:
+diff --git a/tests/test_factory_v2.py b/tests/test_factory_v2.py
+index 2ead928..87698fc 100644
+--- a/tests/test_factory_v2.py
++++ b/tests/test_factory_v2.py
+@@ -1656,6 +1656,132 @@ class FactoryIntegrationTests(unittest.TestCase):
+                     config_from_args(ns)
+                 self.assertEqual(ctx.exception.category, "config")
+ 
++    def test_extract_step_contract_exact_and_bounds(self) -> None:
++        from hermes_factory_v2 import extract_step_contract
++        self.assertEqual(extract_step_contract("One implementation step only."), (1, 1))
++        self.assertEqual(extract_step_contract("fix the bug in 2 steps"), (2, 2))
++        self.assertEqual(extract_step_contract("in 3 steps"), (3, 3))
++        self.assertEqual(extract_step_contract("at least 3 steps"), (3, 8))
++        self.assertEqual(extract_step_contract("between 2 and 4 steps"), (2, 4))
++        self.assertEqual(extract_step_contract("2 to 5 steps"), (2, 5))
++        self.assertEqual(extract_step_contract("no more than 3 steps"), (1, 3))
++        self.assertEqual(extract_step_contract("at most 4 steps"), (1, 4))
++        self.assertEqual(extract_step_contract("fix the bug"), (1, 8))
++        with self.assertRaises(FactoryError) as ctx:
++            extract_step_contract("between 5 and 2 steps")
++        self.assertEqual(ctx.exception.category, "contract")
++        with self.assertRaises(FactoryError) as ctx:
++            extract_step_contract("in 0 steps")
++        self.assertEqual(ctx.exception.category, "contract")
++
++    def test_single_writer_lock_prevents_concurrent_execution(self) -> None:
++        from hermes_factory_v2 import FactoryError, FactoryEngine
++        with tempfile.TemporaryDirectory() as td:
++            repo = make_repo(Path(td))
++            engine = FactoryEngine(state_root=Path(td) / "runs")
++            run_dir = Path(td) / "runs" / "test-run"
++            run_dir.mkdir(parents=True)
++            lock_dir = run_dir / ".run.lock.d"
++            lock_dir.mkdir(parents=True)
++            info_file = lock_dir / "info.json"
++
++            # Spawn a real child process whose liveness we control deterministically
++            import subprocess, sys
++            holder_script = run_dir / "_holder.py"
++            holder_script.write_text(
++                "import os, sys, time, json\n"
++                "lock_path = sys.argv[1]\n"
++                "fd = os.open(lock_path, os.O_CREAT | os.O_RDWR)\n"
++                "if sys.platform == 'win32':\n"
++                "    import msvcrt\n"
++                "    os.lseek(fd, 0, os.SEEK_SET)\n"
++                "    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)\n"
++                "else:\n"
++                "    import fcntl\n"
++                "    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
++                "os.lseek(fd, 1, os.SEEK_SET)\n"
++                "os.write(fd, json.dumps({'pid': os.getpid()}).encode('utf-8'))\n"
++                "os.fsync(fd)\n"
++                "sys.stdout.write('READY\\n')\n"
++                "sys.stdout.flush()\n"
++                "time.sleep(30)\n",
++                encoding="utf-8",
++            )
++            proc_exe = getattr(sys, "_base_executable", sys.executable)
++            proc = subprocess.Popen([proc_exe, str(holder_script), str(run_dir / ".run.lock")], stdout=subprocess.PIPE)
++            proc.stdout.readline()  # wait for READY
++            try:
++                
++                # Creating sol_plan.json and run_state.json to invoke execute
++                import dataclasses
++                config_dict = dataclasses.asdict(self.config())
++                state = {"phase": "planned", "branch": "test-branch", "config": config_dict}
++                (run_dir / "run_state.json").write_text(json.dumps(state))
++                plan = {"allowed_files": ["calc.py"], "implementation_steps": ["step 1"]}
++                (run_dir / "sol_plan.json").write_text(json.dumps(plan))
++                (run_dir / "config.json").write_text(json.dumps(config_dict))
++
++                with self.assertRaises(FactoryError) as ctx:
++                    engine.execute("test-run")
++                self.assertEqual(ctx.exception.category, "lock")
++                self.assertIn(f"locked by active process {proc.pid}", str(ctx.exception))
++
++            finally:
++                proc.terminate()
++                proc.wait()
++
++            # Now with child process terminated, kernel lock is released and acquire succeeds!
++            with self.assertRaises(Exception) as ctx2:
++                # Will proceed past lock and fail on worktree/test setup, proving lock acquired
++                engine.execute("test-run")
++            self.assertNotEqual(getattr(ctx2.exception, "category", None), "lock")
++
++
++
++    def test_resume_budgets_never_reset_or_exceed_limits(self) -> None:
++        from hermes_factory_v2 import FactoryEngine
++        roles = FakeRoles(reject_first=True)
++        builder = FakeBuilder()
++        with tempfile.TemporaryDirectory() as td:
++            repo = make_repo(Path(td))
++            engine = FactoryEngine(state_root=Path(td) / "runs", role_client=roles, builder=builder)
++            run_dir = Path(td) / "runs" / "test-budget-run"
++            run_dir.mkdir(parents=True)
++
++            import dataclasses
++            config_dict = dataclasses.asdict(self.config())
++            # Set review_cycles_used to limit so next reject raises budget error
++            head = cmd(["git", "rev-parse", "HEAD"], repo)
++            status = cmd(["git", "status", "--porcelain=v1", "--untracked-files=all", "--", "calc.py"], repo)
++            state = {
++                "phase": "planned", "run_id": "test-budget-run", "branch": "test-branch", "config": config_dict,
++                "base_commit": head,
++                "debug_attempts_used": 2,
++                "review_cycles_used": 3,
++                "source_head_before": head,
++                "source_guard_paths": ["calc.py"],
++                "source_allowed_status_before": status,
++            }
++            (run_dir / "run_state.json").write_text(json.dumps(state))
++            plan = {
++                "objective": "test budget objective",
++                "allowed_files": ["calc.py"],
++                "implementation_steps": ["step 1"],
++                "acceptance_criteria": ["test passes"],
++                "recommended_tests": ["python -m unittest tests/test_calc.py"],
++            }
++            (run_dir / "sol_plan.json").write_text(json.dumps(plan))
++            (run_dir / "config.json").write_text(json.dumps(config_dict))
++
++            # Resume must fail closed because debug/review budgets are already exhausted and cannot reset
++            with self.assertRaises(FactoryError) as ctx:
++                engine.resume("test-budget-run")
++            self.assertEqual(ctx.exception.category, "review")
++            saved_state = json.loads((run_dir / "run_state.json").read_text("utf-8"))
++            self.assertGreaterEqual(saved_state.get("debug_attempts_used", 0), 2)
++            self.assertGreaterEqual(saved_state.get("review_cycles_used", 0), 2)
++
+ 
+ if __name__ == "__main__":
+     unittest.main(verbosity=2)
++
