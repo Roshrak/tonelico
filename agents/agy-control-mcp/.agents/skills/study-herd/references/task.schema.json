@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Study Herd worker task",
+  "type": "object",
+  "required": ["task_id", "role", "input_bundle", "scope", "acceptance"],
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {"type": "string", "minLength": 1},
+    "role": {
+      "type": "string",
+      "enum": ["source-clerk", "locator-clerk", "coverage-clerk", "exam-transcriber"]
+    },
+    "input_bundle": {"type": "string", "minLength": 1},
+    "scope": {
+      "type": "object",
+      "required": ["source_id"],
+      "additionalProperties": true,
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "pages": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 1},
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "acceptance": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "worker_model": {"type": ["string", "null"]}
+  }
+}
+

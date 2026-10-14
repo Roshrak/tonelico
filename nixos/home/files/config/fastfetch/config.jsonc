@@ -1,0 +1,168 @@
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+
+  "logo": {
+    "padding": {
+      "right": 4
+    }
+  },
+
+  "display": {
+    "separator": "",
+    "constants": [
+      "──────────────────────────────────────────────",
+      "\u001b[47D",
+      "\u001b[47C",
+      "\u001b[46C"
+    ]
+  },
+
+  "modules": [
+
+    // ───────────────────── HARDWARE ─────────────────────
+
+    {
+      "type": "custom",
+      "key": "{#bright_cyan}┌──────────────┬{$1}┐\u001b[37D",
+      "format": "{#white} Hardware "
+    },
+
+    {
+      "type": "cpu",
+      "key": "{#bright_cyan}│ {icon}  CPU       │{$4}│{$2}"
+    },
+
+    {
+      "type": "gpu",
+      "key": "{#bright_cyan}│ {icon}  GPU       │{$4}│{$2}"
+    },
+
+    {
+      "type": "display",
+      "key": "{#bright_cyan}│ {icon}  Display   │{$4}│{$2}",
+      "compactType": "original-with-refresh-rate"
+    },
+
+    {
+      "type": "disk",
+      "key": "{#bright_cyan}│ {icon}  Disk      │{$4}│{$2}",
+      "format": "{size-used} / {size-total} ({size-percentage}) - {filesystem}"
+    },
+
+    {
+      "type": "memory",
+      "key": "{#bright_cyan}│ {icon}  Memory    │{$4}│{$2}"
+    },
+
+    {
+      "type": "swap",
+      "key": "{#bright_cyan}│ {icon}  Swap      │{$4}│{$2}"
+    },
+
+    {
+      "type": "battery",
+      "key": "{#bright_cyan}│ {icon}  Battery   │{$4}│{$2}"
+    },
+
+    {
+      "type": "custom",
+      "key": "{#bright_cyan}└──────────────┴{$1}┘",
+      "format": ""
+    },
+
+
+    "break",
+
+
+    // ───────────────────── SOFTWARE ─────────────────────
+
+    {
+      "type": "custom",
+      "key": "{#bright_cyan}┌──────────────┬{$1}┐\u001b[37D",
+      "format": "{#white} Software "
+    },
+
+    {
+      "type": "os",
+      "key": "{#bright_cyan}│ {icon}  OS        │{$4}│{$2}",
+      "format": "{name} {version-id} (Morgan) {arch}"
+    },
+
+    {
+      "type": "kernel",
+      "key": "{#bright_cyan}│ {icon}  Kernel    │{$4}│{$2}"
+    },
+
+    {
+      "type": "packages",
+      "key": "{#bright_cyan}│ {icon}  Packages  │{$4}│{$2}"
+    },
+
+    {
+      "type": "shell",
+      "key": "{#bright_cyan}│ {icon}  Shell     │{$4}│{$2}"
+    },
+
+    {
+      "type": "wm",
+      "key": "{#bright_cyan}│ {icon}  WM        │{$4}│{$2}"
+    },
+
+    {
+      "type": "theme",
+      "key": "{#bright_cyan}│ {icon}  Theme     │{$4}│{$2}"
+    },
+
+    {
+      "type": "icons",
+      "key": "{#bright_cyan}│ {icon}  Icons     │{$4}│{$2}"
+    },
+
+    {
+      "type": "terminalfont",
+      "key": "{#bright_cyan}│ {icon}  Font      │{$4}│{$2}"
+    },
+
+    {
+      "type": "terminal",
+      "key": "{#bright_cyan}│ {icon}  Terminal  │{$4}│{$2}"
+    },
+
+    {
+      "type": "custom",
+      "key": "{#bright_cyan}└──────────────┴{$1}┘",
+      "format": ""
+    },
+
+
+    "break",
+
+
+    // ─────────────────── UPTIME / AGE ───────────────────
+
+    {
+      "type": "custom",
+      "key": "{#bright_cyan}┌──────────────┬{$1}┐\u001b[39D",
+      "format": "{#white} Uptime / Age "
+    },
+
+    {
+      "type": "disk",
+      "keyIcon": "󰃭",
+      "key": "{#bright_cyan}│ {icon}  OS Age    │{$4}│{$2}",
+      "folders": "/",
+      "format": "{days} days"
+    },
+
+    {
+      "type": "uptime",
+      "key": "{#bright_cyan}│ {icon}  Uptime    │{$4}│{$2}"
+    },
+
+    {
+      "type": "custom",
+      "key": "{#bright_cyan}└──────────────┴{$1}┘",
+      "format": ""
+    }
+  ]
+}

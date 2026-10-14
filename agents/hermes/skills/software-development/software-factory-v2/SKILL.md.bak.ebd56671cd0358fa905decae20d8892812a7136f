@@ -1,0 +1,107 @@
+---
+name: software-factory-v2
+description: "Use when running SoftFac v2. Enforce its agent contract: Astra medium master planning, AGY 1.2.2 builder, deterministic Runner verification, Sol independent review (Large review once per step, finding-only delta rechecks, final integrated review), and exact Hermes commits."
+version: 3.1.0
+author: Hermes Agent
+license: MIT
+platforms: [windows]
+metadata:
+  hermes:
+    tags: [coding, builder, agy, astra, sol, git, workflow]
+---
+
+# Software Factory v2 (SoftFac v2)
+
+## Overview
+
+SoftFac v2 uses one strategic planning call followed by a deterministic Hermes-controlled task graph:
+
+```text
+Mỗi step:
+Astra initial plan (medium)
+       ↓
+Hermes ready task
+       ↓
+AGY 1.2.2 builder (sandbox)
+       ↓
+Runner (deterministic tests/lints/write-tree)
+       ↓
+Sol LARGE review (đúng 1 lần / step)
+       ↓
+[nếu REJECT: AGY repair -> Runner -> Sol finding-only recheck]
+       ↓ (zero blocking findings)
+Hermes exact commit
+
+Sau step cuối:
+Final Integrated Review (đúng 1 lần)
+       ↓
+[nếu có finding: AGY repair -> Runner -> Final finding-only recheck]
+       ↓
+Exact approved release finalize
+```
+
+Hermes selects ready tasks from the immutable master-plan artifact (`sol_plan.json`). A normal project does not call Astra again after each commit. Astra is called again only when verified evidence proves that the plan is invalid/incomplete or the user changes the objective or authorized scope.
+
+Exceptional replanning requires a structured, verified reason with one of:
+- `ASSUMPTION_DISPROVED`
+- `REQUIRED_GAP_UNCOVERED`
+- `ARCHITECTURE_DEPENDENCY_CONFLICT`
+- `PLAN_EXHAUSTED_OBJECTIVE_INCOMPLETE`
+- `USER_OBJECTIVE_OR_SCOPE_CHANGE`
+
+Test failure, repair, rejection, stagnation, and ordinary resume are not replan triggers.
+
+## How to execute
+
+```bash
+hermes-code-factory-v2 run "<repo_path>" "<task_description>"
+```
+
+Optional arguments:
+- `--files "src/auth.py,src/models.py"` sets a hard edit boundary.
+- `--test-cmd "pytest -q"` sets deterministic verification.
+- `--agy-bin "<path>"` pins the AGY executable when it is not on `PATH`.
+- `--planner-reasoning <medium|high>` overrides planner reasoning (default deployed override: `medium`).
+- Subcommands: `run`, `plan`, `execute <run_id>`, `resume <run_id>`, `status <run_id>`.
+
+The active AGY runtime is the audited `1.2.2` executable identity (SHA-256: `80a029a8f22dccc123fd39453bd4d51c93d6384d4f365993a3d5accfa4af4b47`). A changed or unavailable executable, model capability, authentication state, or isolation boundary fails closed; the factory does not auto-update, substitute, or install AGY.
+
+The repository must be its Git top-level directory. The factory uses a host-owned candidate worktree; AGY receives a disposable mirror without `.git`. AGY cannot accept work, stage, commit, merge, or push.
+
+## Agent & Role Ownership Rules
+
+1. **Astra** (`gpt-6-astra`, deployment default `medium` reasoning): Master planner. Classifies the objective, identifies minimal hard edit boundaries, tests, and task definitions. Runs once initially. Never called for routine replanning.
+2. **Hermes**: Master orchestrator. Owns task sequencing, budgets, state persistence, repair coordination, branch isolation, resume, completion, and `git commit`.
+3. **AGY** (`gemini-3.8-flash-high` in AGY 1.2.2 sandbox): Implementation and repair within the current task scope.
+4. **Runner**: Scope/integrity checks, deterministic test execution, staging, and `git write-tree`.
+5. **Sol** (`gpt-5.6-sol`): Independent judge.
+   - Per step: Sol LARGE review runs exactly once. On reject, finding-only rechecks verify targeted fixes.
+   - Project end: Exactly one Final Integrated Review validates the combined solution, followed by finding-only rechecks if final issues are found.
+6. **Commit Authority**: Only Hermes may run `git commit` once all gates pass.
+7. **Luna**: Outside the v1 production runtime. Stagnation or exhausted repair budget is recorded as `BLOCKED` with evidence.
+
+## Builder Operating Envelope & Token-Budget Recovery (P4 Hybrid)
+
+- **Session Budget vs. API Quota**: Distinguish invocation turn/token budget exhaustion (`actual_changed_paths=[]` / `NO_PATCH`) from Google account API quota (`RESOURCE_EXHAUSTED` / 429).
+- **No Monolithic Retries**: Never retry an exhausted budget run with the identical broad prompt.
+- **Role Isolation on Builder Failures**: Sizing and context failures belong to implementation; never invoke Astra, Luna, or Sol on `TOKEN_BUDGET_EXHAUSTED` or `NO_PATCH`.
+- **Zero-Candidate Isolation**: Never sync or advance git baseline if `actual_changed_paths` is empty.
+- **P4 Hybrid Slicing Policy**:
+  - *Attempt 1 fail*: Apply Context Shrink (strip verbose test logs, isolate failing symbol/assertion).
+  - *Attempt 2 fail*: Apply Symbol Localization & Pre-extraction (isolate target symbol to avoid tool loops).
+  - *Attempt 3 fail*: Apply Task Slicing (split into contract, logic, and test sub-slices).
+  - *Attempt 4 fail*: Stop and mark `BLOCKED` with retained attempt telemetry.
+- **Large Context Targeting & Discovery**: Files > 250 KB require symbol-local targeting rather than whole-file context dumps. Discovery layer follows S0/S1/S2 protocol (rg + Python AST candidate localization with fail-closed `WRONG_TARGET = 0`). See [references/agy-builder-envelope.md](references/agy-builder-envelope.md).
+
+
+## Resume Semantics
+
+When resuming via `hermes-code-factory-v2 resume <run_id>`:
+- The engine reloads `run_dir/config.json`.
+- The run inherits its original persisted `planner_reasoning` (`medium` by default for v2 runs).
+- Resume does not refund attempts or invoke Astra for ordinary crashes.
+- A pending commit is reconciled only when its parent and tree exactly match the recorded `{base_commit, candidate_id}`.
+
+## Deployment & Release Reference
+
+For release packaging, authoritative candidate commit helper (`_commit_exact_candidate_tree`), dynamic commit resolution, staging rotation, Windows deterministic archive (`core.autocrlf=false`), hash verification, wrapper conventions, and coupled runtime/skill rollback, see [references/release-and-deployment.md](references/release-and-deployment.md).

@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "observed_direct_sandbox_fresh_runtime_and_discovery_probe",
+  "sanitized": true,
+  "status": "PASS_FRESH_CWD_DISCOVERY",
+  "working_directory_requested": "C:/step2/candidate",
+  "invocations": [
+    {
+      "index": 1,
+      "sentinel": "STEP2_FRESH_1",
+      "exit_code": 0,
+      "stderr_empty": true,
+      "ndjson_line_count": 5,
+      "event_sequence": [
+        "init",
+        "step_update",
+        "step_update",
+        "step_update",
+        "result"
+      ],
+      "model": "gemini-3.8-flash-high",
+      "effective_cwd": "C:/step2/candidate",
+      "tool_count": 57,
+      "permission_mode": "always-proceed",
+      "conversation_id_sha256": "22b14a9943833c9b3dcf0c4508aaad23fd293af30802d3a0b1a123b93314cd4a",
+      "result_status": "SUCCESS",
+      "result_response": "STEP2_FRESH_1\\n",
+      "num_turns": 1,
+      "stdout_sha256": "503c163e4e952e6730bec714f7d2546be4f38943580be29b6498c4ccce63c201"
+    },
+    {
+      "index": 2,
+      "sentinel": "STEP2_FRESH_2",
+      "exit_code": 0,
+      "stderr_empty": true,
+      "ndjson_line_count": 5,
+      "event_sequence": [
+        "init",
+        "step_update",
+        "step_update",
+        "step_update",
+        "result"
+      ],
+      "model": "gemini-3.8-flash-high",
+      "effective_cwd": "C:/step2/candidate",
+      "tool_count": 57,
+      "permission_mode": "always-proceed",
+      "conversation_id_sha256": "d3111cc4f50900e725a094645cd6f1c2695d8e249e6e23cae8a2f11c73967d2b",
+      "result_status": "SUCCESS",
+      "result_response": "STEP2_FRESH_2\\n",
+      "num_turns": 1,
+      "stdout_sha256": "4c821da54634b46073da98c5265f1ee875c66ccbd958ffab41b02d88936429ad"
+    }
+  ],
+  "distinct_conversation_ids": true,
+  "mcp_list": "No MCP servers configured.",
+  "plugin_list": "No imported plugins.",
+  "discovery": [
+    {
+      "path": "C:/Users/WDAGUtilityAccount/.gemini",
+      "present": true,
+      "child_names": [
+        "antigravity-cli",
+        "config"
+      ]
+    },
+    {
+      "path": "C:/Users/WDAGUtilityAccount/.antigravity",
+      "present": false
+    },
+    {
+      "path": "C:/Users/WDAGUtilityAccount/.antigravity_tools",
+      "present": false
+    },
+    {
+      "path": "C:/step2/candidate",
+      "present": true,
+      "child_names": [
+        "agy_allowed.txt",
+        "agy_out_of_scope.txt"
+      ]
+    },
+    {
+      "path": "C:/step2/output",
+      "present": true,
+      "child_names": [
+        "agy_protected.stderr.txt",
+        "agy_protected.stdout.txt",
+        "complete_runtime_probe.ps1",
+        "fresh_1.stderr.txt",
+        "fresh_1.stdout.txt",
+        "fresh_2.stderr.txt",
+        "fresh_2.stdout.txt"
+      ]
+    }
+  ],
+  "limitations": [
+    "prompts prohibited tool calls",
+    "discovery records names/presence only and never file contents",
+    "no protected-root writes were attempted by these fresh no-edit invocations"
+  ],
+  "probe_sha256": "d17f2925a898b0eb8fbc11cc2975508f95c242b3a851d236f61de215d6ada471"
+}

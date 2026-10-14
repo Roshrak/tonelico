@@ -1,0 +1,123 @@
+{
+  "review_type": "DELTA_ONLY_RECHECK",
+  "step": 7,
+  "verdict": "REJECT",
+  "step_status": "FAIL",
+  "authorized_for_next_step": false,
+  "candidate_identity": {
+    "base_commit": "7dbf522aab5682cfebd6e1c3da6db206472f36e4",
+    "head_commit": "caf448e83441a2fab035e1ce9250a6113bdba2f9",
+    "tree_oid": "1f943ff0273c825b09de9fe865b2b76c5ed80707",
+    "diff_sha256": "ab2bfdd3ab7e15a760054ae09c2dbe599cfe720460d4d16862dcccb9037eb45e"
+  },
+  "checklist": [
+    {
+      "requirement": 1,
+      "status": "PASS",
+      "evidence": "Preserved prior PASS. The exact repair delta does not alter the required keyword-only AgyBuilder.run signature; the affected deterministic suite passes 107 tests and 35 subtests."
+    },
+    {
+      "requirement": 2,
+      "status": "FAIL",
+      "finding_ids": [
+        "STEP7-F001"
+      ],
+      "evidence": "Preserved unresolved safety blocker; this bounded repair does not add the mandatory production filesystem-isolation boundary."
+    },
+    {
+      "requirement": 3,
+      "status": "FAIL",
+      "finding_ids": [
+        "STEP7-F002"
+      ],
+      "evidence": "Preserved unresolved safety blocker; this bounded repair does not establish authorized-candidate provenance, protected-root disjointness, or a whole-candidate baseline."
+    },
+    {
+      "requirement": 4,
+      "status": "PASS",
+      "resolved_finding_ids": [
+        "STEP7-F003"
+      ],
+      "evidence": "Preserved prior resolution. The repair does not regress step-update enforcement or durable conversation-identity reservation, and the affected deterministic suite passes."
+    },
+    {
+      "requirement": 5,
+      "status": "PASS",
+      "resolved_finding_ids": [
+        "STEP7-F004"
+      ],
+      "evidence": "Initial stdout/stderr evidence initialization is now wrapped; OSError becomes BuilderProcessError with stable code agy_runtime_error, then a non-resumable BuilderFailure with evidence_path only for the successfully persisted attempt.json."
+    },
+    {
+      "requirement": 6,
+      "status": "PASS",
+      "resolved_finding_ids": [
+        "STEP7-F005",
+        "STEP7-F006"
+      ],
+      "evidence": "The new AgyBuilder.run regression test exercises the exact initial evidence-write failure. The exact repair delta changes only lib/hermes_factory_v2.py and tests/test_factory_agy_builder.py, both authorized. Repair SHA-256 ff51cdf21612ba393ae6adb78475919ebb6f3f203ab617127bc8ec0ff1188521, candidate hashes, total diff identity, test-output SHA-256, and 107-pass evidence are consistent."
+    }
+  ],
+  "blocking_findings": [
+    {
+      "finding_id": "STEP7-F001",
+      "status": "OPEN",
+      "severity": "CRITICAL",
+      "blocking_class": "SAFETY_INVARIANT_VIOLATION",
+      "contract_source": "Astra execution-isolation invariant, Step 2 execution contract, and Step 7 requirement 2",
+      "exact_requirement": "Every production AGY dispatch must execute through the approved filesystem isolation boundary, sanitize inherited workspace/configuration overrides, and deny Builder access to Git and trusted state.",
+      "concrete_evidence": "The repair delta leaves AgyBuilder.run launching the host executable through run_builder_process with cwd=candidate and an os.environ.copy()-derived environment. The supervisor provides lifecycle containment but no approved filesystem isolation boundary.",
+      "observed_state": "Permission-skipping AGY remains able to access host-visible Git metadata, source/trusted paths, user configuration, credentials, and unrelated writable paths.",
+      "expected_state": "Production dispatch must use the approved isolation launcher with only the disposable candidate writable and protected roots inaccessible.",
+      "why_it_blocks_current_step": "The production default remains an unrestricted permission-skipping Builder and violates mandatory isolation and no-Builder-Git invariants.",
+      "required_correction": "Implement and prove the approved production filesystem-isolation boundary and sanitized discovery environment without weakening the requirement.",
+      "correction_class": "SAFETY_BLOCKER"
+    },
+    {
+      "finding_id": "STEP7-F002",
+      "status": "OPEN",
+      "severity": "HIGH",
+      "blocking_class": "SAFETY_INVARIANT_VIOLATION",
+      "contract_source": "Astra Step 7 pre-dispatch contract and Step 7 requirement 3",
+      "exact_requirement": "Validate the canonical authorized disposable candidate and bind a complete whole-candidate baseline before dispatch.",
+      "concrete_evidence": "The repair does not change _canonical_builder_worktree or baseline binding. Validation still accepts an arbitrary distinct Git directory and records baseline_head plus allowed-file snapshots rather than staged, unstaged, untracked, ignored, and out-of-scope candidate state.",
+      "observed_state": "Candidate provenance, protected-root disjointness, and complete baseline identity remain unproven.",
+      "expected_state": "Candidate identity must match the run-authorized disposable worktree, protected roots must be disjoint, and the attempt must bind an unambiguous whole-candidate baseline.",
+      "why_it_blocks_current_step": "Dispatch and retained evidence are not bound to the candidate actually authorized for editing.",
+      "required_correction": "Add provenance/disjointness validation, complete baseline identity, and the required ancestor, unrelated-repository, dirty-index, untracked, and out-of-scope tests.",
+      "correction_class": "SAFETY_BLOCKER"
+    }
+  ],
+  "resolved_findings": [
+    {
+      "finding_id": "STEP7-F003",
+      "status": "RESOLVED",
+      "severity": "HIGH",
+      "concrete_evidence": "Prior resolution remains intact; the exact repair hunk does not change stream parsing or persisted conversation-identity checks, and affected deterministic tests pass."
+    },
+    {
+      "finding_id": "STEP7-F004",
+      "status": "RESOLVED",
+      "severity": "HIGH",
+      "concrete_evidence": "run_builder_process now translates initial evidence-file OSError into BuilderProcessError with agy_runtime_error; AgyBuilder.run converts it to a non-resumable BuilderFailure and persists truthful attempt evidence when possible. The new targeted test passes."
+    },
+    {
+      "finding_id": "STEP7-F005",
+      "status": "RESOLVED",
+      "severity": "HIGH",
+      "concrete_evidence": "Prior backend-correct production instruction and label-bound Builder artifact routing remain unchanged and covered by the passing affected suite."
+    },
+    {
+      "finding_id": "STEP7-F006",
+      "status": "RESOLVED",
+      "severity": "HIGH",
+      "concrete_evidence": "The missing initial-evidence-write AgyBuilder failure path now has executable coverage. The verified repair delta contains exactly the production fix and its regression test, and the affected suite passes 107 tests plus 35 subtests with no failures, errors, or skips."
+    }
+  ],
+  "non_blocking_findings": [],
+  "precedent_corrections": [],
+  "next_actions": [
+    "Keep STEP7-F001 and STEP7-F002 open exactly as safety blockers; do not authorize production AGY or Step 8.",
+    "Step 7 can pass only after an approved filesystem-isolation boundary and complete authorized-candidate provenance/baseline enforcement are implemented and evidenced; do not substitute weaker prompt, cwd, lifecycle, or post-run checks."
+  ]
+}

@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "source_suite": "Study Herd Python 0.1.0",
+  "mappings": [
+    {
+      "python_test": "test_worker_result_requires_in_scope_locators",
+      "node_contract": "studyCore.scope",
+      "node_regression_id": "P01"
+    },
+    {
+      "python_test": "test_worker_result_rejects_locator_outside_the_expected_page_range",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P02"
+    },
+    {
+      "python_test": "test_worker_result_must_echo_the_exact_expected_page_range",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P03"
+    },
+    {
+      "python_test": "test_worker_result_role_must_match_the_task_role",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P04"
+    },
+    {
+      "python_test": "test_done_worker_cannot_hide_missing_coverage_or_violations",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P05"
+    },
+    {
+      "python_test": "test_worker_claim_requires_a_page_line_or_section_locator",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P06"
+    },
+    {
+      "python_test": "test_pdf_scoped_worker_claim_requires_a_page_locator",
+      "node_contract": "studyCore.scope",
+      "node_regression_id": "P07"
+    },
+    {
+      "python_test": "test_antigravity_worker_command_is_sandboxed_and_plan_only",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P08"
+    },
+    {
+      "python_test": "test_worker_run_embeds_the_locked_input_bundle_without_tool_access",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P09"
+    },
+    {
+      "python_test": "test_worker_run_enforces_the_task_page_scope",
+      "node_contract": "studyCore.scope",
+      "node_regression_id": "P10"
+    },
+    {
+      "python_test": "test_worker_run_rejects_an_unbounded_input_bundle",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P11"
+    },
+    {
+      "python_test": "test_built_package_contains_worker_contract_schemas",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P12"
+    },
+    {
+      "python_test": "test_schema_resolution_falls_back_to_packaged_resources",
+      "node_contract": "studyHerdCli",
+      "node_regression_id": "P13"
+    },
+    {
+      "python_test": "test_skill_and_packaged_schemas_stay_in_sync",
+      "node_contract": "studyHerdCli",
+      "node_regression_id": "P14"
+    },
+    {
+      "python_test": "test_worker_retries_once_after_a_transient_process_failure",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P15"
+    },
+    {
+      "python_test": "test_worker_refuses_to_write_outside_a_study_work_directory",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P16"
+    },
+    {
+      "python_test": "test_worker_does_not_create_a_rejected_external_work_directory",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P17"
+    },
+    {
+      "python_test": "test_task_schema_rejects_an_invalid_page_scope",
+      "node_contract": "studyCore.scope",
+      "node_regression_id": "P18"
+    },
+    {
+      "python_test": "test_worker_rejects_a_reversed_page_scope_before_launch",
+      "node_contract": "studyCore.scope",
+      "node_regression_id": "P19"
+    },
+    {
+      "python_test": "test_build_source_index_keeps_unicode_markdown_and_exclusions",
+      "node_contract": "studyCore.index",
+      "node_regression_id": "P20"
+    },
+    {
+      "python_test": "test_pypdf_warnings_are_captured_as_source_metadata",
+      "node_contract": "studyHerdCli",
+      "node_regression_id": "P21"
+    },
+    {
+      "python_test": "test_oral_medicine_manifest_covers_the_full_course_map",
+      "node_contract": "studyCore.index",
+      "node_regression_id": "P22"
+    },
+    {
+      "python_test": "test_scope_locks_the_requested_page_range",
+      "node_contract": "studyCore.scope",
+      "node_regression_id": "P24"
+    },
+    {
+      "python_test": "test_scope_rejects_pages_outside_the_source",
+      "node_contract": "studyCore.scope",
+      "node_regression_id": "P25"
+    },
+    {
+      "python_test": "test_scope_becomes_stale_when_the_source_hash_changes",
+      "node_contract": "studyCore.scope",
+      "node_regression_id": "P26"
+    },
+    {
+      "python_test": "test_mastery_requires_correct_transfer_across_time",
+      "node_contract": "studyHerdCli",
+      "node_regression_id": "P28"
+    },
+    {
+      "python_test": "test_attempt_timestamp_must_include_a_timezone",
+      "node_contract": "studyProgress",
+      "node_regression_id": "P29"
+    },
+    {
+      "python_test": "test_last_attempt_uses_time_not_jsonl_append_order",
+      "node_contract": "studyProgress",
+      "node_regression_id": "P30"
+    },
+    {
+      "python_test": "test_concept_map_rejects_duplicate_ids",
+      "node_contract": "studyHerdCli",
+      "node_regression_id": "P31"
+    },
+    {
+      "python_test": "test_progress_rejects_attempts_for_unknown_concepts",
+      "node_contract": "studyProgress",
+      "node_regression_id": "P32"
+    },
+    {
+      "python_test": "test_doctor_has_a_safe_commander_only_fallback",
+      "node_contract": "integrated skill and doctor",
+      "node_regression_id": "P33"
+    },
+    {
+      "python_test": "test_doctor_fallback_is_neutral_between_sol_and_terra",
+      "node_contract": "integrated skill and doctor",
+      "node_regression_id": "P34"
+    },
+    {
+      "python_test": "test_emit_writes_utf8_when_windows_stdout_is_cp1252",
+      "node_contract": "studyHerdCli",
+      "node_regression_id": "P39"
+    },
+    {
+      "python_test": "test_antigravity_finds_the_windows_default_install_without_path",
+      "node_contract": "studyValidation/studyRunner",
+      "node_regression_id": "P35"
+    },
+    {
+      "python_test": "test_record_attempt_validates_concepts_before_writing_state",
+      "node_contract": "studyProgress",
+      "node_regression_id": "P40"
+    },
+    {
+      "python_test": "test_index_command_handles_unicode_sources",
+      "node_contract": "studyCore.index",
+      "node_regression_id": "P39"
+    },
+    {
+      "python_test": "test_scope_cli_rejects_a_draft_with_a_forbidden_topic",
+      "node_contract": "studyCore.scope",
+      "node_regression_id": "P27"
+    },
+    {
+      "python_test": "test_record_attempt_and_progress_commands_round_trip",
+      "node_contract": "studyProgress",
+      "node_regression_id": "P40"
+    },
+    {
+      "python_test": "test_project_does_not_pin_the_user_to_one_commander_model",
+      "node_contract": "integrated skill and doctor",
+      "node_regression_id": "P36"
+    },
+    {
+      "python_test": "test_repository_and_skill_allow_sol_or_terra_to_write_final_material",
+      "node_contract": "studyHerdCli",
+      "node_regression_id": "P37"
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "observed_cli_facts",
+  "sanitized": true,
+  "executable": {
+    "path": "C:/Users/HH18/AppData/Local/agy/bin/agy.exe",
+    "version_stdout": "1.2.0",
+    "version_format": "semantic_version"
+  },
+  "model_catalog": {
+    "required_model": "gemini-3.8-flash-high",
+    "required_model_present": true,
+    "source_command": "agy.exe models"
+  },
+  "help_flags": {
+    "add_dir": true,
+    "continue": true,
+    "conversation": true,
+    "dangerously_skip_permissions": true,
+    "disable_slash_commands": true,
+    "model": true,
+    "output_format_stream_json": true,
+    "print": true,
+    "print_timeout": true,
+    "sandbox": true
+  },
+  "negative_observations": [
+    {
+      "command": "agy.exe help headless",
+      "observed": "unknown subcommand: headless",
+      "is_capability_evidence": false
+    }
+  ],
+  "windows_boundary_provisioning": {
+    "selected_boundary": "Containers-DisposableClientVM / Windows Sandbox",
+    "optional_feature_state": "Enabled",
+    "restart_needed": false,
+    "sandbox_executable_available": true,
+    "probe_status": "PASS_BOUNDARY_PROBES_LIVE_RUNTIME_SEPARATE"
+  },
+  "runtime_probe": {
+    "fixture": "runtime_probe.json",
+    "status": "OBSERVED_NO_EDIT_ONLY"
+  },
+  "sandbox_probe": {
+    "fixture": "sandbox_probe.json",
+    "status": "PASS_BOUNDARY_PROBES_LIVE_RUNTIME_SEPARATE"
+  },
+  "authenticated_runtime_probe": {
+    "fixture": "authenticated_runtime_probe.json",
+    "status": "PASS_NO_EDIT_ONLY"
+  },
+  "timeout_probe": {
+    "fixture": "timeout_probe.json",
+    "status": "PASS_TIMEOUT_SIGNAL_WITH_ZERO_EXIT"
+  },
+  "cancellation_probe": {
+    "fixture": "cancellation_probe.json",
+    "status": "PASS_OUTER_STOP_NO_LATE_WRITE"
+  },
+  "discovery_probe": {
+    "fixture": "discovery_probe.json",
+    "status": "HOST_SIDE_INVENTORY_ONLY"
+  },
+  "authenticated_tool_probe": {
+    "fixture": "authenticated_tool_probe.json",
+    "status": "PASS_PROTECTED_WRITE_REJECTION"
+  },
+  "scope_acceptance_probe": {
+    "fixture": "scope_acceptance_probe.json",
+    "status": "PASS_SCOPE_REJECTED"
+  },
+  "complete_runtime_probe": {
+    "fixture": "complete_runtime_probe.json",
+    "status": "PASS_FRESH_CWD_DISCOVERY"
+  },
+  "error_probe": {
+    "fixture": "error_probe.json",
+    "status": "PASS_ERROR_SCHEMA"
+  },
+  "stream_schema": {
+    "fixture": "stream_schema.json",
+    "status": "PASS_SCHEMA_BOUND"
+  },
+  "step2_evidence_manifest": {
+    "fixture": "step2_evidence_manifest.json",
+    "status": "PASS_PROVENANCE_MANIFEST"
+  },
+  "unverified": [
+    "malformed output and output-overflow behavior",
+    "future Hermes supervisor ownership of the AGY process tree"
+  ]
+}

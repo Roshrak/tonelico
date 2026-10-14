@@ -1,0 +1,7 @@
+{
+  "subject": "noi-khoa-vung-mieng",
+  "concepts": [
+    { "id": "ras-diagnostic-frame", "label": "RAS diagnostic frame", "tier": "core" },
+    { "id": "antibiotic-source-control", "label": "Antibiotic source control", "tier": "core" }
+  ]
+}

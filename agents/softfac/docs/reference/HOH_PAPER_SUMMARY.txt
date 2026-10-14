@@ -1,0 +1,657 @@
+=== PAGE 1 ===
+Harness-of-Harness: Multi-Day Autonomous Software
+Development with Continual Improvement
+Haoyang Yan†,Min-Le Su †,Hangfan Zhang †,Zhanhao Li †,Chen Zhang,Shao Zhang,
+Yang Chen,Lei Bai,Shuyue Hu
+Shanghai Artificial Intelligence Laboratory
+Abstract
+This paper studies autonomous software development, in which LLM-based coding agents transform
+high-level requirements into complete, functional, and usable software systems without human interven-
+tion. We introduce Harness-of-Harness (HoH), a framework that enables coding agents to continually
+improve software during autonomous development. HoH operates on existing coding-agent harnesses,
+and organizes their executions into iterative planning–coding–testing loops. To sustain improvement
+across loops, HoH balances repair with capability growth, scopes development into small and verifiable
+increments, separates implementation-time testing from independent evaluation, and constrains verifi-
+able outputs rather than prescribing agent workflows. It progressively exposes deliverables, role-specific
+tools, and skills, encourages reuse rather than recreation, and maintains versioned project histories.
+On GameCraft-Bench, FrontierSWE, and ProgramBench, three harness–model pairs (Codex with GPT-
+5.5, OpenCode with DeepSeek-V4-Pro, and Pi with MiniMax-M3), HoH consistently outperforms the
+corresponding standalone harnesses, achieving an average relative gain of 52.25% and a maximum
+gain of 82.86% after three iterations. In a multi-day deployment with more than 70 iterations, HoH
+autonomously develops a first-person-shooter game, featuring a coherent storyline, fully implemented
+core mechanics, human-playable experience, polished visuals and integrated audio.
+/githubGitHub:Flesymeb/HarnessOfHarness/gl⌢beProject Page:HarnessOfHarness
+New issues
+Closed issues
+1 10 20 30 40 50 60 70 80
+0
+8
+16
+24
+32
+Open issues
+Iteration
+Trend
+Counts
+Day 1 Day 2 Day 3 Day 4 Day 5 Day 6
+Continued Polish
+Remaining Fixes
+Playable Build
+Failure & Recovery
+Narrative Polish
+VFX Polish
+Enemy Combat AI
+CG Animation
+Menu & Settings
+Footstep Audio
+Animation Binding
+HUD & UI
+Lighting Polish
+Minimap & Guidance
+Gunfire Audio
+Enemy Model
+Weapon Handling
+Import Map
+Inital Greybox
+Autonomous Development of  an FPS Game via Harness-of-Harness
+Figure 1| Across successive iterations by Harness-of-Harness, the resulting First-Person-Shooter game features
+a coherent storyline, implemented combat, weapon and enemy-interaction systems, player guidance, heads-up
+display and menu systems, cinematic animation, and polished visual and audio presentation, yielding human-
+playable experience. The game, development traces, and gameplay videos are available on GitHub.
+†Equal contribution. {yanhaoyang, suminle, zhanghangfan, lizhanhao, hushuyue}@pjlab.org.cn
+1
+arXiv:2609.01481v1  [cs.AI]  1 Sep 2026
+
+=== PAGE 2 ===
+1 Introduction
+Software development has become a prominent application of large language models (LLMs) [4,
+37]. As LLM capabilities have advanced, LLM-based coding agents have progressed from localized
+assistance, such as function completion [2, 22], to increasingly complex tasks, including navigating
+large codebases and resolving repository-level issues [12, 25, 29, 36, 39]. Despite their growing
+adoption, most coding agents still largely operate under ahuman-in-the-loopsetting (Figure 2a):
+developers must define tasks, guide intermediate decisions, review generated changes and intervene
+when failures occur [1]. In this study, we pursue a more ambitious goal:autonomous software
+development(Figure 2b); given only high-level requirements as human input, coding agents start from
+scratch and independently transform the requirements into complete, functional, and deployable
+software systems, without further human guidance or intervention.
+Such autonomous development poses a fundamentally longer-horizon problem than conventional
+agentic coding tasks [14, 28]. Building a software system from scratch requires agents not only to
+generate code snippets, but also to translate high-level requirements into executable plans, coordinate
+interdependent tasks, design and integrate components, and continuously test and debug the evolving
+system [8, 32, 36]. As these interdependent decisions and modifications accumulate, development
+naturally unfolds over increasingly long trajectories [14, 28]. As trajectories grow, agents may lose
+track of earlier requirements and design decisions, or introduce local fixes that violate constraints
+elsewhere [3, 26]. Failed attempts and suboptimal decisions may accumulate, while new evidence
+from testing can invalidate earlier assumptions [5,24,33]. Long trajectories can also lead to repetitive
+cycles of inspection and repair, redundant verification of completed components, or premature
+declaration of completion despite missing or incorrect functionality [3,11]. Together, these challenges
+suggest that autonomous software development is not simply a problem of longer execution; the real
+challenge is sustaining coherent and effective progress over time.
+Here, we introduce Harness-of-Harness (HoH), a framework that equips coding agents withcontinual
+improvementcapabilities for autonomous software development. Modern coding agents operate within
+a harness—the surrounding system that provides tools, manages execution and mediates the LLM’s
+interaction with the development environment [36, 39, 45]. HoH builds upon existing harnesses and
+organizes development into iterative planning–coding–testing loops. At each iteration, the planner
+synthesizes the high-level requirements and evidence from previous iterations into a development
+plan. Each plan must both address outstanding problems and deliver a small yet concrete new
+capability, following the principle of iterative and incremental development [13]. This helps prevent
+development from collapsing into repetitive local repairs, while the limited scope makes progress
+easier to verify and reduces the risk of uncontrolled changes. The developer then implements the plan
+and embeds focused testing throughout implementation, creating immediate feedback around local
+changes. After passing these tests, a tester independently evaluates the resulting system against both
+the overall requirements and the development plan, using complementary white-box and black-box
+tests. The tests are conducted from multiple perspectives, such as functional correctness, completeness,
+usability, and visual and audio quality (if any). The resulting structured test report is returned to the
+planner as evidence for the next iteration, closing the loop.
+Throughout this process, HoH specifies the artifacts and evidence that agents must deliver, but does
+not prescribe a rigid workflow for producing them. Each role must return a structured artifact,
+and outputs that violate the required schema trigger a retry. This constrains verifiable outcomes
+while preserving agent autonomy over reasoning, tool use and implementation strategy. To maintain
+continuity without overwhelming the context window, HoH adopts progressive disclosure rather than
+adedicatedmemorymodule: plans, reports, historiesandotherartifactsarepersistedinthefilesystem
+2
+
+=== PAGE 3 ===
+(a) Human-in-the-loop Development
+Requirement
+Coding Agent
+Observe
+(b) Autonomous Software Development
+Requirement
+Project
+Planner
+ Developer
+ QA Tester
+Harness of  Harness (HoH)Reinvoke
+Concept Prototype Product
+Errors & Bugs
+ Errors & BugsAuto Observe & Reinvoke
+Concept Prototype Product
+Figure 2| Two different modes of software development.In human-in-the-loop development, coding
+agents generate code under continuous human oversight, guidance, review, and intervention. In autonomous
+software development, agents independently transform high-level requirements into complete, functional, and
+deployable software systems without human guidance or intervention.
+and initially exposed through a concise, categorized index, with detailed contents retrieved only when
+relevant. Tools, such as MCP servers, expert models and domain-specific algorithms, are organized
+by role, with lightweight Markdown-based skills providing concise, on-demand guidance for their
+use. Agents are encouraged to draw on existing resources rather than recreate standard capabilities,
+reducing redundant effort on routine engineering tasks. Finally, HoH maintains a versioned record of
+project evolution at both the agent role and iteration levels. By preserving the software state together
+with concise accounts of how it changes, HoH can return to previously verified states after major
+regressions and draw on evidence from earlier attempts when similar failures recur to inform the
+diagnosis and resolution.
+We evaluate HoH in two complementary settings: three controlled benchmarks (GameCraft-
+Bench [23], FrontierSWE [6], and ProgramBench [40]), and open-ended game development that
+spans over multiple days. First, we evaluate the HoH loop under the original benchmark specifications,
+without additional tools, skills or version-control mechanisms. We consider three harness–model con-
+figurations: Codex with GPT-5.5 (high), OpenCode with DeepSeek-V4-Pro, and Pi with MiniMax-M3.
+Across all three benchmarks, HoH consistently outperforms the corresponding standalone harnesses.
+After three iterations, it yields absolute gains of 16.62–22.08 points on GameCraft-Bench, 19–29
+points on FrontierSWE, and 6.09–16.85 points on ProgramBench. On FrontierSWE, HoH with Codex
+and GPT-5.5 (high) continues improving over ten iterations, from 22% to 72.67%. In our second
+setting, HoH autonomously builds a complex game from scratch, given only high-level product
+requirements, which exposes challenges that are largely absent from conventional benchmarks.
+Different from benchmark evaluation, we additionally implement HoH with role-specific tools and
+skills, supporting development engineinteraction, asset acquisition andgeneration, referenceretrieval,
+testing, and project-state management. Code changes and role-specific artifacts are committed to
+a public GitHub repository after each agent stage, making the complete development trajectory
+traceable. Over multiple days of autonomous development, HoH transforms the initial requirements
+into a complete, human-playable game with a coherent storyline, fully implemented core mechanics,
+polished visuals and integrated audio.
+3
+
+=== PAGE 4 ===
+2 Related Work
+Agent Harnesses.An agent harness is the operational layer that determines what information an
+LLM receives, what actions it can execute, and how execution results enter subsequent decisions [16,
+17]. Manymechanismsnowassembledwithinharnessesweredevelopedasdistinctresearchdirections.
+Prompting and context engineering shape model-facing state [19, 46]; external memory extends
+the state available across interactions [30]; ReAct couples reasoning with environment actions [41];
+and GPTSwarm represents multi-agent orchestration as an optimizable graph [50]. More recent
+work treats the harness itself as the optimization target: AutoHarness synthesizes a code harness
+from environment feedback, Meta-Harness searches over harness code, and Self-Harness iteratively
+diagnoses and modifies its own harness [15, 20, 45]. These approaches improve agent behavior by
+changing the operational layer. HoH builds on existing agent harnesses and iteratively improves an
+evolving software project through repeated implementation, evaluation, and refinement.
+Agentic Systems for Software Development.Research has progressed from localized code gen-
+eration and self-contained programs [4, 10] to repository-level issue resolution, agent–computer
+interfaces, general software-engineering agents, and refactoring [12, 29, 36, 38, 39]. Beyond repos-
+itory issue resolution, MetaGPT and ChatDev use predefined role-based workflows for software
+generation [8, 32]; AgileCoder and EvoDev organize incremental development around sprints
+or dependent features [18, 27]; and EvoMAC adapts the multi-agent workflow using test feed-
+back [9]. Recent benchmarks broaden both the development settings and the capabilities under
+evaluation [7, 14, 28]. SWE-EVO and SlopCodeBench study long-horizon evolution and degradation,
+while Commit0,ProjDevBench, ProgramBench, andGameCraft-Bench evaluate from-scratch con-
+struction of complete libraries or projects [21, 23, 40, 49]. FrontierSWE further covers from-scratch
+implementation together with open-ended performance and research objectives [6]. Existing coding
+harnesses typically organize development within a bounded episode, providing limited support
+for preserving project decisions, verified functionality, and evaluation evidence across subsequent
+revisions. HoH builds on these harnesses and extends their use to iterative greenfield development by
+maintaining continuity across planning, implementation, and evaluation cycles.
+3 Harness-of-Harness
+Harness-of-Harness(HoH)organizesafixedcoding-agentsystemintoalong-runningcycleofplanning,
+development, and independent testing. Each cycle produces a bounded software increment, verifies
+the resulting candidate, and carries both the candidate and its execution evidence into the next cycle.
+The design follows iterative and incremental software development: the system grows through small,
+testable changes while preserving behavior that has already been validated.
+3.1 Problem Formulation and Challenges
+Given a software specificationS, the end-to-end software development task is to construct a complete
+software artifact𝐴 that satisfies its functional and quality requirements. Let𝑀 denote a language
+model and𝐻 the coding harness through which it interacts with a software environment. HoH applies
+a fixed harness–model configuration to this task:
+HoH𝑀,𝐻 :S↦−→𝐴.(1)
+This setting presents three challenges. (1) As the artifact evolves over a long development trajectory,
+earlier requirements, design decisions, observed failures, and previously validated behavior can be
+4
+
+=== PAGE 5 ===
+Project Planner
+QA Tester
+Developer
+Development Toolchain & Skills
+Callable tools and development skills
+for designing, coding, and testing.
+Evidence-Grounded Testing
+Build a software from 
+the plan
+,
+using skills & tools.
+ Evaluate the software across
+multiple quality dimensions.
+Turn the 
+PRD
+ and 
+test evidence
+into a new development plan
+Prior Project State
+Testing
+Planning
+Screenshot
+Source code
+Evidence Bundle
+Build & Test Integrity
+Func�ional Correctness
+Interface & Interac�ion
+Data & 
+Dependencies
+Con�igura�ion 
+Stability & Completeness
+Development Doc
+Evidence Bundle
+Update
+Software Ar�ifact
+Development
+Development Document 
+Unresolved Gaps
+Veri�ied Behaviors
+Priori�ized Task Scope
+Task Speci�ica�ion
+Software speci�ica�ion  
+PRD
+User Task
+Make a platformer
+ game.
+Complete Software 
+Preserva�ion Constraints
+Valida�ion Requirements
+Update
+Core tools
+Development Skills
+Asset Generator
+Asset Provider
+Git tool
+Godot MCP
+API Docs
+CG Generator
+Reference Pool
+Issue Ledger
+Compiler
+Browser
+Screenshot
+Source Code
+Traces
+White-box Test
+Black-box Test
+2D/3D Asset Selec�ion
+Domain Knowledge 
+PRD Generator
+Performance Tuning
+UI/UX & Style Polish
+Run�ime Debugging
+Harnesses
+Figure 3| Harness-of-Harness overview.HoH repeatedly invokes aProject Planner,Developer, andQA
+Testeraround an evolving software artifact. The deterministic Runtime freezes each role’s inputs, enforces its
+permissions, binds evidence to the tested candidate, and records the resulting project state. The model, base
+harness, role definitions, and runtime policy remain fixed within a run; the development document, software
+artifact, and execution evidence evolve across iterations.
+forgotten or become disconnected from subsequent changes. (2) A high-level specification often leaves
+the next useful change underdetermined. Component dependencies and evolving implementation
+constraints mean that locally reasonable changes can conflict with existing behavior, while repeated
+inspection and repair may consume iterations without advancing the complete system. (3) Functional
+and quality requirements manifest through heterogeneous, scenario-specific behaviors. Missing or
+incorrect behavior may therefore remain undetected, allowing an incomplete artifact to be accepted
+as complete. To address these challenges, HoH organizes planning, implementation, and independent
+verification into a three-agent loop that is repeated across iterations, with the evolving artifact and
+accumulated development evidence carried between loops.
+3.2 Harness-of-Harness Overview
+In end-to-end software development, the next useful change cannot be determined from the speci-
+fication alone; it requires jointly interpreting the high-level specification, the current artifact, and
+the evidence accumulated during development. The artifact exposes component dependencies, im-
+plementation constraints, and missing capabilities. Execution evidence reveals observed failures,
+changes the priority of unmet requirements, and identifies validated behavior that subsequent work
+should preserve.
+HoH organizes this changing decision process around a bounded development loop. Each loop starts
+from the current project state and selects one coherent objective that groups the interdependent work
+needed for an observable software increment while excluding unrelated changes. It then implements
+the increment and evaluates the resulting artifact before further development begins. Evaluation
+results inform the next objective by revealing unmet requirements and observed failures, while
+identifying validated behavior that subsequent changes should preserve. Repeating this unit allows
+repair, extension, and preservation demands to be reprioritized as the artifact evolves, keeping local
+5
+
+=== PAGE 6 ===
+work aligned with the end-to-end objective.
+Producing a validated increment requires three different decisions. The system must first determine
+what to change next from the specification and retained project state. The second decision concerns
+how to realize that change in the current artifact, where the appropriate implementation depends on
+details encountered during development. The final decision is whether the resulting behavior satisfies
+observable requirements. These decisions require different context and authority: objective selection
+requires a project-level view, implementation requires write access and local technical autonomy, and
+acceptance requires an assessment that is independent of the implementation claim. HoH assigns
+these responsibilities to aProject Planner, aDeveloper, and aQA Tester, respectively. Each loop invokes
+the same harness–model configuration once in each role, in planning–development–testing order.
+3.3 Cross-Loop State Management
+Repeated loops support iterative and incremental development only when a later loop inherits more
+than the latest implementation. A software artifact records the code, resources, and configuration that
+currently exist, but it does not fully record why earlier changes were selected, which observed failures
+remain unresolved, or which behavior has already been validated. Since each harness invocation has
+bounded context, information retained only in its interaction history disappears when the invocation
+ends. A later loop that receives only the code must reconstruct the development state from the
+implementation. This reconstruction can overlook unmet requirements, repeat work whose outcome
+is already known, forget unresolved failures, or regress validated behavior.
+HoH therefore maintains two complementary states across loop boundaries. The artifact state carries
+the current implementation from one loop to the next. The evidence state carries the validated
+knowledge needed to decide how that implementation should change. Together, they preserve both
+the object under development and the information accumulated by developing and evaluating it.
+Let 𝐴𝑡 denotethesoftwareartifactstateafterloop 𝑡, includingitssourcecode, configuration, resources,
+and project metadata. It records what the software currently is and provides the concrete starting
+point for the next increment. LetE𝑡 denote the execution evidence state obtained by evaluating𝐴𝑡
+against the specification and the current development objective. It records which behaviors have
+been verified, which claims remain unsupported, and which observed failures require further work.
+Neither state subsumes the other:𝐴𝑡 supplies the implementation on which development operates,
+whereasE 𝑡 supplies the validated project knowledge used to direct that development.
+Let 𝐴0 denote the empty project workspace before the first loop. WithE0 =∅ , the transition across
+loop𝑡can be summarized as
+(𝐴𝑡−1,E 𝑡−1)
+loop𝑡underS
+−−−−−−−−−−→(𝐴𝑡,E 𝑡).(2)
+The two states enter a loop in different ways. The Project Planner combines the fixed specificationS
+withE𝑡−1 to determine the next bounded increment. It also reads𝐴𝑡−1 as implementation context so
+that the selected work is grounded in the current project. The Developer then starts from𝐴𝑡−1 and
+realizes the increment, producing𝐴𝑡. The QA Tester evaluates this updated artifact and producesE𝑡
+for the next planning decision.
+At the loop boundary,(𝐴𝑡,E 𝑡) becomes the starting state of loop𝑡+ 1. Carrying𝐴𝑡 forward allows
+implementation work to accumulate instead of being reconstructed in every loop. InterpretingE𝑡
+underS allows new observations to revise development priorities, unresolved gaps to remain visible,
+and validated behavior to become a preservation requirement. The next objective can therefore
+6
+
+=== PAGE 7 ===
+build on prior progress without reconstructing the project trajectory from the artifact alone. Artifact
+continuity makes development incremental, and evidence-guided objective selection makes it iterative.
+3.4 Implementation of a HoH Loop
+A HoH loop converts retained project state into a coherent software increment whose behavior is
+independently assessed. This transformation begins with objective selection. The global specification
+and prior evidence may identify many interdependent demands, so the loop needs a project-level
+decision about which bounded, locally complete subset should be addressed next. Establishing this
+scope before artifact modification gives the increment observable completion conditions and separates
+it from unrelated work.
+Realizing the selected objective is a different function. The current artifact exposes implementation-
+specific choices that cannot be fully determined during planning, so artifact modification requires
+write authority and autonomy over local technical decisions. Assessing the result introduces a third
+function. The implementing agent has direct knowledge of its changes, but its completion claim
+cannot establish that the intended behavior is present. Acceptance must instead be determined from
+observations of a fixed candidate by a role that did not produce that candidate.
+These functions differ in the information they require, the authority they exercise, and the deliverable
+they produce. HoH therefore assigns objective selection to a Project Planner, artifact modification
+to a Developer, and independent acceptance to a QA Tester. The separation makes the target
+of an increment explicit, preserves implementation autonomy within that target, and prevents
+implementation and acceptance from collapsing into the same decision.
+HoHinstantiatesthethreerolesasseparateinvocationsofthesamefixedharness–modelconfiguration.
+For each invocation, a role-specific prompt specifies the role’s responsibility, while a deterministic
+Runtime contract enforces its execution authority. The prompt combines fixed role instructions with
+loop-specific context to state the role’s objective and required structured output, without prescribing
+its reasoning process or tool sequence.
+The Runtime controls which inputs an invocation can access, which tools and write operations it may
+use, and which output schema it must satisfy. HoH thus constrains what each role may read, change,
+and deliver while leaving the agent free to determine how to complete its assigned work within those
+boundaries.
+3.4.1 Project Planning
+The global specification may describe capabilities whose implementation spans interdependent
+components, while the retained project state adds observed failures, unmet requirements, and
+behaviors that must be preserved. These demands describe what remains relevant to the project, but
+they do not by themselves define a tractable unit of work for one loop. Selecting an isolated task can
+omit dependencies needed for observable behavior, whereas combining too many unrelated demands
+enlarges the change surface. When the resulting candidate fails, the source of the failure becomes
+harder to localize, and the affected behavior becomes harder to verify.
+The Project Planner converts these competing demands into one bounded objective. It reconciles
+S withE𝑡−1 to determine what should be addressed next and what previously validated behavior
+must be preserved. It reads𝐴𝑡−1 as implementation context so that the objective reflects the current
+project structure, but it cannot modify the artifact. The result is a development document𝐷𝑡 that
+defines the scope and validation conditions of the current increment.
+7
+
+=== PAGE 8 ===
+The objective is bounded but locally complete. Boundedness limits the amount of unrelated behavior
+changed in one loop, which keeps implementation and diagnosis tractable. Local completeness
+ensures that the selected capability includes the related changes required to make it functional and
+testable. The scope of an increment is therefore determined by a coherent observable behavior, not
+simply by the number of files or components it touches.
+Accordingly,𝐷𝑡 contains a small set of related tasks, the functionality that must be preserved, and
+observable requirements for validating the increment. Related changes may span several files or
+components when they are jointly required by the objective. Unrelated refactoring and opportunistic
+feature expansion remain outside the loop. The document specifies expected behavior and validation
+conditions, while leaving the Developer to choose its reasoning process, tools, and implementation
+algorithm.
+3.4.2 Artifact Development
+A development document defines the intended behavior of an increment, but it cannot anticipate
+every implementation decision exposed by the evolving artifact. The Developer must interpret𝐷𝑡
+in the context of the existing project and adapt its implementation as it encounters code structure,
+dependencies, and runtime behavior. HoH therefore constrains the Developer by the required outcome
+and artifact boundary instead of prescribing its internal procedure. Within these constraints, the
+Developer remains free to select the concrete design, tools, and debugging strategy appropriate to
+the current artifact.
+Artifact development follows a single-writer boundary: only the Developer may modify the evolving
+artifact. The Developer warm-starts from𝐴𝑡−1 so that each increment extends the current implemen-
+tation and retains the surrounding project structure. The Planner may inspect𝐴𝑡−1 to ground the
+objective, and the QA Tester may inspect and execute the resulting candidate, but neither may alter
+the artifact. This boundary makes responsibility for the transition from𝐴𝑡−1 to 𝐴𝑡 explicit and keeps
+the candidate lineage unambiguous. Once the authorized modifications are complete, the updated
+project becomes𝐴𝑡.
+Testing is also integrated into artifact development so that failures are exposed close to the changes
+that cause them. Before editing, the Developer establishes a baseline for the target behavior. After
+each meaningful change, it reruns the corresponding path and inspects the affected implementation,
+execution results, and adjacent regression surface. This baseline–change–retest cycle follows the
+software-engineering principle commonly known asshift-left testing. Shortening the distance between
+a change and its test makes local diagnosis and correction more tractable.
+Developer testing and independent acceptance answer different questions. The Developer uses
+self-tests to determine whether the implementation is ready to be presented as a candidate and
+to repair failures encountered during its own work. These tests do not establish that the product
+requirements have been satisfied. Developer observations and completion claims therefore remain
+inputs to subsequent verification; acceptance is reserved for the independent QA stage.
+3.4.3 Independent Quality Assurance
+Independent QA determines whether the candidate exhibits the behavior required by the current
+objective while preserving relevant existing functionality. End-to-end software quality is multidimen-
+sional and cannot generally be reduced to one fixed performance metric. The relevant functional
+behavior, interaction flows, configuration, resources, and regression risks depend on both the global
+8
+
+=== PAGE 9 ===
+Algorithm 1Harness-of-Harness
+Input: specificationS, initial artifact𝐴 0, iteration budget𝑇
+Fixed: model𝑀, harness𝐻, and role contracts
+Output: final artifact𝐴𝑇
+1:E 0←∅
+2:for𝑡=1,...,𝑇do
+3:𝐷 𝑡←ProjectPlanner(S,E 𝑡−1 ; read_only(𝐴𝑡−1))
+4:𝐴 𝑡←Developer(𝐴 𝑡−1 ;S,𝐷 𝑡)
+5:E 𝑡←QATester(read_only(𝐴 𝑡);S,𝐷 𝑡,Runtime.check(𝐴 𝑡))
+6:end for
+7:return𝐴 𝑇
+specificationandtheselectedincrement. HoHthereforederivesscenario-specific, checkableevaluation
+criteria fromSand𝐷 𝑡 rather than applying the same generic test to every candidate.
+The QA Tester receives𝐴𝑡 as a frozen, read-only candidate together with the results of deterministic
+build and execution checks. Freezing separates artifact production from artifact assessment: the
+implementation cannot change while its evidence is being collected. It also gives every observation
+a single candidate identity, so that an assessment cannot combine behavior from different artifact
+versions. Read-only access prevents the QA stage from silently repairing the candidate it is meant to
+evaluate.
+For each criterion, the QA Tester selects observations appropriate to the software scenario. Black-box
+tests exercise the candidate through ordinary inputs and rendered outputs to examine user-observable
+behavior, state transitions, and end-to-end flows. These observations establish whether the required
+behavior is visible at the product boundary. White-box tests inspect the source, configuration, resource
+bindings, runtime state, and logs. They help diagnose failures and corroborate observations whose
+internal conditions cannot be determined from outputs alone.
+The two forms of testing provide complementary views of the same frozen candidate. A criterion is
+verified only when candidate-bound records support the required behavior. Observed failures, unmet
+requirements, regressions, and insufficient evidence are recorded as gaps instead of being inferred as
+successful completion. The resulting assessments and supporting execution records form the evidence
+stateE𝑡 passed to the next loop. This separation ensures that acceptance follows observable evidence
+rather than the Developer’s knowledge of its implementation or its completion claim.
+The complete HoH procedure is summarized in Algorithm 1, which combines the cross-loop state
+transition with project planning, artifact development, independent quality assurance, and Runtime
+validation.
+4 Experiments: Benchmark Evaluation
+WeevaluateHoHonthreesoftware-developmentbenchmarksandthreeharness–modelconfigurations,
+comparing final artifact quality with the corresponding Vanilla baselines.
+4.1 Experimental Setup
+Benchmarks.WeevaluateHoHonthreebenchmarks: GameCraft-Bench[23],FrontierSWE[6],and
+ProgramBench [40]. GameCraft-Bench comprises 140 tasks across 15 game families, each requiring
+9
+
+=== PAGE 10 ===
+an agent to construct a complete, playable Godot project from a natural-language specification. We
+sample 45 tasks using stratified random sampling by game family, selecting three tasks from each
+of the 15 families with a fixed random seed. For coarse-grained analysis, we additionally organize
+the 15 families into five broader groups defined in this work: Action, Timing, Strategy, Simulation,
+and Adventure. The complete sampled task list and our family-to-group mapping are provided in
+the supplementary material. Due to computational resource constraints, we select15tasks from
+FrontierSWE’s17tasks for evaluation, comprising4Implementation (Impl.),9Performance (Perf.),
+and2Research tasks. ProgramBench is a cleanroom program-reconstruction benchmark in which
+agents receive only a compiled executable and documentation and must rebuild a codebase whose
+behavior matches the reference program. More details are provided in the supplementary material.
+Harnesses and Models.We evaluate HoH with three harness–model configurations: Codex CLI1
+with GPT-5.5 at high reasoning effort, OpenCode2 with DeepSeek-V4-Pro, and Pi Coding Agent3 with
+MiniMax-M3.
+Baseline and Evaluation Protocol.We compare HoH againstVanilla, the corresponding harness–
+model configuration without the HoH protocol. Vanilla performs one standard development pass,
+whereasHoH@ 𝑇 performs 𝑇 planning–coding–testing iterations, with the software artifact and
+execution evidence carried across iterations; the main experiments use𝑇= 3. Intermediate and final
+HoH artifacts are evaluated only after the complete run, and evaluator outputs are not returned to
+the development loop. For each task, Vanilla and HoH use identical benchmark-provided initial states
+and the same underlying harness–model configuration, differing only in the application of the HoH
+protocol.
+Metrics.For GameCraft-Bench, we report the benchmark’sOverallscore. Under this metric, game
+artifacts that fail to compile or run receive a score of zero, while runnable artifacts are scored by
+combining Core Mechanics, Content Depth, Functional Visuals, and Art and Presentation using the
+benchmark-defined weights. We average task-level scores over the 45 tasks and use the benchmark’s
+0–100 scale. For FrontierSWE, task-specific verifiers assign official rewards, and we report the mean
+reward over the 15 evaluated tasks. We additionally report the official dominance score, defined
+as the average task-level win rate against a randomly selected competing configuration from the
+12 evaluated harness–condition combinations. For ProgramBench, we reportAvg. Test Pass Rate,
+computed as the mean across tasks of the fraction of hidden behavioral tests passed for each task. We
+use this continuous signal for relative comparisons between Vanilla and HoH and abbreviate it asPass
+Rate† in Table 1. As a proxy for model-interaction volume, we report provider-reported cumulative
+input and output tokens from coding-harness model calls, excluding benchmark evaluation. Input
+totals may include cached context reads; because cache accounting differs across providers, we use
+these values for within-configuration comparisons rather than direct cross-provider cost comparisons.
+4.2 Main Results
+HoH improves software artifact quality across three benchmarks spanning game development,
+repository-level software engineering, and program reconstruction.Table 1 reports Vanilla and
+all three HoH iterations for each harness–model configuration. HoH@3 outperforms Vanilla across
+the three benchmarks under all three configurations. On GameCraft-Bench, mean Overall scores
+1https://github.com/openai/codex; version 0.142.5.
+2https://github.com/anomalyco/opencode; version 1.14.30.
+3https://github.com/earendil-works/pi; version 0.80.10.
+10
+
+=== PAGE 11 ===
+Setting GameCraft-Bench FrontierSWE ProgramBench
+Action Timing Strat. Sim. Adv.OverallImpl. Perf. ResearchDominance Pass Rate †
+Codex+ GPT-5.5 (high)
+Vanilla 48.74 48.80 44.06 53.63 52.68 49.58 0.21 0.17 1.15 44% 60.41
+HoH@1 59.73 53.79 57.01 66.75 61.24 59.71 0.24 0.44 1.30 58% 65.42
+HoH@2 64.34 62.03 59.97 71.77 66.11 64.84 0.28 0.45 1.18 60% 65.79
+HoH@371.02 70.26 66.13 78.42 71.76 71.52(+21.93)0.30 0.45 1.45 71%(+27)66.50(+6.09)
+OpenCode+ DeepSeek-V4-Pro
+Vanilla 26.21 24.05 21.27 37.12 25.84 26.90 0.08 0.23 0.57 25% 45.27
+HoH@1 27.75 27.40 21.73 43.75 22.44 28.61 0.09 0.23 0.78 28% 55.33
+HoH@2 43.22 36.56 33.51 52.26 36.05 40.32 0.10 0.27 0.78 42% 55.66
+HoH@349.00 45.05 43.34 55.86 51.64 48.98(+22.08)0.15 0.27 0.78 44%(+19)57.56(+12.29)
+Pi+ MiniMax-M3
+Vanilla 45.64 38.20 34.53 48.19 44.26 42.16 0.06 0.12 1.30 35% 35.83
+HoH@1 50.59 52.23 38.60 54.00 49.89 49.06 0.10 0.421.8962% 48.68
+HoH@2 54.70 56.52 42.33 63.20 58.47 55.04 0.11 0.431.89 66% 53.57
+HoH@358.24 62.10 44.86 64.25 64.44 58.78(+16.62)0.11 0.451.88 64%(+29)52.68(+16.85)
+Table 1| Main results on GameCraft-Bench, FrontierSWE, and ProgramBench.Each harness is evaluated
+under Vanilla and HoH@1–3. Within each harness and metric, bold values mark the best setting; rankings use
+unrounded values, and exact ties share the same formatting. Small green values shown only for HoH@3 give
+absolute gains over Vanilla; Dominance gains are percentage points. Bold italic labels distinguish aggregate
+metrics from task categories. Strat., Sim., Adv., Impl., and Perf. denote Strategy, Simulation, Adventure,
+Implementation, and Performance, respectively. FrontierSWE reports category scores and Dominance. For
+ProgramBench,Pass Rate† denotes the benchmark’sAvg. Test Pass Rate.
+increase from 49.58 to 71.52 for Codex, from 26.90 to 48.98 for OpenCode, and from 42.16 to 58.78
+for Pi. On FrontierSWE, rewards increase from 0.31 to 0.54, from 0.23 to 0.31, and from 0.26 to
+0.55, respectively. On ProgramBench,Avg. Test Pass Rateincreases from 60.41 to 66.50 for Codex,
+from 45.27 to 57.56 for OpenCode, and from 35.83 to 52.68 for Pi. HoH@3 also outperforms Vanilla
+in every reported task category across the three benchmarks under all three configurations.
+HoH yields consistent gains over Vanilla across all three harness–model pairs.The gains are
+not limited to configurations with a particular level of Vanilla performance. Codex with GPT-5.5
+(high), the strongest Vanilla configuration, reaches the highest final GameCraft-Bench score of 71.52
+after improving by 21.93 points. Pi with MiniMax-M3 records the largest gain on FrontierSWE,
+increasing by 0.29 from 0.26 to 0.55, and the largest ProgramBench gain, increasing the average test
+pass rate by 16.85 points. OpenCode with DeepSeek-V4-Pro starts from the lowest Vanilla score on
+GameCraft-Bench and FrontierSWE, yet HoH@3 raises its scores to 48.98 and 0.31, respectively, while
+increasing its ProgramBench average test pass rate from 45.27 to 57.56. OpenCode with HoH@3
+further exceeds Codex Vanilla in Action and Simulation on GameCraft-Bench and in Performance
+on FrontierSWE. Thus, HoH improves configurations that begin at substantially different levels of
+Vanilla performance.
+HoH continues to improve software artifact quality as development loops progress.Table 1 traces
+the gains accumulated over the first three development loops. On GameCraft-Bench,Overallscores
+increase monotonically from HoH@1 to HoH@3 under all three harness–model pairs. This trend is
+particularly pronounced for OpenCode, whose gain over Vanilla grows from 1.71 points at HoH@1 to
+11
+
+=== PAGE 12 ===
+13.42 at HoH@2 and 22.08 at HoH@3. On FrontierSWE, the cross-configurationDominanceof Codex
+increases from 44% under Vanilla to 58%, 60%, and 71% at HoH@1–3, respectively. ProgramBench
+exhibits a similar overall pattern: Codex and OpenCode attain their highestPass Ratesat HoH@3,
+while Pi peaks at HoH@2.
+4.3 Analysis and Ablation Study
+On GameCraft-Bench, HoH improves software quality across mechanics, content, visuals, and
+presentation.Figure 4 reports the four benchmark-defined GameCraft-Bench quality components
+separately. HoH@3 improves all four components under every harness–model configuration, with
+gains of 20.00–25.56 points for Codex, 19.25–34.63 points for OpenCode, and 11.32–25.38 points
+for Pi. For Codex, Functional Visuals shows the largest increase, from 48.67 to 74.23, while Art
+and Presentation rises from 45.28 to 65.28. The improvements therefore span gameplay mechanics,
+content richness, visual clarity, and presentation quality.
+Mechanics Content Functional Art
+0
+25
+50
+75
+100Mean Score
+(a) Codex + GPT-5.5 (high)
+64.00
+48.06 48.67 45.28
+86.21
+70.26 74.23
+65.28
+Mechanics Content Functional Art
+(b) OpenCode + DeepSeek-V4-Pro
+34.71
+28.62 24.85 22.71
+69.34
+49.27 44.17 41.96
+Mechanics Content Functional Art
+(c) Pi + MiniMax-M3
+49.41
+39.12 39.86 43.05
+74.79
+57.29 56.38 54.37
+V anilla HoH
+Figure 4| Vanilla and HoH@3 scores across the four GameCraft-Bench rubric categories.Panels (a)–(c)
+show results for Codex with GPT-5.5 (high), OpenCode with DeepSeek-V4-Pro, and Pi with MiniMax-M3,
+respectively. Bars report mean category scores over 45 tasks for Core Mechanics, Content Depth, Functional
+Visuals, and Art and Presentation; error bars indicate 95% bootstrap confidence intervals.
+1 5 10
+Iteration
+20
+40
+60
+80Dominance (%)
+ Vanilla = 27.33
+Vanilla HoH
+Figure 5|FrontierSWE Dominance over 10
+loops.Shading shows±1SE; the star marks the
+best checkpoint and the dashed line denotes
+Vanilla baseline.
+On FrontierSWE, HoH sustains quality gains over ten
+loops.To examine whether these gains extend beyond
+three loops, we continue running Codex with GPT-5.5
+(high) through HoH@10 on the same 15FrontierSWE
+tasks and reportDominanceover a fixed 11-checkpoint
+comparison pool comprising Vanilla and HoH@1–10.
+As shown in Figure 5,Dominanceincreases from 39.33%
+at HoH@3 to 72.67% at HoH@10 and reaches 76.00%
+at HoH@9, whereas Vanilla obtains 27.33%. HoH@10
+therefore improves upon HoH@3 by a further 33.34 per-
+centage points and exceeds Vanilla by 45.34 points.
+For the same number of development passes, HoH consistently outperforms the Vanilla baseline.
+To distinguish the contribution of HoH from the effect of running the coding agent for more passes, we
+compareitwithVanillaContinuationusingCodexwithGPT-5.5(high). Vanillausestheofficialharness
+configurationwiththesamemodelandinferencesettingsasHoH.Aftereachpass, VanillaContinuation
+submits an additional iteration prompt to continue the same session for another development pass.
+Table 2 reports the resulting pass-controlled comparison.
+12
+

@@ -1,0 +1,41 @@
+{
+  "status": "FROZEN",
+  "worktree": "E:/Downloads/hermes-software-factory-v2-hoh/migration-worktree-recovered2",
+  "approved_baseline": "066e885966420b14d470dc159f0ff39acf2099a9",
+  "base_commit": "322c13934d914eb0e870a9d06341226ab25307f7",
+  "head_commit": "322c13934d914eb0e870a9d06341226ab25307f7",
+  "tree_oid": "0f1db5380ce0b08cf9e96cf794c2f8d773022e90",
+  "staged_diff_sha256": "237a0fc97a657a23614d51f5d25009faa07b8c56fd8ac98a013534d80a822823",
+  "staged_diff_length": 507872,
+  "staged_blob_hashes": {
+    "README.md": "2c070a6d51b39d8afb8a7cf99d73fb1c990cf7b56e8c114b3c01ec5edb8eb29f",
+    "bin/hermes-code-factory-v2": "1ad5903336180b38176c5d3c8f508910b94d1892db333f899e597f2aa93b1c3f",
+    "docs/software-factory-SKILL.md": "27d5aa8604819846fdf5aea4a5808b3b7a5496499d591509b6cac58535c5a994",
+    "lib/hermes_factory_v2.py": "359b5db65735f66f1fa05e73f92efeb50526c47919f0949c3bfbefdd49e99453",
+    "tests/test_factory_v2.py": "e24c7c266162291266cb9822bb10dab7bd98dd78c04a81493a1e5881f9092ad1"
+  },
+  "test_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python -B -m pytest -q tests",
+  "test_exit_code": 0,
+  "test_output_sha256": "71b6391056a4697901fd07448f8d90ffd9b89f24d32ba604d14d58c5726a64e2",
+  "test_output": "................................................. [ 35%]\n...................................................... [ 73%]\n.....................................                                    [100%]\n140 passed, 41 subtests passed in 198.74s (0:03:18)\n",
+  "git_diff_cached_check": true,
+  "bytecode_paths": [],
+  "f015_review": {
+    "path": "C:/Users/HH18/sol_softfac_v2_f015_delta_verdict.json",
+    "sha256": "e1454ac6800cede10fa76f9b35be7fc153048d005859fe7d65791e4e212f23bb",
+    "candidate_identity": {
+      "base_commit": "322c13934d914eb0e870a9d06341226ab25307f7",
+      "head_commit": "322c13934d914eb0e870a9d06341226ab25307f7",
+      "tree_oid": "0f1db5380ce0b08cf9e96cf794c2f8d773022e90",
+      "diff_sha256": "237a0fc97a657a23614d51f5d25009faa07b8c56fd8ac98a013534d80a822823"
+    }
+  },
+  "authoritative_plan": {
+    "path": "C:/Users/HH18/softfac_v2_hoh_plan.md",
+    "sha256": "dc427228e2e58af92c7ddbf6ab00b80c0b1a9faced82c80f2ede0b7fbb834e6e"
+  },
+  "constitution": {
+    "path": "C:/Users/HH18/sol_reviewer_constitution.md",
+    "sha256": "61e6695ee2c45433aee4696e78fbb9bc448c30161da773acd9b39c00ab4d785f"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "completed": true,
+  "failed": false,
+  "model": "gpt-5.6-sol",
+  "provider": "openai-codex",
+  "reasoning": "high",
+  "role": "sol"
+}

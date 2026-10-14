@@ -1,0 +1,67 @@
+# Paths (relative to $HOME) that export.sh copies into home/.
+# This is an ALLOWLIST: anything not named here is never copied.
+# Symlinks are skipped (Home Manager owns them), and manifest/home.exclude
+# is applied inside every entry.
+
+# --- KDE Plasma look and feel ---
+.config/kdeglobals
+.config/kdedefaults
+.config/kwinrc
+.config/kwinoutputconfig.json
+.config/kglobalshortcutsrc
+.config/kcminputrc
+.config/kscreenlockerrc
+.config/ksplashrc
+.config/kxkbrc
+.config/kded6rc
+.config/kiorc
+.config/dolphinrc
+.config/baloofilerc
+.config/plasmarc
+.config/plasmashellrc
+.config/plasma-localerc
+.config/plasmanotifyrc
+.config/plasma-org.kde.plasma.desktop-appletsrc
+.config/powerdevilrc
+.config/powermanagementprofilesrc
+.config/spectaclerc
+.config/touchegg
+.config/user-dirs.dirs
+.config/mimeapps.list
+.local/share/plasma/look-and-feel
+.local/share/color-schemes
+
+# --- Toolkit theming (GTK / Qt) ---
+.config/gtk-3.0
+.config/gtk-4.0
+.config/gtkrc
+.config/gtkrc-2.0
+.gtkrc-2.0
+.config/qt5ct
+.config/qt6ct
+.config/fontconfig
+.config/xsettingsd
+
+# --- Noctalia shell and the per-desktop theme profiles ---
+.config/noctalia
+.config/theme-profiles
+.local/state/theme-profiles
+.local/state/noctalia/community-palettes
+.local/state/noctalia/community-templates
+.local/state/noctalia/settings.toml
+.config/background
+
+# --- Terminal and small tools ---
+.config/kitty
+.config/fastfetch
+.config/btop
+.config/cava
+.config/mpv
+.config/fcitx5
+.config/easyeffects
+.config/niri
+.config/mango
+
+# --- Wallpapers ---
+Pictures/Wallpapers
+Pictures/Morgan

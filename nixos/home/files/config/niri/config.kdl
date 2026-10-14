@@ -1,0 +1,657 @@
+// ============================================================
+// TONELICO NIRI
+//
+// Independent Niri session.
+// Owns its Noctalia / GTK / Kitty theme state through:
+//
+//     ~/.config/theme-profiles/niri
+//
+// Visual goal:
+//   - DWM-like minimal windows
+//   - square corners
+//   - tiny gaps
+//   - very thin active/inactive borders
+//   - no shadows
+//   - focus follows mouse
+// ============================================================
+
+
+// ============================================================
+// ENVIRONMENT
+// ============================================================
+
+environment {
+    DISPLAY ":0"
+    XDG_CURRENT_DESKTOP "niri"
+
+    TERMINAL "kitty"
+    KITTY_CONFIG_DIRECTORY "/home/aesc/.config/kitty/profiles/niri"
+    THEME_PROFILE "niri"
+    NOCTALIA_STATE_HOME "/home/aesc/.local/state/theme-profiles/niri"
+    NOCTALIA_CONFIG_HOME "/home/aesc/.config/theme-profiles/niri/config-home"
+    QT_QPA_PLATFORMTHEME "qt6ct"
+
+    NIXOS_OZONE_WL "1"
+    MOZ_ENABLE_WAYLAND "1"
+    WLR_NO_HARDWARE_CURSORS "1"
+}
+
+
+// ============================================================
+// CURSOR
+// ============================================================
+
+// Same cursor as the Mango session and the Noctalia greeter.
+// Niri reads its cursor from this block, NOT from the global
+// XCURSOR_THEME variable, so it must be set explicitly here.
+cursor {
+    xcursor-theme "Bibata-Modern-Ice"
+    xcursor-size 24
+}
+
+
+// ============================================================
+// STARTUP
+// ============================================================
+
+// Apply Niri's own theme before Noctalia starts.
+spawn-at-startup "/run/current-system/sw/bin/theme-profile-activate" "niri"
+
+// Clean stale graphical sessions.
+spawn-at-startup "/home/aesc/.local/bin/clean-stray-sessions"
+
+// Desktop shell.
+spawn-at-startup "/run/current-system/sw/bin/noctalia-profile" "niri"
+
+// Hotplug profiles keep eDP-1 at the main/right side and HDMI-A-1 to its left.
+spawn-at-startup "/run/current-system/sw/bin/kanshi" "--config" "/etc/kanshi/niri.conf"
+
+
+// ============================================================
+// OUTPUTS
+// ============================================================
+
+// External HDMI monitor (LEFT).
+// 1920 × 1080
+// Vertically centered relative to the 1200px-high laptop panel.
+output "HDMI-A-1" {
+    mode "1920x1080@60.000"
+    scale 1
+
+    position x=0 y=60
+}
+
+// Internal laptop panel (MAIN / RIGHT).
+// 1920 × 1200
+output "eDP-1" {
+    mode "1920x1200@60.096"
+    scale 1
+    focus-at-startup
+
+    position x=1920 y=0
+}
+
+
+// ============================================================
+// INPUT
+// ============================================================
+
+input {
+    keyboard {
+        xkb {
+            layout "us"
+        }
+
+        repeat-rate 30
+        repeat-delay 400
+    }
+
+    touchpad {
+        tap
+        drag-lock
+        natural-scroll
+        dwt
+    }
+
+    // True sloppy-focus behavior:
+    //
+    // Move cursor onto a window
+    //          ↓
+    // that window receives keyboard focus.
+    focus-follows-mouse
+}
+
+
+// ============================================================
+// GESTURES
+// ============================================================
+
+gestures {
+    // Disable:
+    //
+    // mouse → top-left corner → overview
+    hot-corners {
+        off
+    }
+}
+
+
+// ============================================================
+// OVERVIEW
+// ============================================================
+
+overview {
+    backdrop-color "#000000"
+}
+
+
+// ============================================================
+// WINDOW LAYOUT
+// ============================================================
+
+layout {
+    // Small DWM-like gaps.
+    gaps 2
+
+    // Let the wallpaper show through the workspace background.
+    background-color "transparent"
+
+    // Do not automatically center the focused column.
+    center-focused-column "never"
+
+
+    // --------------------------------------------------------
+    // Focus indicator
+    // --------------------------------------------------------
+
+    // Niri's normal focus ring is too thick.
+    // Disable it and use the window border instead.
+    focus-ring {
+        off
+    }
+
+
+    // --------------------------------------------------------
+    // Window border
+    // --------------------------------------------------------
+
+    border {
+        on
+
+        // Very thin DWM-like border.
+        width 0.5
+
+        // Focused window.
+        active-color "#89b4fa"
+
+        // Unfocused windows.
+        inactive-color "#45475a"
+    }
+
+
+    // --------------------------------------------------------
+    // Shadows
+    // --------------------------------------------------------
+
+    // Flat DWM-style windows.
+    shadow {
+        off
+    }
+
+
+    // --------------------------------------------------------
+    // Default width
+    // --------------------------------------------------------
+
+    // Approximation of Mango/DWM mfact = 0.62.
+    default-column-width {
+        proportion 0.62
+    }
+}
+
+
+// Prefer compositor-managed decorations.
+//
+// There are intentionally NO:
+//
+//     geometry-corner-radius
+//     clip-to-geometry
+//
+// rules.
+//
+// Windows stay square.
+prefer-no-csd
+
+
+// Draw the thin border separately from the application's background.
+window-rule {
+    draw-border-with-background false
+}
+
+
+// ============================================================
+// HOTKEY OVERLAY
+// ============================================================
+
+hotkey-overlay {
+    skip-at-startup
+}
+
+
+// ============================================================
+// SCREENSHOTS
+// ============================================================
+
+screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
+
+
+// ============================================================
+// KEYBINDS
+// ============================================================
+
+binds {
+
+    // --------------------------------------------------------
+    // Help
+    // --------------------------------------------------------
+
+    Mod+Shift+Slash {
+        show-hotkey-overlay;
+    }
+
+
+    // ========================================================
+    // MOUSE WINDOW NAVIGATION
+    // ========================================================
+
+    // Mod + Shift + wheel down
+    // → next/right window column.
+    Mod+Shift+WheelScrollDown cooldown-ms=10 {
+        focus-column-right;
+    }
+
+    // Mod + Shift + wheel up
+    // → previous/left window column.
+    Mod+Shift+WheelScrollUp cooldown-ms=10 {
+        focus-column-left;
+    }
+
+
+    // ========================================================
+    // APPLICATIONS / NOCTALIA
+    // ========================================================
+
+    Mod+Return {
+        spawn "kitty";
+    }
+
+    Mod+Space {
+        spawn "noctalia" "msg" "panel-toggle" "launcher";
+    }
+
+    Mod+S {
+        spawn "noctalia" "msg" "panel-toggle" "control-center";
+    }
+
+    Mod+Comma {
+        spawn "noctalia" "msg" "settings-toggle";
+    }
+
+    Mod+E {
+        spawn "nautilus";
+    }
+
+    Mod+Z {
+        spawn "chromium";
+    }
+
+    Mod+Escape {
+        spawn "noctalia" "msg" "session" "lock";
+    }
+
+    Mod+Shift+E {
+        spawn "noctalia" "msg" "panel-toggle" "session";
+    }
+
+    Mod+V {
+        spawn "noctalia" "msg" "panel-toggle" "clipboard";
+    }
+
+    Alt+Tab {
+        spawn "noctalia" "msg" "window-switcher";
+    }
+
+    Alt+Z {
+        spawn "fcitx5-remote" "-t";
+    }
+
+
+    // ========================================================
+    // SCREENSHOTS
+    // ========================================================
+
+    Print {
+        spawn "noctalia" "msg" "screenshot-region";
+    }
+
+    Mod+Print {
+        screenshot-screen;
+    }
+
+    Ctrl+Print {
+        screenshot-window;
+    }
+
+
+    // ========================================================
+    // WINDOW CONTROL
+    // ========================================================
+
+    // Close focused window.
+    Mod+Q {
+        close-window;
+    }
+
+    // Normal maximize.
+    //
+    // Fills the usable monitor area and restores on toggle.
+    Mod+M {
+        maximize-window-to-edges;
+    }
+
+    // Switch tiling / column width preset.
+    Mod+N {
+        switch-preset-column-width;
+    }
+
+    // True fullscreen.
+    Mod+F {
+        fullscreen-window;
+    }
+
+    // Floating / tiled.
+    Mod+Shift+F {
+        toggle-window-floating;
+    }
+
+    // Quit Niri.
+    Mod+Shift+Alt+M {
+        quit;
+    }
+
+
+    // ========================================================
+    // WINDOW FOCUS
+    // ========================================================
+
+    Mod+H {
+        focus-column-left;
+    }
+
+    Mod+L {
+        focus-column-right;
+    }
+
+    Mod+K {
+        focus-window-up;
+    }
+
+    Mod+J {
+        focus-window-down;
+    }
+
+    Mod+Tab {
+        focus-window-down;
+    }
+
+
+    // ========================================================
+    // MOVE / SWAP WINDOWS
+    // ========================================================
+
+    Mod+Ctrl+H {
+        move-column-left;
+    }
+
+    Mod+Ctrl+L {
+        move-column-right;
+    }
+
+    Mod+Ctrl+K {
+        move-window-up;
+    }
+
+    Mod+Ctrl+J {
+        move-window-down;
+    }
+
+
+    // ========================================================
+    // WORKSPACES
+    // ========================================================
+
+    Mod+1 {
+        focus-workspace 1;
+    }
+
+    Mod+2 {
+        focus-workspace 2;
+    }
+
+    Mod+3 {
+        focus-workspace 3;
+    }
+
+    Mod+4 {
+        focus-workspace 4;
+    }
+
+    Mod+5 {
+        focus-workspace 5;
+    }
+
+    Mod+6 {
+        focus-workspace 6;
+    }
+
+    Mod+7 {
+        focus-workspace 7;
+    }
+
+    Mod+8 {
+        focus-workspace 8;
+    }
+
+    Mod+9 {
+        focus-workspace 9;
+    }
+
+
+    // --------------------------------------------------------
+    // Move window/column to workspace
+    // --------------------------------------------------------
+
+    Mod+Shift+1 {
+        move-column-to-workspace 1;
+    }
+
+    Mod+Shift+2 {
+        move-column-to-workspace 2;
+    }
+
+    Mod+Shift+3 {
+        move-column-to-workspace 3;
+    }
+
+    Mod+Shift+4 {
+        move-column-to-workspace 4;
+    }
+
+    Mod+Shift+5 {
+        move-column-to-workspace 5;
+    }
+
+    Mod+Shift+6 {
+        move-column-to-workspace 6;
+    }
+
+    Mod+Shift+7 {
+        move-column-to-workspace 7;
+    }
+
+    Mod+Shift+8 {
+        move-column-to-workspace 8;
+    }
+
+    Mod+Shift+9 {
+        move-column-to-workspace 9;
+    }
+
+
+    // --------------------------------------------------------
+    // Horizontal focus
+    // --------------------------------------------------------
+
+    Mod+Left {
+        focus-column-left;
+    }
+
+    Mod+Right {
+        focus-column-right;
+    }
+
+
+    // --------------------------------------------------------
+    // Workspace scroll
+    // --------------------------------------------------------
+
+    Mod+WheelScrollUp {
+        focus-workspace-up;
+    }
+
+    Mod+WheelScrollDown {
+        focus-workspace-down;
+    }
+
+
+    // --------------------------------------------------------
+    // Overview
+    // --------------------------------------------------------
+
+    // Overview is manual only.
+    // Hot corner is disabled above.
+    Mod+Shift+MouseMiddle { toggle-overview; }
+    Mod+O {
+        toggle-overview;
+    }
+
+
+    // ========================================================
+    // MONITORS
+    // ========================================================
+
+    // HDMI is physically LEFT.
+    // Laptop is physically RIGHT.
+
+    Mod+Alt+Left {
+        focus-monitor-left;
+    }
+
+    Mod+Alt+Right {
+        focus-monitor-right;
+    }
+
+
+    // --------------------------------------------------------
+    // Move columns between monitors
+    // --------------------------------------------------------
+
+    Mod+Alt+Shift+Left {
+        move-column-to-monitor-left;
+    }
+
+    Mod+Alt+Shift+Right {
+        move-column-to-monitor-right;
+    }
+
+    Mod+Shift+Left {
+        move-column-to-monitor-left;
+    }
+
+    Mod+Shift+Right {
+        move-column-to-monitor-right;
+    }
+
+
+    // --------------------------------------------------------
+    // Vertical monitor movement
+    // --------------------------------------------------------
+
+    Mod+Shift+Up {
+        move-window-to-monitor-up;
+    }
+
+    Mod+Shift+Down {
+        move-window-to-monitor-down;
+    }
+
+
+    // ========================================================
+    // AUDIO
+    // ========================================================
+
+    XF86AudioRaiseVolume {
+        spawn "wpctl" "set-volume" "@DEFAULT_SINK@" "5%+";
+    }
+
+    XF86AudioLowerVolume {
+        spawn "wpctl" "set-volume" "@DEFAULT_SINK@" "5%-";
+    }
+
+    XF86AudioMute {
+        spawn "wpctl" "set-mute" "@DEFAULT_SINK@" "toggle";
+    }
+
+    XF86AudioMicMute {
+        spawn "noctalia" "msg" "mic-mute";
+    }
+
+
+    // ========================================================
+    // BRIGHTNESS
+    // ========================================================
+
+    XF86MonBrightnessUp {
+        spawn "noctalia" "msg" "brightness-up";
+    }
+
+    XF86MonBrightnessDown {
+        spawn "noctalia" "msg" "brightness-down";
+    }
+
+
+    // ========================================================
+    // MEDIA
+    // ========================================================
+
+    XF86AudioPlay {
+        spawn "noctalia" "msg" "media" "toggle";
+    }
+
+    XF86AudioNext {
+        spawn "noctalia" "msg" "media" "next";
+    }
+
+    XF86AudioPrev {
+        spawn "noctalia" "msg" "media" "previous";
+    }
+}
+
+// Disable direct scanout on Intel GPU to prevent cursor after-images / ghosting at screen edges
+debug {
+    disable-direct-scanout
+    render-drm-device "/dev/dri/renderD128"
+}
+
+// Dynamic session colors generated from theme profile
+include "colors.kdl"

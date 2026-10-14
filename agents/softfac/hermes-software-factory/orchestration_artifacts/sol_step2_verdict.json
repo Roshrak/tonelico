@@ -1,0 +1,88 @@
+{
+  "review_type": "STEP_CONFORMANCE_REVIEW",
+  "step": 2,
+  "verdict": "APPROVE",
+  "step_status": "PASS",
+  "authorized_for_next_step": true,
+  "candidate_identity": {
+    "base_commit": "b7bb56591708677521c5e3f9b62edbff874d674f",
+    "head_commit": "d8f09020cb6905b396c34631dd455bd7c538d76d",
+    "tree_oid": "d333f561a58ee58099fbdc8cc9c0ae13a40e1d8a",
+    "diff_sha256": "3eb3b76f8bfe376ae6d317c866a947836bc6986e608da463f69dd16a00a6fa44"
+  },
+  "checklist": [
+    {
+      "requirement": "Candidate identity, cleanliness, and allowed-path boundary",
+      "status": "PASS",
+      "evidence": "HEAD, tree OID, raw diff SHA-256, all 15 file hashes, clean status, and changed paths independently matched the packet."
+    },
+    {
+      "requirement": "Executable, version, flags, and exact model contract",
+      "status": "PASS",
+      "evidence": "Pinned agy.exe 1.2.0 identity and gemini-3.8-flash-high catalog presence are recorded with fail-closed invocation rules."
+    },
+    {
+      "requirement": "Fresh conversations, effective cwd, and discovery surfaces",
+      "status": "PASS",
+      "evidence": "Two confined invocations reported candidate cwd, exact model, distinct conversation identities, empty guest MCP/plugin lists, and bounded configuration/credential discovery."
+    },
+    {
+      "requirement": "Completion, error, and timeout characterization",
+      "status": "PASS",
+      "evidence": "Fixtures bind observed SUCCESS and ERROR shapes and demonstrate that print timeout can return exit zero with zero turns, requiring fail-closed parsing."
+    },
+    {
+      "requirement": "Execution isolation",
+      "status": "PASS",
+      "evidence": "Windows Sandbox was selected and exercised with read-only source, shared Git, trusted-state, review, and unrelated mappings; native and authenticated AGY tool probes demonstrated protected-write rejection."
+    },
+    {
+      "requirement": "Descendant cancellation behavior",
+      "status": "PASS",
+      "evidence": "The outer sandbox stop test armed a delayed child, stopped the boundary, waited beyond the delay, and observed no late write."
+    },
+    {
+      "requirement": "Candidate acceptance scope",
+      "status": "PASS",
+      "evidence": "The authorized candidate edit was accepted while the deliberate out-of-scope candidate edit was detected and rejected before downstream gates."
+    },
+    {
+      "requirement": "No unsafe interpretation or backend activation",
+      "status": "PASS",
+      "evidence": "The contract explicitly rejects prompt, cwd, --sandbox help text, and --dangerously-skip-permissions as isolation proof and leaves the production backend unchanged."
+    },
+    {
+      "requirement": "Regression verification",
+      "status": "PASS",
+      "evidence": "29 tests independently reran and passed with exit code 0; all fixture JSON parsed and git diff --check passed."
+    }
+  ],
+  "blocking_findings": [],
+  "resolved_findings": [],
+  "non_blocking_findings": [
+    {
+      "finding_id": "S2-NB-001",
+      "status": "NON_BLOCKING",
+      "severity": "INFO",
+      "issue": "Malformed-stream and output-overflow behavior remains unverified.",
+      "rationale": "The candidate accurately discloses this as parser implementation and regression work for later runtime steps, not a missing Step 2 containment capability.",
+      "suggested_followup": "Add bounded malformed-record and output-exhaustion fixtures with the Step 6-7 supervisor/parser implementation.",
+      "suggested_future_step": 6
+    },
+    {
+      "finding_id": "S2-NB-002",
+      "status": "NON_BLOCKING",
+      "severity": "INFO",
+      "issue": "Hermes supervisor ownership of the AGY process tree is not implemented.",
+      "rationale": "Step 2 proves the selected external boundary and stop capability; production supervisor integration is explicitly outside this documentation-and-fixture increment.",
+      "suggested_followup": "Implement and regression-test audited process-tree ownership before any production Builder dispatch.",
+      "suggested_future_step": 6
+    }
+  ],
+  "precedent_corrections": [],
+  "next_actions": [
+    "Proceed to Step 3 characterization tests while retaining the existing production Builder.",
+    "Carry the approved Step 2 boundary, protocol, discovery, timeout, and fail-closed requirements into later implementation gates.",
+    "Do not activate AGY production dispatch until supervisor and acceptance-scope enforcement are implemented and independently reviewed."
+  ]
+}

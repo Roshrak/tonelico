@@ -1,0 +1,35 @@
+{
+  "verdict": "REJECT",
+  "summary": "Preflight validation is strict and documentation reflects direct Agy execution, but filesystem isolation and artifact cleanup are not fail-closed. The cleanup can delete arbitrary user files, while the source-checkout guard misses modifications to pre-existing dirty, untracked, or ignored paths.",
+  "reviewed_files": [
+    "README.md",
+    "SHA256SUMS",
+    "docs/software-factory-SKILL.md",
+    "lib/hermes_factory_v2.py",
+    "tests/test_factory_v2.py"
+  ],
+  "feedback": [
+    "Agy preflight correctly requires a JSON object with exact status SUCCESS and response BUILDER_PREFLIGHT_OK.",
+    "Builder execution correctly rejects empty, malformed, non-object, and non-success JSON output.",
+    "README and software-factory documentation consistently describe direct Agy CLI execution with gemini-3.8-flash-high.",
+    "Checksum entries were updated for every modified tracked file, but their digest accuracy cannot be independently established from the supplied diff alone.",
+    "Replace extension-based cache cleanup with exact allowlisted relative paths and filenames.",
+    "Record content-level source baselines and require them at every post-builder boundary, including resumed runs."
+  ],
+  "concerns": [
+    "--add-dir and prompt instructions do not enforce containment; --dangerously-skip-permissions increases reliance on independently verified sandbox and post-execution guards.",
+    "The source baseline is optional during later checks because missing source_status_before silently disables full-status comparison.",
+    "Full source status is checked only for labels beginning with after_builder, leaving other execution boundaries dependent on narrower guards.",
+    "Git porcelain status does not prove unchanged contents for ignored files or paths that were already dirty.",
+    "Tests do not independently run a SHA256SUMS verification command.",
+    "The preflight tests reject plaintext and incorrect fields but do not explicitly test non-dictionary JSON payloads in preflight."
+  ],
+  "blocking_issues": [
+    "clean_builder_generated_artifacts deletes any direct .agy or .gemini file having a broad allowed suffix, including user_notes.db and my_cache.cache. These paths are exempted from the pre-cleanup scope violation and are then deleted, concealing the violation.",
+    "The implementation does not support the required .gemini/logs/* cleanup: the logs subdirectory is classified as unexpected and raises FactoryError.",
+    "The Aider cleanup deletes tags.db-journal, cache.db, and cache.db-journal even though the specified exact allowlist contains only .aider.tags.cache.v4/tags.db.",
+    "_assert_source_unchanged compares path sets rather than content snapshots. Changes to an already-dirty or already-untracked source path, removal of such a path, and modifications to ignored files can pass undetected.",
+    "No test exercises an Agy process attempting to modify the original source checkout, nor modifications to pre-existing dirty, untracked, or ignored source files.",
+    "The cleanup preservation test checks a user database only at the worktree root; it does not test user_notes.db or my_cache.cache inside .agy or .gemini, where the implementation actually deletes them."
+  ]
+}

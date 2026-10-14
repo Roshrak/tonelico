@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Run Python with OpenVINO able to use the Intel NPU (Meteor Lake).
+export LD_LIBRARY_PATH="/run/opengl-driver/lib:/nix/store/akv4awajnd4mibzh471xzs0rp2d92w4b-level-zero-1.28.5/lib:/nix/store/dhnkzbxag2xk81p93n8980vl0iblb2fc-onetbb-2022.3.0/lib:/nix/store/hl2rmyygyyfzfmhw3ms08xhj07pqglzi-zlib-1.3.2/lib:/nix/store/y5xhanv1fmrkwslgz41nwnvajmvs17hj-zstd-1.5.7/lib:/nix/store/2ga5nd1m56n5cx2wh8vbf6nrdhqk2f0q-gcc-15.3.0-lib/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec /nix/store/wifwa3iixf0ydp0xrrcrqlja5ixcwf41-python3-3.13.15-env/bin/python3 "$@"

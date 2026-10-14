@@ -1,0 +1,22 @@
+Continue the SoftFac v2 implementation from the current migration checkpoint.
+
+Authoritative execution contract:
+
+1. Astra creates one immutable whole-project master plan. Hermes selects READY
+   tasks by stable plan order and dependency state; ordinary commits, repairs,
+   and resume do not call Astra again.
+2. AGY edits only a disposable non-Git mirror. The boundary validates the
+   complete delta and atomically syncs allowed changes to the host-owned
+   candidate worktree. Source, Git metadata, and trusted state stay protected.
+3. Runner owns deterministic verification, scope/integrity gates, staging, and
+   `git write-tree`. Sol independently reviews the exact
+   `{base_commit,candidate_id}` candidate. Hermes alone may commit.
+4. Runner FAIL and Sol REJECT route to AGY repair. Repeated stagnant or
+   exhausted repair attempts become BLOCKED with complete evidence; Luna is
+   outside the v1 production path.
+5. Resume preserves completed commits, candidate identity, evidence, and
+   attempt budgets. If a pending commit cannot be reconciled exactly, fail
+   closed rather than replaying or guessing.
+6. Keep tests deterministic and separate offline fake-provider proof from live
+   authenticated runtime proof. Do not introduce a scheduler, registry,
+   duplicate state database, or unrelated provider abstraction.

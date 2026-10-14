@@ -1,0 +1,568 @@
+{
+  "review_type": "MIGRATION_PLAN_CONFORMANCE_REVIEW",
+  "authority": {
+    "plan": "C:/Users/HH18/astra_plan.md",
+    "plan_sha256": "e8e73917846871263557cfb9a2f163d07ed5aac088da4caad51213682eb396c2",
+    "reviewer": "Sol High",
+    "decision": "REJECT"
+  },
+  "precedent_correction": {
+    "issued": true,
+    "statement": "Any prior approval or guidance treating --sandbox, --dangerously-skip-permissions, cwd=worktree, --add-dir, post-execution source checks, or cache cleanup as sufficient isolation is withdrawn. Astra Steps 2, 6, and 9 require an audited enforcement boundary covering native file tools, descendants, shared Git metadata, trusted state, and delayed writers. That boundary is absent and unproven."
+  },
+  "reviewed_candidate": {
+    "repository": "C:/Users/HH18/Downloads/hermes-software-factory-v2-hoh/hermes-software-factory-v2",
+    "base_commit": "066e885966420b14d470dc159f0ff39acf2099a9",
+    "head_commit": "232b5ef78d981dc3a084a2463f105ea42406cc1e",
+    "head_tree_oid": "8b42465e6004ded2d5b5991f982c5d767d815be8",
+    "candidate_diff_sha256": "ec12f4e3c6c8aba2b5eb5d76a96265f2731a5dd034427926078f868850826f4f",
+    "changed_paths": [
+      "README.md",
+      "SHA256SUMS",
+      "docs/software-factory-SKILL.md",
+      "lib/hermes_factory_v2.py",
+      "tests/test_factory_v2.py"
+    ],
+    "current_file_hashes": {
+      "README.md": "3555f379b270b28fa1759ea18457f95bceaf897e6312862ae4cecf279417cddf",
+      "SHA256SUMS": "5c9ce4d09c147c5c0222986c9bba7783f997b39453be2925458b38b1605abfbd",
+      "docs/software-factory-SKILL.md": "8acba2f86e3f449a6ac624a9b6898d6488ec236996429da58fb2c9a152696838",
+      "lib/hermes_factory_v2.py": "8e623311cadfb19b15f93c6cd5635cb39ba3277ed00c119d2f4b80db47630f21",
+      "tests/test_factory_v2.py": "58619e7318cb7283573d48a78c5874ea97a93c9c29ee4a431e05e8d73ff67c7c"
+    },
+    "worktree_status": [
+      "?? lib/__pycache__/hermes_factory_v2.cpython-311.pyc"
+    ],
+    "step_specific_allowed_paths_evidence": "ABSENT"
+  },
+  "actual_achieved_step_boundary": {
+    "last_fully_accepted_step": 0,
+    "description": "No Astra migration increment is fully conformant. Step 1 is incomplete, Step 2 is unproven, and production AgyBuilder work was implemented ahead of both prerequisites."
+  },
+  "do_not_proceed_beyond_step": 1,
+  "release_status": "BLOCKED",
+  "sequence_violation": {
+    "present": true,
+    "evidence": "Commit 872e4fb switched the production default to AgyBuilder before later isolation-labelled commits, while the Step 2 contract, fixtures, and enforcement boundary remain absent."
+  },
+  "critical_findings": [
+    {
+      "severity": "CRITICAL",
+      "astra_steps": [
+        2,
+        6,
+        9
+      ],
+      "finding": "There is no execution-isolation boundary. AgyBuilder launches unrestricted Windows AGY with inherited environment and host access. The installed AGY help describes --sandbox as terminal restrictions; it does not prove containment of native file tools, descendants, shared Git metadata, trusted run state, hooks, MCP, plugins, or unrelated host files.",
+      "evidence": [
+        "lib/hermes_factory_v2.py:1002-1100",
+        "The command combines --sandbox and --dangerously-skip-permissions and relies on cwd, --add-dir, and prompt instructions.",
+        "tests/fixtures/agy/1.2.0 is absent.",
+        "docs/agy-builder-contract.md is absent."
+      ]
+    },
+    {
+      "severity": "CRITICAL",
+      "astra_steps": [
+        8,
+        10
+      ],
+      "finding": "Builder calls are not durably reserved or centralized. Initial build and all repair/rework routes call self.builder.run directly. Crashes can replay work and replenish in-memory budgets.",
+      "evidence": [
+        "lib/hermes_factory_v2.py:2023-2030",
+        "lib/hermes_factory_v2.py:2117-2124",
+        "lib/hermes_factory_v2.py:2337-2344",
+        "lib/hermes_factory_v2.py:2430-2440",
+        "No _dispatch_builder, builder_calls_used, attempt-state machine, non_resumable enforcement, or OS-backed lock exists."
+      ]
+    },
+    {
+      "severity": "CRITICAL",
+      "astra_steps": [
+        2,
+        9
+      ],
+      "finding": "Post-run source checks cannot prevent external damage and do not prove preservation. The full-status comparison uses path-set differences, so changing the contents of a previously dirty or untracked out-of-scope source file can remain undetected. Linked worktrees retain shared Git metadata.",
+      "evidence": [
+        "lib/hermes_factory_v2.py:1174-1235",
+        "Only labels beginning with after_builder receive the additional full-status path comparison.",
+        "No content-hash boundary or Git common-directory isolation exists."
+      ]
+    },
+    {
+      "severity": "CRITICAL",
+      "astra_steps": [
+        9,
+        13
+      ],
+      "finding": "The cleanup design directly contradicts Astra. It broadly exempts .agy and .gemini paths from scope rejection and then deletes untracked files based largely on filename suffix. This can erase user or malicious evidence and make a scope violation disappear.",
+      "evidence": [
+        "lib/hermes_factory_v2.py:916-999",
+        "lib/hermes_factory_v2.py:1496-1519",
+        "lib/hermes_factory_v2.py:2016",
+        "tests/test_factory_v2.py:713-778 explicitly expects destructive cleanup."
+      ]
+    },
+    {
+      "severity": "HIGH",
+      "astra_steps": [
+        6,
+        7
+      ],
+      "finding": "The Builder runtime and result protocol are not the planned protocol. Generic subprocess.run captures text in memory, has no concurrent bounded drains or process-tree ownership, can expose the prompt-bearing argv in timeout errors, and does not preserve partial raw evidence. AgyBuilder accepts one JSON object containing status=SUCCESS without initialization, model, cwd, conversation, terminal cardinality, or contradictory-error validation.",
+      "evidence": [
+        "lib/hermes_factory_v2.py:479-506",
+        "lib/hermes_factory_v2.py:1006-1118",
+        "No run_builder_process, parse_agy_event_stream, or BuilderFailure implementation exists."
+      ]
+    },
+    {
+      "severity": "HIGH",
+      "astra_steps": [
+        10,
+        12
+      ],
+      "finding": "Crash-safe rollback and commit identity are incomplete. Checkpoint code references base64 without importing it when untracked files exist. Tests are accepted solely by exit code, are not bound to candidate content, and approval records no tested tree, staged tree OID, expected parent, writer-quiescence proof, or post-commit tree verification.",
+      "evidence": [
+        "lib/hermes_factory_v2.py:1777-1800",
+        "lib/hermes_factory_v2.py:1842-1856",
+        "lib/hermes_factory_v2.py:1539-1566",
+        "lib/hermes_factory_v2.py:2184-2262"
+      ]
+    },
+    {
+      "severity": "HIGH",
+      "astra_steps": [
+        13,
+        14
+      ],
+      "finding": "Cutover and documentation deployment are premature. The repository default is AgyBuilder and the installed skill has already been changed, although isolation and acceptance are unapproved. The installed skill is also internally contradictory and still directs slices to Aider.",
+      "evidence": [
+        "lib/hermes_factory_v2.py:1140",
+        "C:/Users/HH18/AppData/Local/hermes/skills/software-development/software-factory-v2/SKILL.md:14-18",
+        "C:/Users/HH18/AppData/Local/hermes/skills/software-development/software-factory-v2/SKILL.md:34-37",
+        "Installed skill SHA-256: 89ff17128c5470da283cbbbe13f86f5de0eb7bf470dd282be2509102ef58506f"
+      ]
+    }
+  ],
+  "step_conformance": [
+    {
+      "step": 1,
+      "status": "REJECT_PARTIAL",
+      "conforming_work": [
+        "HEAD descends from the approved 066e885 baseline.",
+        "A named migration branch exists."
+      ],
+      "violations": [
+        "The target checkout itself is the branch worktree rather than a documented dedicated migration worktree.",
+        "docs/agy-migration-plan.md and docs/agy-migration-baseline.md are absent.",
+        "No tracked-file hash inventory, launcher/install inventory, separate main/audit regression record, or selective audit-protection inventory exists.",
+        "The current tree is dirty due to an untracked pyc."
+      ]
+    },
+    {
+      "step": 2,
+      "status": "REJECT_NOT_IMPLEMENTED",
+      "violations": [
+        "docs/agy-builder-contract.md and sanitized 1.2.0 fixtures are absent.",
+        "No audit covers configuration, rules, hooks, plugins, MCP, credentials, files outside the candidate, terminal schema, descendants, or cancellation.",
+        "No malicious-fixture proof exists for source, trusted state, Git refs/index, out-of-scope files, or delayed children.",
+        "Windows isolation provisioning and approval were bypassed."
+      ]
+    },
+    {
+      "step": 3,
+      "status": "REJECT_PARTIAL",
+      "conforming_work": [
+        "The current 31-test suite retains several prior scope, rollback, Luna, Sol, hash, symlink, and prior-run tests."
+      ],
+      "violations": [
+        "Required characterization tests for empty diff, zero discovery, Builder index/HEAD changes, simultaneous partial/out-of-scope failure, ambiguous resume, budget reservation, trusted artifact tampering, ignored paths, and per-slice scopes are missing.",
+        "AGY tests patch command or subprocess.run; they do not exercise the real process boundary."
+      ]
+    },
+    {
+      "step": 4,
+      "status": "REJECT_CONTRADICTED",
+      "conforming_work": [
+        "DEFAULT_BUILDER_MODEL is gemini-3.8-flash-high."
+      ],
+      "violations": [
+        "Config has no agy_bin.",
+        "RUN_CONFIG_VERSION, builder_backend, and builder_contract_version are absent.",
+        "DEFAULT_AIDER_MODEL, DEFAULT_AIDER_URL, DEFAULT_BUILDER_ARCHITECT_MODEL, DEFAULT_BRIDGE_URL, bridge_url, builder_architect_model, --bridge-url, and the hidden architect argument remain.",
+        "--agy-bin is absent; an unplanned --agy-model alias was added.",
+        "Config silently strips openai/ instead of rejecting obsolete model values.",
+        "status() constructs current Config through _load, so raw historical inspection is not separated from executable configuration.",
+        "Old-Builder execution/resume is not rejected."
+      ]
+    },
+    {
+      "step": 5,
+      "status": "REJECT_PARTIAL",
+      "conforming_work": [
+        "A preflight JSON artifact is written after a probe."
+      ],
+      "violations": [
+        "No resolve_agy_executable function or explicit-path behavior exists.",
+        "Resolution is shutil.which or the literal string agy; there is no Windows fallback, absolute pinning, shim rejection, or resume identity.",
+        "Version format is not validated and binary hash is not persisted.",
+        "The model catalog and required capabilities are not checked.",
+        "The probe trusts generated response prose rather than effective model/cwd stream metadata.",
+        "Installed AGY 1.2.0 was observed during review, but the implementation does not enforce its identity."
+      ]
+    },
+    {
+      "step": 6,
+      "status": "REJECT_NOT_IMPLEMENTED",
+      "violations": [
+        "run_builder_process and the subprocess fixture are absent.",
+        "Invocation uses output-format json instead of stream-json and omits print-timeout.",
+        "No Windows Job Object or equivalent containment exists.",
+        "No concurrent bounded pipe draining, output-overflow policy, raw malformed-UTF-8 evidence, shutdown margin, noninteractive stdin, cancellation handling, or descendant termination exists.",
+        "Prompt size/NUL/Windows command-line limits are not enforced."
+      ]
+    },
+    {
+      "step": 7,
+      "status": "REJECT_PARTIAL",
+      "conforming_work": [
+        "AgyBuilder preserves the broad engine-facing run signature and checks process exit plus a SUCCESS field."
+      ],
+      "violations": [
+        "No audited event-stream parser exists.",
+        "Initialization, canonical cwd, effective model, fresh conversation, exactly-one terminal result, duplicate keys, record bounds, truncation, and contradictory states are not validated.",
+        "Labels and attempt artifacts are not safely validated or bound to a baseline.",
+        "Structured BuilderFailure codes and non_resumable classification are absent."
+      ]
+    },
+    {
+      "step": 8,
+      "status": "REJECT_NOT_IMPLEMENTED",
+      "violations": [
+        "No centralized _dispatch_builder exists.",
+        "No manifest-before-dispatch, durable call reservation, trusted-boundary snapshot, or failure aggregation exists.",
+        "All four Builder routes call run directly.",
+        "Plans still use string implementation steps and execute the complete plan in one initial Builder invocation.",
+        "Repairs receive the entire plan allowed_files boundary instead of a strict repair/slice subset."
+      ]
+    },
+    {
+      "step": 9,
+      "status": "REJECT_CONTRADICTED",
+      "conforming_work": [
+        "Some path confinement and symlink checks exist.",
+        "Runtime logs are generally placed under run_dir."
+      ],
+      "violations": [
+        "_changed_files uses splitlines rather than NUL-delimited path parsing.",
+        "Ignored files, Windows case collisions, junctions, unsupported types, refs, config, hooks, HEAD, and index are not comprehensively snapshotted or protected.",
+        "_stage resets the index before inspection, concealing Builder staging.",
+        "clean_aider_generated_artifacts remains as an alias and cleanup is invoked at two call sites.",
+        ".agy and .gemini are broadly exempted and deleted instead of keeping runtime state outside the candidate.",
+        "Shared linked-worktree Git metadata remains writable."
+      ]
+    },
+    {
+      "step": 10,
+      "status": "REJECT_NOT_IMPLEMENTED",
+      "violations": [
+        "No OS-backed single-writer lock exists.",
+        "No reserved/dispatched/completed/failed/ambiguous attempt state exists.",
+        "No durable builder_calls_used counter exists; debug and review counters are local variables.",
+        "non_resumable is absent from execute and resume.",
+        "resume accepts failed and blocked runs and can replay Builder work without ambiguous-dispatch protection.",
+        "Resume does not verify plan hash, candidate identity, executable identity, backend, model, or contract version.",
+        "Writer quiescence is not proven before rollback.",
+        "Checkpoint untracked-file handling has an untested missing-base64-import failure."
+      ]
+    },
+    {
+      "step": 11,
+      "status": "REJECT_NOT_IMPLEMENTED",
+      "conforming_work": [
+        "Legacy issue_ledger.json and trajectory.json snapshots remain."
+      ],
+      "violations": [
+        "issue_ledger.jsonl, trajectory.jsonl, and docs/ledger-compatibility.md are absent.",
+        "No canonical transaction hashes, projection deduplication, flush ordering, generation tracking, or journal recovery exists.",
+        "MemoryLedger catches corrupt snapshot loading and calls _flush, which can replace corrupt evidence with an empty ledger."
+      ]
+    },
+    {
+      "step": 12,
+      "status": "REJECT_PARTIAL",
+      "conforming_work": [
+        "Nonempty diff, scope, syntax, conflict markers, fresh Sol invocation, staged diff SHA-256, and a pre-commit cached-diff recheck exist."
+      ],
+      "violations": [
+        "A zero test exit code is accepted without runner-specific discovery evidence.",
+        "Test evidence is not bound to candidate content.",
+        "No approved staged tree OID or tested tree identity is persisted.",
+        "HEAD/index/writer quiescence and same-path unstaged mutation are not fully checked.",
+        "Commit parent and tree are not verified.",
+        "A crash after commit but before final state persistence can lead to unsafe recovery behavior."
+      ]
+    },
+    {
+      "step": 13,
+      "status": "REJECT_CONTRADICTED",
+      "conforming_work": [
+        "Some README and repository skill wording was changed to AGY."
+      ],
+      "violations": [
+        "AiderBuilder, Aider constants, cleanup, .aider ignore rule, urllib imports, bridge configuration, and compatibility behavior remain active.",
+        "bridge/agy_bridge.py and systemd/agy-bridge.service.example remain shipped.",
+        "README continues to advertise and install the legacy bridge.",
+        "tests/test_no_legacy_builder_dependencies.py is absent.",
+        "Required authentication, historical-run, JSONL, isolation limitation, offline/live, and no-fallback documentation is incomplete.",
+        "The installed skill was modified before release acceptance and is inconsistent with both Astra and the repository copy."
+      ]
+    },
+    {
+      "step": 14,
+      "status": "REJECT_PARTIAL",
+      "conforming_work": [
+        "Offline unittest discovery passed 31 tests.",
+        "run --help, plan --help, and git diff --check exited zero.",
+        "All entries currently listed in SHA256SUMS match."
+      ],
+      "violations": [
+        "docs/agy-migration-acceptance.md is absent.",
+        "No real process-supervisor fixtures exist.",
+        "No authorized installed-AGY edit/isolation contract suite was supplied.",
+        "None of the eight required disposable-repository end-to-end scenarios is evidenced with the real AGY boundary.",
+        "Aider/bridge absence was not demonstrated.",
+        "No exact-tree Sol approval, deployment authorization, backup, atomic deployment, deployed smoke, or deployed hash comparison exists.",
+        "The repository is not a frozen clean release tree."
+      ]
+    }
+  ],
+  "final_release_checklist": [
+    {
+      "item": 1,
+      "met": false,
+      "requirement": "AgyBuilder is the only production Builder implementation.",
+      "reason": "AiderBuilder remains exported as an active compatibility subclass."
+    },
+    {
+      "item": 2,
+      "met": true,
+      "requirement": "Default model is exactly gemini-3.8-flash-high.",
+      "reason": "The literal default is correct, although obsolete prefixed explicit values are silently rewritten."
+    },
+    {
+      "item": 3,
+      "met": false,
+      "requirement": "--agy-bin is resolved, persisted, and correctly used after resume.",
+      "reason": "--agy-bin and persisted executable identity do not exist."
+    },
+    {
+      "item": 4,
+      "met": false,
+      "requirement": "No active Aider executable, configuration, history, metadata/settings, LiteLLM, or Builder bridge dependency remains.",
+      "reason": "Multiple Aider constants/classes/cleanup rules, bridge CLI configuration, bridge files, README instructions, urllib imports, and .aider ignore behavior remain."
+    },
+    {
+      "item": 5,
+      "met": false,
+      "requirement": "AGY permission-skipping execution has an approved isolation boundary.",
+      "reason": "No approved or tested Windows enforcement boundary exists."
+    },
+    {
+      "item": 6,
+      "met": false,
+      "requirement": "Every Builder route uses the same durable dispatch and integrity checks.",
+      "reason": "Four direct Builder call sites bypass any durable dispatcher."
+    },
+    {
+      "item": 7,
+      "met": false,
+      "requirement": "Per-slice and whole-plan scope gates are independently tested.",
+      "reason": "Per-slice dispatch is not implemented."
+    },
+    {
+      "item": 8,
+      "met": false,
+      "requirement": "Ambiguous or partial execution cannot reach tests, review, commit, or automatic replay.",
+      "reason": "No attempt-state protocol or non_resumable guard exists."
+    },
+    {
+      "item": 9,
+      "met": false,
+      "requirement": "Budgets, locks, checkpoints, rollback, and failed evidence survive crashes.",
+      "reason": "No lock or durable budget reservations exist; crash injection is absent and checkpoint untracked handling is broken."
+    },
+    {
+      "item": 10,
+      "met": false,
+      "requirement": "Issue history, trajectory, progressive disclosure, and legacy inspection remain functional.",
+      "reason": "Some snapshot behavior passes mocks, but backend-versioned legacy inspection is absent and corrupt evidence can be overwritten."
+    },
+    {
+      "item": 11,
+      "met": false,
+      "requirement": "Requested JSONL journals have deterministic recovery and snapshot compatibility.",
+      "reason": "No JSONL implementation exists."
+    },
+    {
+      "item": 12,
+      "met": false,
+      "requirement": "Sol remains independent and approval binds the tested, staged, and committed candidate.",
+      "reason": "Sol invocation is independent, but test, staged-tree, and committed-tree identities are not transitively bound."
+    },
+    {
+      "item": 13,
+      "met": false,
+      "requirement": "Main/source checkout and unrelated user changes remain preserved.",
+      "reason": "Only fake-Builder evidence exists; external writes are not prevented and source checking is path-level and incomplete."
+    },
+    {
+      "item": 14,
+      "met": false,
+      "requirement": "Offline, installed-CLI, and live end-to-end evidence are reported separately.",
+      "reason": "Only offline mocks and reviewer-observed version/help evidence exist."
+    },
+    {
+      "item": 15,
+      "met": false,
+      "requirement": "Repository and deployed artifacts match the formally approved release.",
+      "reason": "No approved release exists; the repository is dirty and the installed skill hash differs from the repository skill."
+    }
+  ],
+  "prior_findings_reassessment": [
+    {
+      "finding": "Isolation breach",
+      "status": "OPEN_CRITICAL",
+      "assessment": "Not corrected. Prompt restrictions, cwd, --add-dir, --sandbox, post-run checks, and linked-worktree checks do not enforce Astra's execution boundary."
+    },
+    {
+      "finding": "Cache cleanup destruction",
+      "status": "OPEN_AND_BROADER",
+      "assessment": "The implementation now intentionally deletes .agy and .gemini content and exempts those paths from scope rejection, directly contradicting Step 9."
+    },
+    {
+      "finding": "SHA256SUMS",
+      "status": "NARROWLY_CORRECTED",
+      "assessment": "All currently listed entries match their files. This does not satisfy the missing Step 1 tracked-file baseline or Step 14 approved/deployed release-manifest comparison."
+    },
+    {
+      "finding": "Documentation",
+      "status": "OPEN_AND_PREMATURELY_DEPLOYED",
+      "assessment": "Required migration documents are absent, README retains the bridge workflow, and the installed skill was changed before acceptance while retaining contradictory Aider instructions."
+    }
+  ],
+  "verification_evidence": {
+    "offline_tests": [
+      {
+        "command": "python -B tests/test_factory_v2.py",
+        "exit_code": 0,
+        "result": "31 tests passed",
+        "classification": "mock/fake-provider orchestration evidence"
+      },
+      {
+        "command": "python -B -m unittest discover -s tests -p \"test_*.py\"",
+        "exit_code": 0,
+        "result": "31 tests passed",
+        "classification": "offline deterministic suite only"
+      },
+      {
+        "command": "python -B bin/hermes-code-factory-v2 run --help",
+        "exit_code": 0
+      },
+      {
+        "command": "python -B bin/hermes-code-factory-v2 plan --help",
+        "exit_code": 0
+      },
+      {
+        "command": "git diff --check",
+        "exit_code": 0
+      }
+    ],
+    "installed_agy_observation": {
+      "path": "C:/Users/HH18/AppData/Local/agy/bin/agy.exe",
+      "version": "1.2.0",
+      "sha256": "a613315a951bfebd588b456143c236de31d9f85e1a73ac82d33105e5baef1a4a",
+      "classification": "binary version/help observation only; not isolation, authentication, model-routing, or live-edit acceptance"
+    },
+    "sha256sums": "All entries listed in SHA256SUMS matched.",
+    "coderabbit": "Unavailable on this machine; the independent review was performed directly against the plan, repository, tests, Git state, and installed CLI help.",
+    "not_performed": [
+      "No live model edit or malicious AGY containment test was run because the plan requires explicit model-use and Windows-isolation provisioning authorization.",
+      "No deployment or mutation was performed."
+    ]
+  },
+  "next_required_work": [
+    {
+      "order": 1,
+      "astra_step": 1,
+      "work": "Return to the approved 066e885 baseline in a dedicated migration worktree. Create the two baseline documents, record clean status, versions, complete tracked hashes, separate main/audit results, removal inventory, deployment locations, and selectively reviewed audit protections."
+    },
+    {
+      "order": 2,
+      "astra_step": 2,
+      "work": "Before any production AGY dispatch, specify and prove the 1.2.0 runtime contract with sanitized fixtures. Obtain explicit authorization for any required Windows isolation provisioning. Demonstrate that only an allowed candidate edit succeeds and source, trusted state, Git metadata, unrelated host paths, and delayed descendants cannot be modified."
+    },
+    {
+      "order": 3,
+      "astra_step": 3,
+      "work": "Add every required characterization test, including ambiguous failure, durable reservations, trusted-state tampering, ignored paths, HEAD/index mutation, partial edits, and distinct slice boundaries."
+    },
+    {
+      "order": 4,
+      "astra_step": 4,
+      "work": "Implement versioned AGY configuration and raw historical inspection. Add agy_bin, remove active legacy arguments/constants, reject prefixed models, persist backend/contract versions, and block old-Builder execution or resume."
+    },
+    {
+      "order": 5,
+      "astra_step": 5,
+      "work": "Implement strict executable resolution, semantic-version validation, binary hashing and pinning, capability/model-catalog checks, confined no-edit probing, sanitized evidence, and resume identity validation."
+    },
+    {
+      "order": 6,
+      "astra_step": 6,
+      "work": "Implement the dedicated bounded process supervisor with stream-json, noninteractive stdin, UTF-8/raw evidence handling, bounded concurrent drains, prompt limits, timeout margin, Windows process-tree ownership, cancellation, and delayed-writer tests."
+    },
+    {
+      "order": 7,
+      "astra_step": 7,
+      "work": "Implement the audited AGY event parser, fresh-conversation and terminal-cardinality checks, canonical cwd/model validation, attempt binding, safe labels, duplicate-key rejection, and structured non-resumable BuilderFailure codes."
+    },
+    {
+      "order": 8,
+      "astra_step": 8,
+      "work": "Create one durable _dispatch_builder path and route initial slices and all repair/rework calls through it. Persist reservations/manifests before dispatch and enforce structured per-slice editable-file subsets."
+    },
+    {
+      "order": 9,
+      "astra_step": 9,
+      "work": "Replace line-based Git parsing with NUL-safe records; protect HEAD, index, refs, common Git metadata, ignored paths, junctions, case collisions, and file types. Remove all Builder artifact cleanup and place AGY runtime state outside the candidate."
+    },
+    {
+      "order": 10,
+      "astra_step": 10,
+      "work": "Add OS-backed locking, monotonic durable budgets, the attempt state machine, fail-closed resume identity checks, ambiguous replay blocking, writer-quiescent rollback, canonical fingerprints, and crash-injection coverage. Fix the missing base64 import or redesign checkpoint serialization."
+    },
+    {
+      "order": 11,
+      "astra_step": 11,
+      "work": "Add the canonical trajectory JSONL journal, issue-event projection, compatible snapshots, hash chaining, flush ordering, deterministic recovery, torn-tail preservation, deduplication, and compatibility documentation."
+    },
+    {
+      "order": 12,
+      "astra_step": 12,
+      "work": "Bind runner-specific test discovery and evidence to a candidate tree identity; bind Sol approval to the exact staged tree and diff; revalidate immediately before commit; verify committed parent/tree; and make post-commit recovery idempotent."
+    },
+    {
+      "order": 13,
+      "astra_step": 13,
+      "work": "After consumer verification, remove all active Aider, LiteLLM, bridge, history, metadata/settings, cleanup, obsolete CLI, imports, package files, and .aider behavior. Add the no-legacy test and complete all required documentation. Do not deploy the skill separately."
+    },
+    {
+      "order": 14,
+      "astra_step": 14,
+      "work": "Run and document offline, real-subprocess, installed-AGY, and eight-scenario end-to-end acceptance layers separately. Freeze hashes, obtain Sol approval of the exact tree, request explicit deployment authorization, back up and deploy the complete set atomically, smoke-test it, and compare deployed hashes."
+    }
+  ],
+  "_memory_citation": ""
+}

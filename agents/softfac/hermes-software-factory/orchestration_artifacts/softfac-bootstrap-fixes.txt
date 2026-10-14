@@ -1,0 +1,12 @@
+Bootstrap reliability repair for HoH Software Factory v2. Keep this patch intentionally small so Aider can finish it completely. Mandatory roles and routing are immutable: planner gpt-6-astra high; independent reviewer gpt-5.6-sol high; debugger gpt-5.6-luna xhigh; builder openai/gemini-3.8-flash-high through Antigravity http://127.0.0.1:8045/v1. Never substitute a model or provider.
+
+Hard edit boundary and mandatory plan allowed_files: .gitignore, lib/hermes_factory_v2.py, tests/test_factory_v2.py. Do not edit anything else. Do not weaken scope/isolation/review/hash gates. No main merge. Do not import rejected worktrees.
+
+Implement and test only these bootstrap defects:
+1. Add narrow repository ignores for Python bytecode/cache so normal execution does not dirty the source checkout. Preserve existing .aider* ignore. Do not ignore generic *.lock or broad runtime evidence.
+2. Separate Antigravity builder credentials from Codex credentials. AiderBuilder preflight and invocation must use GEMINI_API_KEY for bridge 8045, never prefer OPENAI_API_KEY from Codex 13844. Remove any hardcoded secret/token fallback from source. Missing builder credential must fail closed with a redacted actionable preflight error. Never persist or print credential values.
+3. Stop silently clamping invalid CLI limits/timeouts. Pass parsed values into strict Config validation; reject negative debug/review budgets and nonpositive timeouts with an actionable configuration error. Zero debug/review attempts remains valid if Config policy allows it. Add direct CLI/config regressions.
+4. Use the current absolute Python interpreter for Python test execution when the factory auto-selects or receives a command beginning with python, so subprocess tests do not accidentally run under a different installed Python. Preserve explicit non-Python test commands. Add deterministic unit tests.
+5. A successful test command must prove substantive test discovery. For pytest, exit code 5/zero collected is failure. For unittest discovery, zero tests is failure. Empty/stub test files never count as evidence. Add tests without weakening existing behavior.
+
+Run PYTHONDONTWRITEBYTECODE=1 with the exact current interpreter: python -m unittest discover -s tests -p test_factory_v2.py. Require nonzero substantive test count and all tests passing. Sol must review the exact staged diff and approve before commit. If Aider output is incomplete, zero-diff, or truncated, stop with exact evidence or route a bounded Luna repair; do not repeatedly resend the same unchanged task.

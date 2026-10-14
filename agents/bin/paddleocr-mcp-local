@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# PyPI binary wheels need these shared libraries on NixOS.  Keep the paths
+# behind GC roots so upgrades and garbage collection cannot break the server.
+runtime_libs=(
+  "/run/current-system/sw/share/nix-ld/lib"
+  "/home/aesc/.local/share/nix-roots/hermes-ocr-libgl/lib"
+  "/home/aesc/.local/share/nix-roots/hermes-ocr-glib/lib"
+)
+
+joined="$(IFS=:; echo "${runtime_libs[*]}")"
+if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
+  export LD_LIBRARY_PATH="${joined}:${LD_LIBRARY_PATH}"
+else
+  export LD_LIBRARY_PATH="${joined}"
+fi
+
+export PADDLEOCR_MCP_MODEL="${PADDLEOCR_MCP_MODEL:-PP-OCRv6}"
+export PADDLEOCR_MCP_PPOCR_SOURCE="${PADDLEOCR_MCP_PPOCR_SOURCE:-local}"
+export PADDLE_PDX_MODEL_SOURCE="${PADDLE_PDX_MODEL_SOURCE:-BOS}"
+# PaddlePaddle 3.3.1 currently fails on the PP-OCR CPU oneDNN path with
+# ConvertPirAttribute2RuntimeAttribute.  PaddleX exposes this fail-safe flag;
+# the plain Paddle CPU backend is slower but correct on this host.
+export PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT="${PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT:-False}"
+export PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK="${PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK:-True}"
+
+exec python3 -u -c '
+import sys, subprocess, json
+
+p = subprocess.Popen(
+    ["/home/aesc/.local/share/hermes-ocr/venv/bin/paddleocr_mcp", *sys.argv[1:]],
+    stdin=sys.stdin,
+    stdout=subprocess.PIPE,
+    stderr=sys.stderr,
+)
+
+for line in p.stdout:
+    if b"\"tools\"" in line and b"\"result\"" in line:
+        try:
+            data = json.loads(line)
+            if "result" in data and isinstance(data["result"], dict) and "tools" in data["result"]:
+                data["result"]["ttlMs"] = 604800000
+                sys.stdout.buffer.write(json.dumps(data).encode("utf-8") + b"\n")
+                sys.stdout.buffer.flush()
+                continue
+        except Exception:
+            pass
+    sys.stdout.buffer.write(line)
+    sys.stdout.buffer.flush()
+
+p.wait()
+sys.exit(p.returncode)
+' "$@"
