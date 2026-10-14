@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Study Herd worker result",
+  "type": "object",
+  "required": ["status", "role", "scope_echo", "items", "coverage", "uncertainties", "violations"],
+  "additionalProperties": false,
+  "properties": {
+    "status": {"type": "string", "enum": ["done", "partial", "blocked"]},
+    "role": {
+      "type": "string",
+      "enum": ["source-clerk", "locator-clerk", "coverage-clerk", "exam-transcriber"]
+    },
+    "scope_echo": {
+      "type": "object",
+      "required": ["source_id"],
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "pages": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 1},
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "locator", "confidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "text": {"type": "string", "minLength": 1},
+          "locator": {
+            "type": "object",
+            "required": ["source_id"],
+            "anyOf": [
+              {"required": ["page"]},
+              {"required": ["section"]},
+              {"required": ["line"]}
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "source_id": {"type": "string", "minLength": 1},
+              "page": {"type": "integer", "minimum": 1},
+              "section": {"type": "string"},
+              "line": {"type": "integer", "minimum": 1}
+            }
+          },
+          "confidence": {"type": "string", "enum": ["high", "medium", "low"]}
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["expected", "covered", "missing"],
+      "additionalProperties": false,
+      "properties": {
+        "expected": {"type": "integer", "minimum": 0},
+        "covered": {"type": "integer", "minimum": 0},
+        "missing": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "uncertainties": {"type": "array", "items": {"type": "string"}},
+    "violations": {"type": "array", "items": {"type": "string"}}
+  }
+}
+

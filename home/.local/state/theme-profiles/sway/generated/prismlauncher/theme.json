@@ -1,0 +1,22 @@
+{
+  "colors": {
+    "AlternateBase": "#282828",
+    "Base": "#282828",
+    "BrightText": "#fabd2f",
+    "Button": "#3c3836",
+    "ButtonText": "#fbf1c7",
+    "Highlight": "#b8bb26",
+    "HighlightedText": "#282828",
+    "Link": "#b8bb26",
+    "Text": "#fbf1c7",
+    "ToolTipBase": "#3c3836",
+    "ToolTipText": "#fbf1c7",
+    "Window": "#282828",
+    "WindowText": "#fbf1c7",
+    "fadeAmount": 0.5,
+    "fadeColor": "#3c3836"
+  },
+  "name": "Matugen",
+  "widgets": "Fusion"
+}
+

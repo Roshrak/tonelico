@@ -1,0 +1,18 @@
+services:
+  antigravity-manager:
+    build:
+      context: ./src
+      dockerfile: docker/Dockerfile
+    image: antigravity-manager:4.9.6-local
+    container_name: antigravity-manager
+    ports:
+      - "127.0.0.1:8045:8045"
+    volumes:
+      - /home/aesc/.antigravity_tools:/root/.antigravity_tools
+    environment:
+      - LOG_LEVEL=info
+      - API_KEY=${API_KEY}
+      - WEB_PASSWORD=${WEB_PASSWORD}
+      - ABV_BIND_LOCAL_ONLY=false
+      - ABV_DATA_DIR=/root/.antigravity_tools
+    restart: unless-stopped

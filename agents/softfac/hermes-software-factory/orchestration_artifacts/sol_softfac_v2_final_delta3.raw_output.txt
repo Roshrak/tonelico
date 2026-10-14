@@ -1,0 +1,98 @@
+{
+  "review_type": "DELTA_ONLY_RECHECK",
+  "step": 7,
+  "verdict": "REJECT",
+  "step_status": "FAIL",
+  "authorized_for_next_step": false,
+  "candidate_identity": {
+    "base_commit": "bbfe7a8410e79fc1460be0d92908c67776af4e1f",
+    "head_commit": "bbfe7a8410e79fc1460be0d92908c67776af4e1f",
+    "tree_oid": "d68ebb859449a9e25bf22da4c70e4a0adbb3b565",
+    "diff_sha256": "14e9d41a3f3fbf8b86b9682ce2b5c6494fc5c16507ae5e248544b1815723d5d9"
+  },
+  "checklist": [
+    {
+      "finding_id": "FINAL-F002",
+      "status": "PASS",
+      "evidence": "A checked-in same-content host-creation race regression now creates the host target immediately before no-clobber creation, expects agy_isolation_failed, and proves the identical host bytes remain. The targeted test passed independently."
+    },
+    {
+      "finding_id": "FINAL-F003",
+      "status": "FAIL",
+      "evidence": "Runtime behavior is repaired: an independent exact probe injected two consecutive post-Astra-response crashes, observed RESERVED dispatch_1 and dispatch_2, then confirmed the third recovery made zero additional Astra calls and persisted phase=blocked. However, the checked-in regression still injects only one post-response crash and therefore does not retain the exact required two-crash recovery scenario."
+    },
+    {
+      "finding_id": "FINAL-F005",
+      "status": "FAIL",
+      "evidence": "Nonzero return code, configured-command mismatch, artifact filename/sequence mismatch, and escaping or missing log references are now rejected. An independent probe changed the Runner log contents and result sequence while retaining the other fields; status, execute, and resume each still returned phase=complete."
+    },
+    {
+      "finding_id": "FINAL-F007",
+      "status": "FAIL",
+      "evidence": "Replacement planning now uses a new request artifact and enforces plan.request_ref during planning. Evidence validation still trusts a caller-supplied kind and verified=true for any existing in-run file: an independent ASSUMPTION_DISPROVED request using request.json as its evidence was accepted, invoked Astra, and completed. Positive end-to-end tests remain limited to REQUIRED_GAP_UNCOVERED and USER_OBJECTIVE_OR_SCOPE_CHANGE."
+    },
+    {
+      "requirement": "affected deterministic evidence",
+      "status": "PASS",
+      "evidence": "HEAD and staged tree were independently confirmed. The staged diff SHA-256 is 14e9d41a3f3fbf8b86b9682ce2b5c6494fc5c16507ae5e248544b1815723d5d9; the exact repair delta is 19868 bytes with SHA-256 4390fc85caee2ab5bd8b1491fd951eaccf332e331c4422ed45c0a5446238ef4b. git diff --cached --check passed. Seven targeted tests passed, and the full suite independently passed 152 tests and 46 subtests."
+    }
+  ],
+  "blocking_findings": [
+    {
+      "finding_id": "FINAL-F003",
+      "status": "OPEN",
+      "severity": "HIGH",
+      "blocking_class": "REQUIRED_EVIDENCE_GAP",
+      "contract_source": "Previous FINAL-F003 required correction; authoritative plan Sections 5, 7, 10 and 11; acceptance scenarios 4 and 7",
+      "exact_requirement": "The durable regression must cover two consecutive crashes immediately after Astra responses, followed by a third recovery attempt that persists BLOCKED without another Astra dispatch.",
+      "concrete_evidence": "tests/test_factory_v2.py::test_replan_budget_survives_crash_after_astra_response uses a boolean guard and raises KeyboardInterrupt only once. Its next execute call performs the second dispatch and exhaustion without simulating the second required process interruption. The independent exact two-crash probe passed, but that evidence is not retained in the candidate suite.",
+      "observed_state": "The runtime now persists BLOCKED correctly after two reserved dispatches, but the exact crash sequence required by the previous finding has no durable deterministic regression.",
+      "expected_state": "A checked-in test must crash after each of the first two completed Astra responses, verify both durable RESERVED dispatch records, then invoke a third recovery and assert phase=blocked, exhaustion evidence, unchanged Astra count, and no later dispatch.",
+      "why_it_blocks_current_step": "The previous open recovery finding explicitly required durable coverage of this exact repeated-crash boundary. An ad hoc probe does not provide release-retained regression protection.",
+      "required_correction": "Extend tests/test_factory_v2.py::test_replan_budget_survives_crash_after_astra_response to inject two distinct post-response crashes and then test the third recovery attempt. Rerun the focused test and full suite.",
+      "correction_class": "EVIDENCE_REPAIR"
+    },
+    {
+      "finding_id": "FINAL-F005",
+      "status": "OPEN",
+      "severity": "CRITICAL",
+      "blocking_class": "EXECUTION_OR_RELEASE_CORRECTNESS",
+      "contract_source": "Authoritative plan Sections 7, 8 and 11; Milestone 3 T6; previous FINAL-F005",
+      "exact_requirement": "Execute, resume, and status terminal paths must reject invalid Runner sequence/log provenance and broken evidence integrity before reporting success.",
+      "concrete_evidence": "The repair validates artifact_sequence against the filename and requires an existing bounded log path, but it does not validate the result's sequence field or bind the log contents to the verification result or Sol approval. A fresh probe replaced the referenced log with forged contents and changed sequence to 987654; status, execute, and resume all accepted the terminal state as complete.",
+      "observed_state": "Terminal validation proves that a correctly named log file exists, but not that its contents are the Runner output reviewed for the approved candidate. It also ignores the verification result's sequence field.",
+      "expected_state": "The verification result must have internally consistent sequence metadata and a tamper-evident log/result binding covered by the exact Sol-approved candidate. Any changed log contents or invalid sequence must block status, execute, and resume.",
+      "why_it_blocks_current_step": "COMPLETE remains machine-visible even when the retained Runner evidence has been replaced after approval, so exact verified-and-approved release provenance is not established.",
+      "required_correction": "Bind the Runner log/result integrity to the candidate review contract, validate both sequence fields and the binding in _validate_terminal_state, and add independent tamper cases exercising status, execute, and resume.",
+      "correction_class": "SAFETY_BLOCKER"
+    },
+    {
+      "finding_id": "FINAL-F007",
+      "status": "OPEN",
+      "severity": "HIGH",
+      "blocking_class": "EXECUTION_OR_RELEASE_CORRECTNESS",
+      "contract_source": "Authoritative plan Sections 4, 5 and 6; Milestone 2 T4; acceptance scenario 5; previous FINAL-F007",
+      "exact_requirement": "Every exceptional-replan trigger must resolve bounded, existing, fresh, code-appropriate verified evidence; each of the five trigger paths must have positive end-to-end coverage.",
+      "concrete_evidence": "validate_replan_reason checks only that kind equals a fixed caller-provided string, while _persist_replan_reason checks only that artifact_ref resolves to an existing file inside the run. A fresh probe supplied request.json as evidence for ASSUMPTION_DISPROVED with kind=assumption and verified=true; request_replan accepted it, called Astra, and completed. Repository search shows positive integrations only for REQUIRED_GAP_UNCOVERED and USER_OBJECTIVE_OR_SCOPE_CHANGE.",
+      "observed_state": "Missing and escaping artifacts are rejected, and replacement request_ref is checked during planning, but unrelated existing artifacts can still be relabeled as verified evidence for any trigger. Three trigger types lack positive end-to-end tests.",
+      "expected_state": "Non-user triggers must validate artifact schema, producer, identity/freshness, and semantics appropriate to the selected code. ASSUMPTION_DISPROVED, ARCHITECTURE_DEPENDENCY_CONFLICT, and PLAN_EXHAUSTED_OBJECTIVE_INCOMPLETE must join the two existing trigger paths in positive integration coverage.",
+      "why_it_blocks_current_step": "Fabricated metadata can still authorize paid strategic replanning without verified trigger evidence, and the complete five-trigger contract remains unproven.",
+      "required_correction": "Implement code-specific evidence resolvers and freshness checks instead of trusting kind and verified fields. Add one positive end-to-end integration per trigger and negative tests for existing but unrelated, stale, malformed, and producer-inappropriate artifacts. Also assert the replacement plan and immutable request artifact remain bound during later execute, resume, and status loads.",
+      "correction_class": "NORMAL_REWORK"
+    }
+  ],
+  "resolved_findings": [
+    {
+      "finding_id": "FINAL-F002",
+      "status": "RESOLVED",
+      "evidence": "The exact same-content creation race is now retained in tests/test_factory_agy_builder.py and independently passes while preserving the concurrent host-created file."
+    }
+  ],
+  "non_blocking_findings": [],
+  "precedent_corrections": [],
+  "next_actions": [
+    "Retain the exact two-post-response-crash exhaustion scenario as a checked-in FINAL-F003 regression.",
+    "Add tamper-evident Runner log/result provenance and exercise rejection through execute, resume, and status for FINAL-F005.",
+    "Replace caller-asserted replan evidence kinds with code-specific artifact validation and add positive integrations for all five FINAL-F007 triggers."
+  ]
+}

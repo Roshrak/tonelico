@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "observed_host_side_discovery_inventory",
+  "sanitized": true,
+  "status": "HOST_SIDE_INVENTORY_ONLY",
+  "read_only_commands": [
+    {
+      "command": "agy.exe mcp list",
+      "exit_code": 0,
+      "enabled_server_count": 1,
+      "server_names": [
+        "hermes-coding-tools"
+      ],
+      "server_types": [
+        "stdio"
+      ]
+    },
+    {
+      "command": "agy.exe plugin list",
+      "exit_code": 0,
+      "imported_plugin_count": 0
+    },
+    {
+      "command": "agy.exe agents",
+      "exit_code": 0,
+      "output_lines": 0
+    }
+  ],
+  "host_surfaces_present": [
+    "C:/Users/HH18/.gemini",
+    "C:/Users/HH18/.antigravity",
+    "C:/Users/HH18/.antigravity_tools",
+    "C:/Users/HH18/AppData/Local/agy/bin/agy.exe"
+  ],
+  "not_captured": [
+    "configuration contents",
+    "credentials, tokens, or account data",
+    "effective discovery inside a confined AGY launch",
+    "repository rules/hooks/plugins and log/state writes during a live turn"
+  ]
+}

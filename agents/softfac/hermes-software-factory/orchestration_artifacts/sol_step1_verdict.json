@@ -1,0 +1,80 @@
+{
+  "review_type": "DELTA_ONLY_RECHECK",
+  "step": 1,
+  "constitution_version": "1.0.0",
+  "constitution_sha256": "61e6695ee2c45433aee4696e78fbb9bc448c30161da773acd9b39c00ab4d785f",
+  "verdict": "APPROVE",
+  "step_status": "PASS",
+  "authorized_for_next_step": true,
+  "candidate_identity": {
+    "base_commit": "066e885966420b14d470dc159f0ff39acf2099a9",
+    "head_commit": "b7bb56591708677521c5e3f9b62edbff874d674f",
+    "tree_oid": "85ae9780e9737588a2bea02aac6ce2c5727beba2",
+    "diff_sha256": "78a1d28cf700c31e4ecc2b12f690cb1a662b572fdadd21ba2a39d57786cbe9e0"
+  },
+  "checklist": [
+    {
+      "requirement": "Authorized path boundary and clean candidate",
+      "status": "PASS",
+      "evidence": "Only the two approved documentation paths changed; worktree is clean."
+    },
+    {
+      "requirement": "Candidate identity and hashes",
+      "status": "PASS",
+      "evidence": "HEAD, tree, both file hashes, 24819-byte diff, and diff SHA-256 independently match the packet."
+    },
+    {
+      "requirement": "Complete baseline inventory",
+      "status": "PASS",
+      "evidence": "All 19 baseline paths and SHA-256 hashes match Git; no listed dependency manifest exists."
+    },
+    {
+      "requirement": "Removal-surface inventory",
+      "status": "PASS",
+      "evidence": "Independent semantic verifier passed 19 of 19 checks covering legacy runtime, documentation, service, skill, and audit surfaces."
+    },
+    {
+      "requirement": "Regression evidence",
+      "status": "PASS",
+      "evidence": "Fresh main-baseline run passed 29 of 29 tests; audit transcript hash matches and records 58 run, 57 passed, 1 skipped."
+    },
+    {
+      "requirement": "Preservation and deployment discovery",
+      "status": "PASS",
+      "evidence": "Main, migration, audit, installed-skill, launcher, and module locations are separately recorded without Step 2 or deployment changes."
+    }
+  ],
+  "blocking_findings": [],
+  "resolved_findings": [
+    {
+      "finding_id": "SOL-S1-001",
+      "status": "RESOLVED",
+      "resolution": "The complete 19-path inspection matrix and verified dependency-manifest absence are now recorded.",
+      "concrete_evidence": "Baseline inventory verifier reports identical path sets and hashes with no missing, extra, or mismatched entries."
+    },
+    {
+      "finding_id": "SOL-S1-002",
+      "status": "RESOLVED",
+      "resolution": "Generated histories, candidate cache, and the broad ignore rule are accurately distinguished.",
+      "concrete_evidence": "The baseline records run-directory history files, .aider.tags.cache.v4, and .aider* as separate surfaces."
+    },
+    {
+      "finding_id": "SOL-S1-003",
+      "status": "RESOLVED",
+      "resolution": "Previously omitted runtime, documentation, service, installed-skill, and audit protection surfaces are cataloged.",
+      "concrete_evidence": "The semantic verifier passed repository skill, installed skill, service, runtime wiring, module discovery, and audit protection checks."
+    },
+    {
+      "finding_id": "SOL-S1-004",
+      "status": "RESOLVED",
+      "resolution": "The execution plan now states the authoritative role ownership, exact installed-skill location, and narrowly scoped service removal after consumer verification.",
+      "concrete_evidence": "The current delta replaces the inaccurate ownership, generic deployment path, and broad systemd removal statements."
+    }
+  ],
+  "non_blocking_findings": [],
+  "precedent_corrections": [],
+  "next_actions": [
+    "Persist this approval against the stated candidate identity.",
+    "Prepare Step 2 as a separate reviewed increment."
+  ]
+}

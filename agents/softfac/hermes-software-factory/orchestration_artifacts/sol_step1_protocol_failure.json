@@ -1,0 +1,6 @@
+{
+  "status": "REVIEW_PROTOCOL_FAILURE",
+  "reason": "Sol output contained non-JSON commentary inside blocking finding object; CodexRoleClient rejected JSON",
+  "raw_output_path": "C:/Users/HH18/sol_step1.raw_output.txt",
+  "raw_output_sha256": "f2281969c6f8495277e80226fa2f5918275bf679c16d857e2086509479c7e934"
+}

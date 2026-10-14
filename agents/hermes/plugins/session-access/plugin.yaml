@@ -1,0 +1,5 @@
+name: session-access
+version: 1.0.0
+description: "Enable seamless cross-origin session access and switching for gateway admins."
+author: "Antigravity"
+hooks: []

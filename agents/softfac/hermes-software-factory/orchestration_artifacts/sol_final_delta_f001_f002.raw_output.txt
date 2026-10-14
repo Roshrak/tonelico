@@ -1,0 +1,51 @@
+{
+  "review_type": "DELTA_ONLY_RECHECK",
+  "step": 7,
+  "verdict": "APPROVE",
+  "step_status": "PASS",
+  "authorized_for_next_step": true,
+  "release_status": "PASS",
+  "authorized_for_release": true,
+  "candidate_identity": {
+    "base_commit": "400ec160f4e9cdf12cc986079fd64db7c12676ab",
+    "head_commit": "400ec160f4e9cdf12cc986079fd64db7c12676ab",
+    "tree_oid": "d5ee88bdc36a4380e2f446946c0a78ba22c2fa7d",
+    "diff_sha256": "335f193697529f663d1fef36a32a191bfadb6858de4026f3ac0c4e42e6853a59"
+  },
+  "checklist": [
+    {
+      "requirement": "FINAL-F001: verified exceptional replan may replace the active contract under the same task_id while preserving attempts and completed history",
+      "status": "PASS",
+      "finding_ids": [
+        "FINAL-F001"
+      ],
+      "evidence": "Replan validation now compares immutable task fields only for completed task IDs and protects only global criteria carrying PASS evidence bound to an existing completed commit. Active task identity remains mandatory, while current_task_attempts is explicitly preserved across planning. The integration regression changes active T1 objective, acceptance criteria, and unbound G1 under ASSUMPTION_DISPROVED, observes T1 with one reserved attempt, and completes T1-T3 without rewriting completed history."
+    },
+    {
+      "requirement": "FINAL-F002: normal and pending commit paths reject pre-advancement index/base mutation and publish only the approved parent/tree",
+      "status": "PASS",
+      "finding_ids": [
+        "FINAL-F002"
+      ],
+      "evidence": "Both commit paths use the shared exact-tree helper. It constructs the commit with git commit-tree from the recorded candidate tree and approved parent, fingerprints the index around commit creation, holds the standard index lock across final validation and ref publication, and advances the branch with update-ref expected-old-value CAS. Normal and pending regressions cover index mutation at commit-tree and update-ref boundaries and prove error, unchanged branch, and no completed commit. The five targeted regressions independently passed."
+    }
+  ],
+  "blocking_findings": [],
+  "resolved_findings": [
+    {
+      "finding_id": "FINAL-F001",
+      "status": "RESOLVED",
+      "resolution_evidence": "Completed task contracts and completed-evidence-bound global criteria remain immutable; active and pending contracts may be replaced under the stable active task ID; attempt count and completed history are preserved."
+    },
+    {
+      "finding_id": "FINAL-F002",
+      "status": "RESOLVED",
+      "resolution_evidence": "Exact commit creation is independent of mutable index contents, final index validation and ref advancement are protected by the standard index lock, and branch publication uses an expected-old-value CAS in both normal and pending reconciliation paths."
+    }
+  ],
+  "non_blocking_findings": [],
+  "precedent_corrections": [],
+  "next_actions": [
+    "Hermes may commit exactly tree d5ee88bdc36a4380e2f446946c0a78ba22c2fa7d on approved parent 400ec160f4e9cdf12cc986079fd64db7c12676ab and proceed."
+  ]
+}

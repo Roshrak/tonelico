@@ -1,0 +1,3 @@
+Verdict: REJECT  
+Feedback: Isolation is not fail-closed. `--dangerously-skip-permissions` plus prompt-based confinement does not establish a worktree-only filesystem boundary; escaped writes outside `allowed_files` or outside the source repository may go undetected because the source guard checks only allowed paths. Cleanup also runs before scope enumeration and recursively deletes untracked `.aider.tags.cache.v4`, potentially erasing evidence or arbitrary contents. Require enforceable OS-level confinement, full-source integrity checks, audit-before-cleanup, exact model-identity verification, and negative tests covering escape attempts, cache-path abuse, malformed/empty/non-SUCCESS output. Revert the tracked `.pyc` change.
+

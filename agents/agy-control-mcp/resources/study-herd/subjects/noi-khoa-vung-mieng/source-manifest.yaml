@@ -1,0 +1,134 @@
+subject: noi-khoa-vung-mieng
+sources:
+  - id: slide-ras
+    kind: course-slide
+    include: false
+    reason: Source material is installed separately.
+  - id: slide-prescribing
+    kind: course-slide
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r20
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r01
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r02
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r03
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r04
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r05
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r06
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r07
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r08
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r09
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r10
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r11
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r12
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r13
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r14
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r15
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r16
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r17
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r18
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r19
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r21
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r22
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r23
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r24
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r25
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r26
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r27
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r28
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r29
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r30
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.
+  - id: lecture-r31
+    kind: lecture
+    include: false
+    reason: Source material is installed separately.

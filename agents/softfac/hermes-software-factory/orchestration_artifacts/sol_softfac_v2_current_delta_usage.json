@@ -1,0 +1,13 @@
+{
+  "role": "Sol Reviewer",
+  "model": "gpt-5.6-sol",
+  "review_type": "DELTA_ONLY_RECHECK",
+  "step": 7,
+  "target_findings": [
+    "STEP7-F002",
+    "STEP7-F013",
+    "STEP7-F015",
+    "STEP7-F016"
+  ],
+  "exit_code": 0
+}

@@ -1,0 +1,8 @@
+{
+  "deployment_version": "2.2.0-linux-bubblewrap",
+  "source_commit": "fed2cd166836e93cc45a6f7452c7e96c5f47a0b6",
+  "source_tree": "2e31cdb57ad69567a535937691dee5feef406cf1",
+  "agy_runtime_pin": "1.2.0",
+  "deployed_at": "2026-09-27T23:53:06+07:00",
+  "deployment_target": "/home/aesc/.local/share/hermes-code-factory-v2"
+}

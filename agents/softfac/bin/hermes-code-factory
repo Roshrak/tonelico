@@ -1,0 +1,344 @@
+#!/usr/bin/env python3
+"""Hermes software-factory runner."""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+
+BRIDGE_URL = "http://127.0.0.1:8765/v1"
+LOCAL_BRIDGE_PREFIX = "openai/gemini-3.8-flash-"
+AIDER_ARTIFACTS = {".aider.chat.history.md", ".aider.input.history"}
+
+
+def load_env_file(env_path: Path):
+    """Load simple KEY=value entries without overriding the parent process."""
+    if not env_path.is_file():
+        return
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip("'\"")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+def run_cmd(cmd, cwd=None, env=None, check=True):
+    return subprocess.run(
+        cmd,
+        cwd=cwd,
+        env=os.environ if env is None else env,
+        shell=isinstance(cmd, str),
+        capture_output=True,
+        text=True,
+        check=check,
+    )
+
+
+def detect_test_command(repo_path: Path) -> str:
+    """Auto-detect common test runners in repository."""
+    package_json = repo_path / "package.json"
+    if package_json.is_file():
+        try:
+            with open(package_json, "r", encoding="utf-8") as f:
+                package = json.load(f)
+            scripts = package.get("scripts", {}) if isinstance(package, dict) else {}
+            if isinstance(scripts, dict) and isinstance(scripts.get("test"), str):
+                return "npm test"
+        except (OSError, json.JSONDecodeError):
+            pass
+    if (
+        (repo_path / "pytest.ini").is_file()
+        or (repo_path / "tests").is_dir()
+    ):
+        return "pytest"
+    if (repo_path / "Cargo.toml").is_file():
+        return "cargo test"
+    if (repo_path / "go.mod").is_file():
+        return "go test ./..."
+    return ""
+
+
+def is_local_bridge_model(model: str) -> bool:
+    return model.startswith(LOCAL_BRIDGE_PREFIX)
+
+
+def is_aider_artifact(path: str) -> bool:
+    return path in AIDER_ARTIFACTS or path.startswith(".aider.tags.cache.v4/")
+
+
+def status_lines(repo: Path):
+    return run_cmd(
+        ["git", "status", "--porcelain", "--untracked-files=all"], cwd=repo
+    ).stdout.splitlines()
+
+
+def has_meaningful_changes(repo: Path) -> bool:
+    tracked = run_cmd(["git", "diff", "--quiet", "HEAD", "--"], cwd=repo, check=False)
+    if tracked.returncode != 0:
+        return True
+    untracked = run_cmd(
+        ["git", "ls-files", "--others", "--exclude-standard"], cwd=repo
+    ).stdout.splitlines()
+    return any(not is_aider_artifact(path) for path in untracked)
+
+
+def validate_target_files(repo: Path, raw_files: str | None):
+    if not raw_files:
+        tracked = run_cmd(["git", "ls-files"], cwd=repo).stdout.splitlines()
+        code_exts = {
+            ".py", ".ts", ".js", ".go", ".rs", ".json", ".yaml", ".yml",
+            ".md", ".nix", ".c", ".cpp", ".h",
+        }
+        candidates = [
+            path for path in tracked
+            if Path(path).suffix in code_exts and not path.startswith(".")
+        ]
+        if len(candidates) > 15:
+            raise ValueError(
+                "repository has more than 15 candidate files; pass --files explicitly"
+            )
+        return candidates
+
+    result = []
+    for raw in raw_files.split(","):
+        value = raw.strip()
+        if not value:
+            continue
+        raw_path = Path(value)
+        candidate = (repo / raw_path).resolve(strict=False) if not raw_path.is_absolute() else raw_path.resolve(strict=False)
+        try:
+            relative = candidate.relative_to(repo)
+        except ValueError as exc:
+            raise ValueError(f"target file is outside repository: {value}") from exc
+        if candidate.exists() and candidate.is_dir():
+            raise ValueError(f"target is a directory, not a file: {value}")
+        result.append(relative.as_posix())
+    if not result:
+        raise ValueError("--files did not contain any file paths")
+    return result
+
+
+def build_models(args, env):
+    has_openai = bool(env.get("OPENAI_API_KEY"))
+    has_gemini = bool(env.get("GEMINI_API_KEY"))
+    if args.editor_model:
+        editor_model = args.editor_model
+    elif has_gemini:
+        editor_model = "gemini/gemini-2.5-flash"
+    elif has_openai:
+        editor_model = "openai/gpt-4o-mini"
+    else:
+        editor_model = "openai/gemini-3.8-flash-medium"
+
+    if args.architect_model:
+        architect_model = args.architect_model
+    elif has_openai:
+        architect_model = "openai/gpt-4o"
+    else:
+        architect_model = "openai/gemini-3.8-flash-high"
+
+    models = [architect_model, editor_model]
+    has_local_bridge = any(is_local_bridge_model(model) for model in models)
+    has_direct_openai = any(
+        model.startswith("openai/") and not is_local_bridge_model(model)
+        for model in models
+    )
+    if has_local_bridge and has_direct_openai:
+        raise ValueError(
+            "cannot mix local-bridge and direct OpenAI models in one Aider run; "
+            "Aider exposes one OpenAI API base"
+        )
+    return architect_model, editor_model, has_local_bridge
+
+
+def build_aider_command(aider_bin, task, architect_model, editor_model, target_files, use_local_bridge):
+    command = [
+        aider_bin,
+        "--edit-format", "diff-fenced",
+        "--yes-always",
+        "--no-auto-commits",
+        "--no-check-update",
+        "--no-analytics",
+        "--no-show-model-warnings",
+    ]
+    if use_local_bridge:
+        command.extend(["--openai-api-base", BRIDGE_URL])
+    if architect_model != editor_model:
+        command.extend([
+            "--model", architect_model,
+            "--architect",
+            "--editor-model", editor_model,
+            "--editor-edit-format", "diff-fenced",
+        ])
+    else:
+        command.extend(["--model", editor_model])
+    command.extend(["--message", task, *target_files])
+    return command
+
+
+def excerpt(text: str, limit: int = 2000) -> str:
+    return text[-limit:].strip() if text else ""
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Hermes Software Factory Runner")
+    parser.add_argument("repo_path", help="Path to local git repository")
+    parser.add_argument("task", help="Description of the feature or bug to implement")
+    parser.add_argument("--test-cmd", default=None, help="Command to run tests (auto-detected if omitted)")
+    parser.add_argument("--files", default=None, help="Comma-separated list of target files")
+    parser.add_argument("--architect-model", default=None, help="Model for Sol (Architect)")
+    parser.add_argument("--editor-model", default=None, help="Model for Aider builder")
+    args = parser.parse_args()
+
+    repo = Path(args.repo_path).resolve()
+    if not (repo / ".git").exists():
+        print(f"Error: {repo} is not a valid git repository.", file=sys.stderr)
+        return 1
+
+    try:
+        if run_cmd(["git", "rev-parse", "--is-inside-work-tree"], cwd=repo).stdout.strip() != "true":
+            raise ValueError(f"{repo} is not a Git work tree")
+        original_head = run_cmd(["git", "rev-parse", "HEAD"], cwd=repo).stdout.strip()
+        original_branch = run_cmd(
+            ["git", "symbolic-ref", "--short", "-q", "HEAD"], cwd=repo, check=False
+        ).stdout.strip() or "(detached HEAD)"
+        target_files = validate_target_files(repo, args.files)
+        load_env_file(Path.home() / ".hermes" / ".env")
+        env = os.environ.copy()
+        architect_model, editor_model, use_local_bridge = build_models(args, env)
+    except (subprocess.CalledProcessError, ValueError, OSError) as exc:
+        print(f"Error before task branch creation: {exc}", file=sys.stderr)
+        return 3
+
+    timestamp = time.time_ns()
+    branch_name = f"hermes/task-{timestamp}"
+    stash_created = False
+    try:
+        if status_lines(repo):
+            stash = run_cmd(
+                ["git", "stash", "push", "--include-untracked", "-m", f"hermes-pre-task-{timestamp}"],
+                cwd=repo,
+            )
+            stash_created = "No local changes" not in stash.stdout
+        run_cmd(["git", "checkout", "-b", branch_name], cwd=repo)
+    except (subprocess.CalledProcessError, OSError) as exc:
+        if stash_created:
+            run_cmd(["git", "stash", "pop"], cwd=repo, check=False)
+        print(f"Error creating isolated task branch: {exc}", file=sys.stderr)
+        return 3
+
+    aider_bin = "/home/aesc/.local/bin/aider" if os.path.exists("/home/aesc/.local/bin/aider") else "aider"
+    aider_cmd = build_aider_command(
+        aider_bin, args.task, architect_model, editor_model, target_files, use_local_bridge
+    )
+    print(f"==> Launching Aider on {repo} (branch: {branch_name})...")
+    try:
+        builder_res = subprocess.run(aider_cmd, cwd=repo, env=env, capture_output=True, text=True)
+    except OSError as exc:
+        print(f"Aider could not be started: {exc}", file=sys.stderr)
+        return 3
+    builder_output = (builder_res.stdout or "") + "\n" + (builder_res.stderr or "")
+    builder_ok = builder_res.returncode == 0
+    if not builder_ok:
+        print(f"==> Aider failed with return code {builder_res.returncode}.", file=sys.stderr)
+
+    test_cmd = args.test_cmd or detect_test_command(repo)
+    test_passed = True
+    test_output = ""
+    if test_cmd and has_meaningful_changes(repo):
+        print(f"==> Running test suite: {test_cmd}...")
+        test_run = run_cmd(test_cmd, cwd=repo, check=False)
+        test_output = (test_run.stdout or "") + "\n" + (test_run.stderr or "")
+        test_passed = test_run.returncode == 0
+        if not test_passed and has_meaningful_changes(repo):
+            print("==> Tests failed. Invoking Luna Debugger...")
+            debug_prompt = (
+                f"Automated test command `{test_cmd}` failed with return code {test_run.returncode}.\n"
+                f"Test failure output:\n```\n{excerpt(test_output)}\n```\n"
+                "Inspect the failure and fix only the task changes so the test passes."
+            )
+            debug_cmd = build_aider_command(
+                aider_bin, debug_prompt, editor_model, editor_model, target_files,
+                is_local_bridge_model(editor_model),
+            )
+            debug_res = subprocess.run(debug_cmd, cwd=repo, env=env, capture_output=True, text=True)
+            if debug_res.returncode != 0:
+                test_output += "\nLuna failed:\n" + (debug_res.stderr or debug_res.stdout or "")
+            retest = run_cmd(test_cmd, cwd=repo, check=False)
+            test_output = (retest.stdout or "") + "\n" + (retest.stderr or "")
+            test_passed = retest.returncode == 0
+
+    commit_hash = "No changes applied"
+    final_stat = ""
+    staged_files = []
+    out_of_scope_files = []
+    if has_meaningful_changes(repo):
+        run_cmd(["git", "add", "-A"], cwd=repo)
+        for artifact in sorted(AIDER_ARTIFACTS):
+            run_cmd(["git", "reset", "--quiet", "--", artifact], cwd=repo, check=False)
+        run_cmd(["git", "reset", "--quiet", "--", ".aider.tags.cache.v4"], cwd=repo, check=False)
+        if args.files:
+            allowed_files = set(target_files)
+            staged_before_scope = run_cmd(
+                ["git", "diff", "--cached", "--name-only"], cwd=repo
+            ).stdout.splitlines()
+            for path in staged_before_scope:
+                if path not in allowed_files:
+                    out_of_scope_files.append(path)
+                    run_cmd(["git", "reset", "--quiet", "--", path], cwd=repo, check=False)
+        staged_files = run_cmd(["git", "diff", "--cached", "--name-only"], cwd=repo).stdout.splitlines()
+        if staged_files:
+            final_stat = run_cmd(["git", "diff", "--cached", "--stat"], cwd=repo).stdout.strip()
+            commit_msg = f"feat(hermes): {args.task}\n\nBuilt by Aider ({editor_model}) with diff-fenced format."
+            run_cmd(["git", "commit", "-m", commit_msg], cwd=repo)
+            commit_hash = run_cmd(["git", "rev-parse", "--short", "HEAD"], cwd=repo).stdout.strip()
+
+    successful = bool(staged_files) and builder_ok and test_passed
+    status_icon = "✅" if successful else ("⚠️" if staged_files else "❌")
+    report = [
+        f"{status_icon} **Hermes Software Factory Task Completed**\n",
+        f"- **Task:** {args.task}",
+        f"- **Repository:** `{repo}`",
+        f"- **Branch:** `{branch_name}` (from `{original_branch}`)",
+        f"- **Commit:** `{commit_hash}`",
+        f"- **Builder Model:** `{editor_model}` (diff-fenced)",
+    ]
+    if architect_model != editor_model:
+        report.append(f"- **Architect Model:** `{architect_model}`")
+    report.append(f"- **Aider:** {'Passed' if builder_ok else f'Failed (rc={builder_res.returncode})'}")
+    if test_cmd:
+        report.append(f"- **Tests (`{test_cmd}`):** {'Passed' if test_passed else 'Failed'}")
+    if final_stat:
+        report.append(f"\n**Changes Summary:**\n```\n{final_stat}\n```")
+    else:
+        report.append("\n**Notice:** No meaningful file modifications were committed.")
+    if not builder_ok:
+        report.append(f"\n**Aider output:**\n```\n{excerpt(builder_output)}\n```")
+    if stash_created:
+        report.append("\nPre-task work remains in the Git stash and was not auto-restored.")
+    if out_of_scope_files:
+        report.append(
+            "\nOut-of-scope changes were left uncommitted: "
+            + ", ".join(f"`{path}`" for path in out_of_scope_files)
+        )
+    if original_branch == "(detached HEAD)":
+        report.append(f"\nTo apply the commit: `git cherry-pick {commit_hash}`")
+    else:
+        report.append(f"\nTo merge: `git checkout {original_branch} && git merge {branch_name}`")
+    print("\n" + "\n".join(report))
+    if not staged_files:
+        return 1
+    return 0 if successful else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

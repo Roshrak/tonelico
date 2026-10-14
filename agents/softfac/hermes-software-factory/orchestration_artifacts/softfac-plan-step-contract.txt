@@ -1,0 +1,3 @@
+One implementation step only. Aider is sole Builder. Edit ONLY lib/hermes_factory_v2.py. No tests or other files. Preserve every existing workflow, role, Aider audit, isolation, scope/hash, test, Luna, Sol and resume behavior. No main merge.
+
+Fix plan contract validation: validate_plan must reject an implementation_steps list with more than 8 nonempty strings, reject an empty implementation_steps list, and reject any blank/whitespace-only step. This must be enforced before Builder dispatch, not merely by _builder_instruction. Existing valid 1..8-step plans retain behavior. No other change. Run existing full unittest suite. Sol exact diff approval required.

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Ensure GUI apps know which Wayland/X11 display to open on even when run from headless services
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+export DISPLAY="${DISPLAY:-:0}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/1000}"
+export SWAYSOCK="${SWAYSOCK:-$(ls /run/user/1000/sway-ipc.*.sock 2>/dev/null | head -n 1)}"
+
+nohup /run/current-system/sw/bin/xdg-open "$@" >/tmp/xdg-open.log 2>&1 &
+exit 0

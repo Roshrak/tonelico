@@ -1,0 +1,7 @@
+interface:
+  display_name: "Study Herd"
+  short_description: "Source-grounded exam tutor and reviewer"
+  default_prompt: "Use $study-herd to teach a source range, then test me with a high-application case."
+policy:
+  allow_implicit_invocation: true
+
