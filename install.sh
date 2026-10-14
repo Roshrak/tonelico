@@ -144,8 +144,35 @@ install_system() {
   step "building the system with the newest kernel (this takes a while)"
   # 'boot' makes the new system the default for the next start without switching
   # the display manager under a running Plasma session.
+  # Some Plasma packages are rebuilt from source (the patched kwin changes every
+  # package that depends on it). Several C++ compiles at once can exhaust RAM and
+  # get the build killed, so size the parallelism to the memory this machine has
+  # and add temporary swap when there is little of it.
+  local ram_gb swap_gb cpus cores jobs swapfile=""
+  ram_gb=$(awk '/^MemTotal:/ {printf "%d", $2/1048576}' /proc/meminfo)
+  swap_gb=$(awk '/^SwapTotal:/ {printf "%d", $2/1048576}' /proc/meminfo)
+  cpus=$(nproc)
+  cores=$(( cpus < 4 ? cpus : 4 ))
+  jobs=$(( ram_gb / 4 )); [ "$jobs" -lt 1 ] && jobs=1
+  [ "$jobs" -gt $(( cpus / cores > 0 ? cpus / cores : 1 )) ] && jobs=$(( cpus / cores > 0 ? cpus / cores : 1 ))
+  info "RAM ${ram_gb} GB, swap ${swap_gb} GB: building with at most $jobs job(s) of $cores core(s) each"
+  if [ $(( ram_gb + swap_gb )) -lt 24 ] && [ ! -e /var/tonelico-build.swap ]; then
+    if sudo fallocate -l 16G /var/tonelico-build.swap 2>/dev/null \
+       && sudo chmod 600 /var/tonelico-build.swap \
+       && sudo mkswap /var/tonelico-build.swap >/dev/null \
+       && sudo swapon /var/tonelico-build.swap 2>/dev/null; then
+      swapfile=/var/tonelico-build.swap
+      info "temporary 16 GB swap enabled for the build, removed afterwards"
+    else
+      sudo rm -f /var/tonelico-build.swap
+      warn "could not create temporary swap; if the build is killed, re-run install.sh (finished work is kept)"
+    fi
+  fi
+  local rc=0
   sudo env NIX_CONFIG=$'experimental-features = nix-command flakes\naccept-flake-config = true' \
-    nixos-rebuild boot --flake /etc/nixos#tonelico
+    nixos-rebuild boot --flake /etc/nixos#tonelico --max-jobs "$jobs" --cores "$cores" || rc=$?
+  if [ -n "$swapfile" ]; then sudo swapoff "$swapfile" 2>/dev/null || true; sudo rm -f "$swapfile"; fi
+  [ "$rc" -eq 0 ] || die "the system build failed (exit $rc). Finished work is cached; fix the cause above and run install.sh again."
   record PASS "NixOS system built and set as the next boot entry"
   local kver
   kver="$(basename "$(dirname "$(readlink -f /nix/var/nix/profiles/system/kernel)")" 2>/dev/null | sed -E 's/^[a-z0-9]{32}-linux-//')"
