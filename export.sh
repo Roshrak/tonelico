@@ -138,11 +138,8 @@ rsync -a --chmod=u+rwX,go+rX --no-links \
   "$HERMES/skills"/ "$hm/skills"/
 rsync -a --chmod=u+rwX,go+rX --no-links --exclude='__pycache__' --exclude='*.pyc' "$HERMES/plugins"/ "$hm/plugins"/
 cp -p -- "$HERMES/scripts/clean-system.py" "$hm/scripts/"
-# Scheduled jobs: only the definition, never run history. The Drive wallpaper
-# sync job is left out because it depends on a personal Google Drive login.
-jq '[.jobs[]
-     | select(.name != "Google Drive Wallpaper Sync")
-     | {name, script, no_agent, schedule: .schedule.display, deliver}]' \
+# Scheduled jobs: only the definition, never run history.
+jq '[.jobs[] | {name, script, no_agent, schedule: .schedule.display, deliver}]' \
   "$HERMES/cron/jobs.json" > "$hm/cron-jobs.json"
 
 # --- 6. Antigravity rotator (Docker) ----------------------------------------

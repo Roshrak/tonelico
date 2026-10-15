@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""Bounded 30-day cache/Trash retention with no-follow, handle-relative deletion.
+"""Tiered cache/temp/Trash retention with no-follow, handle-relative deletion.
+
+Retention (a file is only ever removed when it is older than its tier):
+  /tmp (this user's entries)        3 days   never files a process has open or uses as cwd
+  uv / npm caches, Hermes logs     14 days
+  Hermes media caches, cron output 30 days
+  Trash, thumbnails, Chromium      30 days
+  Docker (rootless)                dangling images, build cache older than 7 days
+  Nix store                        dead (unreferenced) paths only, and only when the disk
+                                   is low; the weekly nix.gc timer does the routine work.
+                                   Generations are never deleted here.
 
 Cooperative locking prevents this cleaner racing itself. Private quarantine and
 identity checks protect normal concurrent cache replacements. This cannot stop
@@ -7,8 +17,8 @@ an arbitrary same-UID writer holding an already-open file/directory descriptor;
 it is not a security boundary against that process. The cooperative lock is
 valid only while its pathname continues to identify the locked inode: a same-UID
 process can rename/replace that lock path and bypass cooperation. Unknown quarantine conflicts
-remain preserved with a visible error. No Nix, reports, /tmp or generations are
-cleaned here.
+remain preserved with a visible error. Reports, sandboxes, Hermes sessions and
+state are not cleaned here.
 """
 from __future__ import annotations
 import argparse
@@ -19,16 +29,26 @@ import fcntl
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-RETENTION_DAYS = 30
+RETENTION_DAYS = 30          # Trash, thumbnails, browser and Hermes media caches
+CACHE_DAYS = 14              # package-manager caches and Hermes logs
+TMP_DAYS = 3                 # this user's entries in /tmp
+DOCKER_BUILD_CACHE_HOURS = 168
+LOW_SPACE_BYTES = 40 * 1024**3
 DAY_SECONDS = 24 * 60 * 60
 BROWSER_PROCESS_NAMES = {"chromium", "chromium-browser", "chrome", "google-chrome", "google-chrome-stable"}
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+# Names in /tmp that belong to a running session, a game or a service.
+TMP_PROTECTED_PREFIXES = (
+    "claude-", "lwjgl", "ssh-", "systemd-private-", "runtime-", "hsperfdata", "sddm",
+    "dbus-", "pulse", "pipewire", ".X", ".ICE", ".font", ".XIM", ".wine", "pyright",
+)
 
 @dataclass
 class TargetResult:
@@ -39,7 +59,9 @@ class TargetResult:
     estimated_bytes: int = 0
     removed_bytes: int = 0
     partial_removals: int = 0
+    in_use: int = 0
     skipped: str = ""
+    note: str = ""
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -227,7 +249,181 @@ def _deletion_date(data):
     except ValueError:
         return None
 
-def clean_old_cache_files(label, root: Path, cutoff: float, dry_run: bool) -> TargetResult:
+def open_inodes(proc_root: Path = Path("/proc")) -> set[int]:
+    """Inodes that any process has open, mapped, or as its working directory.
+
+    Matching on the inode alone (not the device) can only over-protect, never
+    under-protect, so a file in this set is simply left alone.
+    """
+    inodes: set[int] = set()
+    try:
+        pids = [p for p in proc_root.iterdir() if p.name.isdigit()]
+    except OSError:
+        return inodes
+    for proc in pids:
+        for link in ("cwd", "root"):
+            try:
+                inodes.add(os.stat(proc / link).st_ino)
+            except OSError:
+                pass
+        try:
+            for fd in os.listdir(proc / "fd"):
+                try:
+                    inodes.add(os.stat(proc / "fd" / fd).st_ino)
+                except OSError:
+                    pass
+        except OSError:
+            pass
+        try:
+            with open(proc / "maps", encoding="utf-8", errors="replace") as maps:
+                for line in maps:
+                    parts = line.split()
+                    if len(parts) >= 5 and parts[4] != "0":
+                        inodes.add(int(parts[4]))
+        except (OSError, ValueError):
+            pass
+    return inodes
+
+
+def snapshot_dir_mtimes(root: Path) -> dict[int, float]:
+    """inode -> mtime for every real directory under root, read before cleaning so that
+    deleting a directory's expired files does not make it look freshly modified."""
+    seen: dict[int, float] = {}
+    stack = [root]
+    while stack:
+        current = stack.pop()
+        try:
+            with os.scandir(current) as it:
+                for entry in it:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            st = entry.stat(follow_symlinks=False)
+                            seen[st.st_ino] = st.st_mtime
+                            stack.append(Path(entry.path))
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+    try:
+        st = os.stat(root, follow_symlinks=False)
+        seen[st.st_ino] = st.st_mtime
+    except OSError:
+        pass
+    return seen
+
+
+def prune_empty_dirs(parent_fd, name, cutoff, dry_run, result, protect=frozenset(), mtimes=None) -> bool:
+    """Remove empty, expired, user-owned directories bottom-up. True if `name` is gone
+    (or, in a dry run, would be). rmdir cannot remove a directory that gained content."""
+    try:
+        s = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        if not stat.S_ISDIR(s.st_mode) or s.st_uid != os.geteuid() or s.st_mode & 0o022:
+            return False
+        child = os.open(name, DIR_FLAGS, dir_fd=parent_fd)
+    except OSError:
+        return False
+    empty = True
+    try:
+        opened = os.fstat(child)
+        if (opened.st_dev, opened.st_ino) != (s.st_dev, s.st_ino):
+            return False
+        for entry in sorted(os.listdir(child)):
+            if entry.startswith('.hermes-clean-quarantine-'):
+                empty = False
+                continue
+            if not prune_empty_dirs(child, entry, cutoff, dry_run, result, protect, mtimes):
+                empty = False
+    except OSError:
+        return False
+    finally:
+        os.close(child)
+    # Judge the directory by its mtime from before this run emptied it.
+    before = (mtimes or {}).get(s.st_ino, s.st_mtime)
+    if not empty or before >= cutoff or s.st_ino in protect:
+        return False
+    result.examined += 1
+    result.eligible += 1
+    if dry_run:
+        return True
+    try:
+        again = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        if (again.st_dev, again.st_ino) != (s.st_dev, s.st_ino):
+            return False
+        os.rmdir(name, dir_fd=parent_fd)
+        result.removed += 1
+        return True
+    except OSError:
+        return False
+
+
+def clean_tmp(tmp_root: Path, cutoff: float, dry_run: bool, protect: set[int], browsers: list[str]) -> TargetResult:
+    """Expire this user's old entries in a shared, sticky /tmp."""
+    result = TargetResult(f"/tmp entries older than {TMP_DAYS} days")
+    try:
+        tmp_fd = os.open(tmp_root, DIR_FLAGS)
+    except OSError as exc:
+        result.skipped = f"/tmp not available: {exc}"
+        return result
+    try:
+        for name in sorted(os.listdir(tmp_fd)):
+            if name.startswith(TMP_PROTECTED_PREFIXES) or name.startswith('.hermes-clean-quarantine-'):
+                continue
+            if browsers and 'chromium' in name.lower():
+                continue
+            try:
+                s = os.stat(name, dir_fd=tmp_fd, follow_symlinks=False)
+            except OSError:
+                continue
+            if s.st_uid != os.geteuid():
+                continue
+            if stat.S_ISREG(s.st_mode):
+                if s.st_nlink != 1 or s.st_mtime >= cutoff:
+                    continue
+                result.examined += 1
+                if s.st_ino in protect:
+                    result.in_use += 1
+                    continue
+                result.eligible += 1
+                result.estimated_bytes += s.st_size
+                if dry_run:
+                    continue
+                try:
+                    again = os.stat(name, dir_fd=tmp_fd, follow_symlinks=False)
+                    if identity(again) != identity(s):
+                        continue
+                    os.unlink(name, dir_fd=tmp_fd)
+                    result.removed += 1
+                    result.removed_bytes += s.st_size
+                except OSError as exc:
+                    result.warnings.append(f'/tmp file preserved: {exc}')
+            elif stat.S_ISDIR(s.st_mode):
+                if s.st_mode & 0o022:
+                    continue
+                mtimes = snapshot_dir_mtimes(tmp_root / name)
+                sub = clean_old_cache_files(name, tmp_root / name, cutoff, dry_run, protect)
+                result.examined += sub.examined
+                result.eligible += sub.eligible
+                result.removed += sub.removed
+                result.estimated_bytes += sub.estimated_bytes
+                result.removed_bytes += sub.removed_bytes
+                result.partial_removals += sub.partial_removals
+                result.in_use += sub.in_use
+                # Files other users or hard links keep alive are expected in /tmp;
+                # count them instead of reporting each as an error.
+                for message in sub.errors:
+                    if message.startswith(('Unowned', 'Hard-linked', 'Cache entry preserved')):
+                        result.in_use += 1
+                    else:
+                        result.errors.append(message)
+                if sub.skipped and 'absent' not in sub.skipped:
+                    result.in_use += 1
+                prune_empty_dirs(tmp_fd, name, cutoff, dry_run, result, protect, mtimes)
+    finally:
+        os.close(tmp_fd)
+    return result
+
+
+def clean_old_cache_files(label, root: Path, cutoff: float, dry_run: bool, protect=frozenset()) -> TargetResult:
     result = TargetResult(label)
     try:
         root_fd = open_directory(root)
@@ -241,6 +437,9 @@ def clean_old_cache_files(label, root: Path, cutoff: float, dry_run: bool) -> Ta
         for parent_fd, name, selected in _walk_files(root_fd, result.errors):
             result.examined += 1
             if selected.st_mtime >= cutoff:
+                continue
+            if selected.st_ino in protect:
+                result.in_use += 1
                 continue
             result.eligible += 1
             result.estimated_bytes += selected.st_size
@@ -403,26 +602,97 @@ def format_bytes(value: int) -> str:
     return f"{value} B"
 
 
+def _tool(name: str) -> str:
+    return shutil.which(name) or f"/run/current-system/sw/bin/{name}"
+
+
+def docker_prune(dry_run: bool) -> TargetResult:
+    """Rootless Docker: dangling images and old build cache only. Never containers or volumes."""
+    result = TargetResult(f"Docker: dangling images and build cache older than {DOCKER_BUILD_CACHE_HOURS // 24} days")
+    host = os.environ.get("DOCKER_HOST") or f"unix:///run/user/{os.geteuid()}/docker.sock"
+    sock = Path(host[len("unix://"):]) if host.startswith("unix://") else None
+    if sock is not None and not sock.exists():
+        result.skipped = "Docker is not running"
+        return result
+    if dry_run:
+        result.skipped = "dry run: Docker is only pruned in a real run"
+        return result
+    env = dict(os.environ, DOCKER_HOST=host)
+    reclaimed = []
+    for args in (["image", "prune", "-f"],
+                 ["builder", "prune", "-f", "--filter", f"until={DOCKER_BUILD_CACHE_HOURS}h"]):
+        try:
+            done = subprocess.run([_tool("docker"), *args], env=env, capture_output=True, text=True, timeout=300)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            result.errors.append(f"docker {args[0]} prune did not run: {exc}")
+            continue
+        if done.returncode != 0:
+            result.errors.append(f"docker {args[0]} prune failed: {done.stderr.strip()[:160]}")
+            continue
+        for line in done.stdout.splitlines():
+            if line.lower().startswith("total reclaimed space"):
+                reclaimed.append(line.split(":", 1)[1].strip())
+    result.note = "reclaimed " + " + ".join(reclaimed) if reclaimed else "nothing to prune"
+    return result
+
+
+def nix_garbage(free_now: int | None, dry_run: bool) -> TargetResult:
+    """Report dead Nix paths; collect them only when the disk is low. Never deletes generations."""
+    result = TargetResult("Nix store (dead paths only; generations are never touched)")
+    try:
+        listed = subprocess.run([_tool("nix-store"), "--gc", "--print-dead"],
+                                capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        result.warnings.append(f"could not list dead Nix paths: {exc}")
+        return result
+    if listed.returncode != 0:
+        result.warnings.append(f"could not list dead Nix paths: {listed.stderr.strip()[:160]}")
+        return result
+    dead = len([line for line in listed.stdout.splitlines() if line.startswith("/nix/store/")])
+    result.examined = dead
+    low = free_now is not None and free_now < LOW_SPACE_BYTES
+    if not low or dead == 0 or dry_run:
+        why = "disk space is fine" if not low else "dry run"
+        result.note = f"{dead} unreferenced path(s); not collecting now ({why}); the weekly nix-gc timer handles them"
+        return result
+    try:
+        done = subprocess.run([_tool("nix-store"), "--gc"], capture_output=True, text=True, timeout=3600)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        result.errors.append(f"nix-store --gc did not finish: {exc}")
+        return result
+    if done.returncode != 0:
+        result.errors.append(f"nix-store --gc failed: {done.stderr.strip()[:160]}")
+        return result
+    summary = next((l for l in reversed(done.stdout.splitlines() + done.stderr.splitlines())
+                    if "store paths deleted" in l), "collected")
+    result.note = f"low disk space ({format_bytes(free_now)} free): {summary.strip()}"
+    return result
+
+
 def _run_cleanup_unlocked(
-    home: Path, data_home: Path, cache_home: Path, dry_run: bool
+    home: Path, data_home: Path, cache_home: Path, dry_run: bool,
+    tmp_root: Path | None = None, system_wide: bool = True,
 ) -> tuple[int, list[TargetResult], int | None, int | None]:
     started = time.time()
     cutoff = started - RETENTION_DAYS * DAY_SECONDS
+    cache_cutoff = started - CACHE_DAYS * DAY_SECONDS
+    tmp_cutoff = started - TMP_DAYS * DAY_SECONDS
     before = disk_available(home)
     results: list[TargetResult] = []
+    protect = open_inodes()
+    browsers = running_browser_processes()
 
-    trash_root = data_home / "Trash"
-    results.append(clean_expired_trash(trash_root, cutoff, dry_run))
+    results.append(clean_tmp(tmp_root or Path("/tmp"), tmp_cutoff, dry_run, protect, browsers))
 
-    thumbnails = cache_home / "thumbnails"
+    results.append(clean_expired_trash(data_home / "Trash", cutoff, dry_run))
+
     results.append(
         clean_old_cache_files(
-            f"Thumbnails older than {RETENTION_DAYS} days", thumbnails, cutoff, dry_run
+            f"Thumbnails older than {RETENTION_DAYS} days", cache_home / "thumbnails", cutoff, dry_run, protect
         )
     )
 
     chromium = cache_home / "chromium"
-    browsers = running_browser_processes()
     if browsers and chromium.exists():
         result = TargetResult("Chromium cache retention")
         result.skipped = "Chromium is running or browser state is unavailable; cache is untouched"
@@ -430,11 +700,13 @@ def _run_cleanup_unlocked(
     else:
         results.append(
             clean_old_cache_files(
-                f"Chromium cache files older than {RETENTION_DAYS} days",
-                chromium,
-                cutoff,
-                dry_run,
+                f"Chromium cache files older than {RETENTION_DAYS} days", chromium, cutoff, dry_run, protect
             )
+        )
+
+    for label, root in (("uv cache", cache_home / "uv"), ("npm cache", home / ".npm" / "_cacache")):
+        results.append(
+            clean_old_cache_files(f"{label} files older than {CACHE_DAYS} days", root, cache_cutoff, dry_run, protect)
         )
 
     hermes = home / ".hermes"
@@ -442,19 +714,31 @@ def _run_cleanup_unlocked(
         results.append(
             clean_old_cache_files(
                 f"Hermes {cache_name} files older than {RETENTION_DAYS} days",
-                hermes / cache_name,
-                cutoff,
-                dry_run,
+                hermes / cache_name, cutoff, dry_run, protect,
             )
         )
+    results.append(
+        clean_old_cache_files(
+            f"Hermes cron output older than {RETENTION_DAYS} days", hermes / "cron" / "output", cutoff, dry_run, protect
+        )
+    )
+    results.append(
+        clean_old_cache_files(
+            f"Hermes logs older than {CACHE_DAYS} days", hermes / "logs", cache_cutoff, dry_run, protect
+        )
+    )
+
+    if system_wide:
+        results.append(docker_prune(dry_run))
+        results.append(nix_garbage(disk_available(home), dry_run))
 
     after = disk_available(home)
     return (1 if any(result.errors for result in results) else 0), results, before, after
 
 
-def run_cleanup(home, data_home, cache_home, dry_run):
+def run_cleanup(home, data_home, cache_home, dry_run, tmp_root=None, system_wide=True):
     if dry_run:
-        return _run_cleanup_unlocked(home, data_home, cache_home, dry_run)
+        return _run_cleanup_unlocked(home, data_home, cache_home, dry_run, tmp_root, system_wide)
     root_fd = lock_fd = None
     try:
         root_fd = open_directory(home)
@@ -463,7 +747,7 @@ def run_cleanup(home, data_home, cache_home, dry_run):
         if not stat.S_ISREG(s.st_mode) or s.st_uid != os.geteuid() or s.st_nlink != 1 or s.st_mode & 0o077:
             raise Preserved('unsafe cleanup lock preserved')
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return _run_cleanup_unlocked(home, data_home, cache_home, dry_run)
+        return _run_cleanup_unlocked(home, data_home, cache_home, dry_run, tmp_root, system_wide)
     except BlockingIOError:
         r = TargetResult('Cleanup run lock'); r.errors.append('Another cleanup is running; no cleanup started')
         return 75, [r], None, None
@@ -492,21 +776,26 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         data_home = home / ".local" / "share"
         cache_home = home / ".cache"
+        tmp_root = home / "tmp"
+        system_wide = False
     else:
         home = Path.home()
         data_home = Path(os.environ.get("XDG_DATA_HOME", str(home / ".local" / "share")))
         cache_home = Path(os.environ.get("XDG_CACHE_HOME", str(home / ".cache")))
+        tmp_root = Path("/tmp")
+        system_wide = True
 
     now = dt.datetime.now().astimezone().isoformat(timespec="seconds")
     mode = "DRY RUN — no files will be removed" if args.dry_run else "CLEANUP — conservative retention enabled"
-    exit_code, results, before, after = run_cleanup(home, data_home, cache_home, args.dry_run)
+    exit_code, results, before, after = run_cleanup(home, data_home, cache_home, args.dry_run, tmp_root, system_wide)
 
-    print("🧹 **Hermes 12-hour disk care**")
+    print("🧹 **Hermes 12-hour disk cleanse**")
     print(f"• Checked: {now}")
     print(f"• Mode: **{mode}**")
-    print(f"• Policy: cache and Trash items older than **{RETENTION_DAYS} days** only")
+    print(f"• Policy: /tmp **{TMP_DAYS}d** · package caches and logs **{CACHE_DAYS}d** · Trash, browser and media caches **{RETENTION_DAYS}d**; in-use files are never touched")
     if before is not None and after is not None:
-        print(f"• Root filesystem free before/after: {format_bytes(before)} → {format_bytes(after)}")
+        low = "  ⚠️ LOW" if after < LOW_SPACE_BYTES else ""
+        print(f"• Root filesystem free before/after: {format_bytes(before)} → {format_bytes(after)}{low}")
     print("")
     print("**Areas checked**")
     total_estimated = 0
@@ -520,10 +809,14 @@ def main(argv: list[str] | None = None) -> int:
             detail = f"⚠️ {len(result.errors)} issue(s); see details below"
         elif result.warnings:
             detail = f"⚠️ {len(result.warnings)} item(s) preserved for review"
+        elif result.note:
+            detail = result.note
         elif args.dry_run:
             detail = f"{result.eligible} eligible item(s), about {format_bytes(result.estimated_bytes)}"
         else:
-            detail = f"{result.removed} item(s) removed, about {format_bytes(result.estimated_bytes)}"
+            detail = f"{result.removed} item(s) removed, about {format_bytes(result.removed_bytes)}"
+        if result.in_use and not result.skipped:
+            detail += f" ({result.in_use} in use or shared, left alone)"
         print(f"• {result.label}: {detail}")
         for error in result.errors[:10]:
             print(f"  • ⚠️ {error}")
@@ -547,7 +840,7 @@ def main(argv: list[str] | None = None) -> int:
         partial = sum(result.partial_removals for result in results)
         if partial:
             print(f"• {partial} interrupted recursive deletion(s): additional removed bytes are unknown; remaining data/metadata was preserved where possible.")
-    print("• System generations, Nix store, /tmp, reports, sandboxes, and cron history are preserved.")
+    print("• Nix generations, Hermes sessions/state, reports and sandboxes are never touched.")
     print("• Free-space change is informational; filesystem activity can affect the measurement.")
     return exit_code
 
