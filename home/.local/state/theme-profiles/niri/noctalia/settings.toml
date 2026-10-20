@@ -159,16 +159,16 @@ wallpaper_scheme = "m3-fruit-salad"
 directory = "/home/aesc/Pictures/Wallpapers"
 
     [wallpaper.default]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
 
     [wallpaper.last]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
 
     [wallpaper.monitors.HDMI-A-1]
     path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
 
     [wallpaper.monitors.eDP-1]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
 
     [[wallpaper.favorite]]
     palette_source = "wallpaper"

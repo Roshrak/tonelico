@@ -77,7 +77,7 @@ in
   };
 
   # Acer Swift SFG16-72 / Intel Core Ultra 5 125U-specific tuning.
-  # Keep vendor-specific settings here instead of in shared configuration.nix.
+  # Keep vendor-specific settings here instead of in shared modules/system.
   hardware.cpu.intel.updateMicrocode = true;
   hardware.graphics.extraPackages = with pkgs; [
     intel-media-driver
