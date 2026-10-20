@@ -26,6 +26,9 @@
     options = "--delete-older-than 14d";
   };
   nixpkgs.config.allowUnfree = true;
+  # ~/.local/bin (slogout and the other personal commands) on PATH in every session,
+  # including GNOME, whose terminals do not source Home Manager's session variables.
+  environment.localBinInPath = true;
 
   time.timeZone = "Asia/Ho_Chi_Minh";
   i18n.defaultLocale = "en_US.UTF-8";

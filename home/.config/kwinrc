@@ -4,7 +4,11 @@ Id_2=d2bcf152-4278-4cb9-8834-c19e6f3f7315
 Id_3=afa267b3-f9a7-473b-bfba-6d7df6e2ed93
 Id_4=e0ffab0d-e450-4c92-af21-6042647abb13
 Id_5=b4710b83-304d-43e5-8eef-cd4c35d038ed
-Number=5
+Id_6=dc2a6c36-1776-4813-aaa4-d7f09541aaff
+Id_7=a451d3be-9777-460f-ba46-987d6eee1145
+Id_8=300d51a5-43ad-4cd3-b8f0-afdf04cb9c70
+Id_9=d52e5bf3-7535-4b5e-b91a-7eaf2457b4de
+Number=9
 Rows=1
 
 [EdgeBarrier]
@@ -15,6 +19,7 @@ BorderActivate=9
 
 [Plugins]
 shakecursorEnabled=false
+tonelico-window-keysEnabled=true
 
 [Tiling][94df4783-34d1-452f-9f0c-8b3f6b5b0f2b][418ea21f-8c84-4573-ba8d-9d5b330c64e8]
 padding=4
@@ -61,6 +66,7 @@ InputMethod[$e]=/run/current-system/sw/share/applications/fcitx5-wayland-launche
 
 [Windows]
 ActiveMouseScreen=true
+CommandAllKey=Meta
 Placement=UnderMouse
 
 [Xwayland]
