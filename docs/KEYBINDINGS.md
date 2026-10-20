@@ -40,7 +40,7 @@ has its own (the file manager, the settings app). The key does not.
 ## Commands and aliases
 
 `install.sh` puts these in `~/.local/bin` (from `agents/bin` and `agents/softfac/bin`) and in the shell
-(`nixos/home/programs/shell.nix`), so they exist on every desktop:
+(`nixos/modules/home/programs/shell.nix`), so they exist on every desktop:
 
 | Command | What it does |
 |---|---|
@@ -73,7 +73,7 @@ launchers) come from the NixOS config itself.
 
 | Desktop | Source |
 |---|---|
-| Sway, Niri, MangoWC, Hyprland | `nixos/home/files/config/` and `nixos/modules/nixos/desktop/sessions/hyprland/` |
+| Sway, Niri, MangoWC, Hyprland | `nixos/home/files/config/` and `nixos/modules/desktop/sessions/hyprland/` |
 | KDE Plasma | `home/.config/kglobalshortcutsrc` and `kwinrc`, placed by `tonelico-restore`; `Super+Shift/Ctrl+H/J/K/L` come from a KWin script and `Alt+Z` / `Super+S` from two shortcut entries, both in `sessions/plasma.nix` |
 | GNOME | `sessions/gnome.nix` (system defaults), `home/desktop/gnome.nix` (custom commands), and the `tonelico-window-rules` extension (directional focus and move) |
 | XFCE | `sessions/xfce.nix`: `xfce-apply-shared-keybindings` runs at every XFCE login, and `xfce-window-direction` does the focus and move |

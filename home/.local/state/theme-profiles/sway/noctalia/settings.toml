@@ -159,16 +159,16 @@ wallpaper_scheme = "m3-fruit-salad"
 directory = "/home/aesc/Pictures/Wallpapers"
 
     [wallpaper.default]
-    path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/better flare.jpeg"
 
     [wallpaper.last]
-    path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/better flare.jpeg"
 
     [wallpaper.monitors.HDMI-A-1]
     path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_fate_and_1_more_drawn_by_mochi_upamo__5a0064b23658cf009024bdb8bb13c707.jpg"
 
     [wallpaper.monitors.eDP-1]
-    path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/better flare.jpeg"
 
     [[wallpaper.favorite]]
     palette_source = "wallpaper"
@@ -181,6 +181,15 @@ directory = "/home/aesc/Pictures/Wallpapers"
     path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_fate_and_1_more_drawn_by_mochi_upamo__5a0064b23658cf009024bdb8bb13c707.jpg"
     theme_mode = "dark"
     wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    builtin_palette = "Gruvbox"
+    palette_source = "builtin"
+    path = "/home/aesc/Pictures/Wallpapers/better flare.jpeg"
+    theme_mode = "dark"
+
+    [[wallpaper.favorite]]
+    path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
 
 [widget.network]
 show_label = false

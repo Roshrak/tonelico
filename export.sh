@@ -41,9 +41,10 @@ host_nix="$REPO/nixos/hosts/tonelico/host.nix"
 # A fresh machine does not have this laptop's recovery generations in its store.
 sed -i 's/retainLocalRecovery = true;/retainLocalRecovery = false;/' "$host_nix"
 grep -q 'retainLocalRecovery = false;' "$host_nix" || die "could not disable retainLocalRecovery in host.nix"
-if ! grep -q 'tonelico-restore.nix' "$host_nix"; then
-  sed -i 's|^\([[:space:]]*\)\./keyboard\.nix|&\n\1../../modules/nixos/features/tonelico-restore.nix|' "$host_nix"
-  grep -q 'tonelico-restore.nix' "$host_nix" || die "could not register tonelico-restore.nix in host.nix"
+# The overlay feature is selected by name in host.nix; the dendritic modules/ tree is auto-imported.
+if ! grep -q '"tonelico-restore"' "$host_nix"; then
+  sed -i 's|features = \[ "virtualization" \];|features = [ "virtualization" "tonelico-restore" ];|' "$host_nix"
+  grep -q '"tonelico-restore"' "$host_nix" || die "could not register tonelico-restore in host.nix features"
 fi
 
 # --- 2. Theme, desktop settings and wallpapers -----------------------------

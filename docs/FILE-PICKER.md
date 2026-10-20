@@ -53,9 +53,9 @@ Save requests: go to the folder, press `q`, then type the name (it starts filled
 
 | Piece | Where |
 |---|---|
-| the picker, its Yazi config, the find/recent helpers | `nixos/modules/nixos/desktop/shared/file-picker.nix` |
-| every session uses it for `FileChooser` | `nixos/modules/nixos/desktop/shared/portals.nix` |
-| apps are told to use the portal (`GTK_USE_PORTAL=1`) | `file-picker.nix`, and the Discord and Chromium launchers in `nixos/home/files/scripts.nix` |
+| the picker, its Yazi config, the find/recent helpers | `nixos/modules/desktop/shared/file-picker.nix` |
+| every session uses it for `FileChooser` | `nixos/modules/desktop/shared/portals.nix` |
+| apps are told to use the portal (`GTK_USE_PORTAL=1`) | `file-picker.nix`, and the Discord and Chromium launchers in `nixos/modules/home/scripts.nix` |
 | the window floats and is centred on Sway, Niri, MangoWC, Hyprland | the compositor configs under `nixos/home/files/config/` and `sessions/hyprland/` |
 | what it remembers | `~/.local/state/tonelico/file-picker/` (`last-dir`, `recent-dirs`, `recent-files`) |
 

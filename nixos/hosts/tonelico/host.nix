@@ -10,11 +10,8 @@
   userUid = 1000;
   userGid = 100;
 
-  # These modules are useful on this machine but are not forced onto every
-  # future host. New hosts can opt in by adding paths to their own host.nix.
-  extraModules = [
-    ./keyboard.nix
-    ../../modules/nixos/features/tonelico-restore.nix
-    ../../modules/nixos/features/virtualization.nix
-  ];
+  # Host-local modules are paths. Shared features are named modules from
+  # modules/. Neither is forced onto every future host.
+  extraModules = [ ./keyboard.nix ];
+  features = [ "virtualization" "tonelico-restore" ];
 }

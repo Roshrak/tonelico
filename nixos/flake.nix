@@ -1,8 +1,15 @@
 {
   description = "Acer laptop NixOS 26.05 with Mango and Noctalia v5";
 
+  # Dendritic layout: every .nix file under modules/ is a flake-parts module
+  # (auto-imported by import-tree). Hosts are discovered from hosts/<name>/.
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+    flake-parts = {
+      url = "github:hercules-ci/flake-parts";
+      inputs.nixpkgs-lib.follows = "nixpkgs";
+    };
+    import-tree.url = "github:vic/import-tree";
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -14,7 +21,7 @@
     mango.url = "github:mangowm/mango";
     noctalia.url = "github:noctalia-dev/noctalia/cachix";
     lotus.url = "github:LotusInputMethod/fcitx5-lotus";
-    niri.url = "github:epireyn/niri-flake"; # NEW - Phase 5
+    niri.url = "github:epireyn/niri-flake";
     noctalia-greeter = {
       url = "github:noctalia-dev/noctalia-greeter";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -28,72 +35,8 @@
   };
 
   outputs =
-    inputs@{ nixpkgs, ... }:
-    let
-      lib = nixpkgs.lib;
-      hostRoot = ./hosts;
-      hostEntries = builtins.readDir hostRoot;
-
-      # A host becomes a flake configuration when its directory contains both
-      # host.nix (small metadata) and hardware-configuration.nix (generated on
-      # that physical machine). Templates and documentation are ignored.
-      hostKeys = builtins.attrNames (
-        lib.filterAttrs (
-          name: type:
-          type == "directory"
-          && builtins.pathExists (hostRoot + "/${name}/host.nix")
-          && builtins.pathExists (hostRoot + "/${name}/hardware-configuration.nix")
-        ) hostEntries
-      );
-
-      mkHost =
-        hostKey:
-        let
-          hostPath = hostRoot + "/${hostKey}";
-          host = import (hostPath + "/host.nix");
-          codexPackage = inputs.codex-nixpkgs.legacyPackages.${host.system}.codex;
-          hostModule = hostPath + "/default.nix";
-          extraModules = host.extraModules or [ ];
-        in
-        lib.nameValuePair hostKey (
-          lib.nixosSystem {
-            system = host.system;
-            specialArgs = { inherit inputs host; };
-            modules = [
-              (hostPath + "/hardware-configuration.nix")
-              hostModule
-              inputs.home-manager.nixosModules.home-manager
-              ./home-manager.nix
-              ({ ... }: {
-                # Codex is intentionally sourced from the dedicated pinned
-                # input above instead of upgrading all NixOS packages.
-                nixpkgs.overlays = [
-                  (_final: _prev: { codex = codexPackage; })
-                ];
-              })
-              ./configuration.nix
-              ({ ... }: {
-                networking.hostName = host.hostName;
-              })
-            ]
-            ++ extraModules;
-          }
-        );
-    in
-    {
-      # Keep the directory-based target for installation/backup tooling and
-      # expose hostname aliases for native nixos-rebuild without --flake.
-      nixosConfigurations =
-        let
-          configurations = builtins.listToAttrs (map mkHost hostKeys);
-          hostnameAliases = builtins.listToAttrs (
-            map (
-              key: lib.nameValuePair (import (hostRoot + "/${key}/host.nix")).hostName configurations.${key}
-            ) hostKeys
-          );
-        in
-        configurations // hostnameAliases;
-    };
+    inputs:
+    inputs.flake-parts.lib.mkFlake { inherit inputs; } (inputs.import-tree ./modules);
 
   nixConfig = {
     extra-substituters = [
