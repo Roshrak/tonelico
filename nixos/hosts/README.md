@@ -5,8 +5,9 @@ attribute. For example, `hosts/tonelico/` produces `/etc/nixos#tonelico`.
 
 Every real host directory contains:
 
-- `host.nix`: hostname, architecture, primary-user deployment metadata, and
-  optional extra modules.
+- `host.nix`: hostname, architecture, primary-user deployment metadata,
+  `features` (names of shared modules from `modules/`, e.g.
+  `[ "virtualization" ]`) and `extraModules` (paths local to this host).
 - `hardware-configuration.nix`: generated on that physical installation with
   `nixos-generate-config`. This file is host-specific and should not be copied
   from a different computer.
