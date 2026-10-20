@@ -58,6 +58,16 @@ Logins and personal data cannot live in git. Add these by hand after install:
 Secrets you give the installer are stored only in `~/.config/tonelico/secrets.env` (mode 600).
 The repo holds `@TELEGRAM_USER_ID@`-style placeholders where a personal value used to be.
 
+## Keybindings
+
+The same keys work in every session (Sway, Niri, MangoWC, Hyprland, KDE, GNOME, XFCE). See
+[docs/KEYBINDINGS.md](docs/KEYBINDINGS.md) for the table and what does not carry over.
+
+## File picker
+
+Attach, open and save windows are Yazi in Kitty in every session: they remember the last folder and take files from
+several folders at once. See [docs/FILE-PICKER.md](docs/FILE-PICKER.md).
+
 ## Keeping the repo current
 
 On the laptop being copied:
@@ -88,4 +98,5 @@ agents/     agy-control-mcp, softfac, hermes, antigravity-manager, bin, systemd,
 overlay/    files added on top of /etc/nixos during export (the first-boot theme service)
 manifest/   the allowlist and exclude patterns
 scripts/    check-secrets.sh and shared helpers
+docs/       KEYBINDINGS.md (the key set shared by every session), FILE-PICKER.md (the attach/open/save window)
 ```
