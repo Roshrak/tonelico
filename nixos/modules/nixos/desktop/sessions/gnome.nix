@@ -41,6 +41,11 @@ let
       command = "gnome-session-quit --logout-dialog";
       binding = "<Super><Shift>e";
     }
+    {
+      name = "Logout now";
+      command = "slogout";
+      binding = "<Super><Shift><Alt>m";
+    }
   ];
   customPaths = lib.genList (
     i: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom${toString i}/"
@@ -107,6 +112,8 @@ in
     [org.gnome.desktop.wm.preferences]
     num-workspaces=9
     button-layout=':minimize,maximize,close'
+    # Super + right-drag resizes, as in the compositor sessions.
+    resize-with-right-button=true
 
     [org.gnome.mutter]
     center-new-windows=false
@@ -122,7 +129,7 @@ in
     toggle-tiled-right=[]
 
     [org.gnome.desktop.wm.keybindings]
-    close=['<Super>q']
+    close=['<Super>q', '<Super><Shift>q']
     toggle-fullscreen=['<Super>f']
     toggle-maximized=['<Super>m']
     minimize=[]

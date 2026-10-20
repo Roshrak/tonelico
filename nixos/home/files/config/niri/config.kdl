@@ -228,6 +228,17 @@ window-rule {
     draw-border-with-background false
 }
 
+// The file picker (Yazi in Kitty, from the desktop portal) floats.
+window-rule {
+    match app-id=r#"^tonelico-file-picker$"#
+    open-floating true
+    border { off; }
+    focus-ring { off; }
+    shadow { off; }
+    default-column-width { fixed 1250; }
+    default-window-height { fixed 760; }
+}
+
 
 // ============================================================
 // HOTKEY OVERLAY

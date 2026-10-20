@@ -130,6 +130,88 @@ let
       exec wmctrl -r :ACTIVE: -b toggle,maximized_vert,maximized_horz
     '';
   };
+  # Keyboard focus and move by direction (Super+H/J/K/L and the arrows), the
+  # same keys the compositor sessions and the GNOME extension use. XFWM has no
+  # directional commands of its own.
+  xfceWindowDirection = pkgs.writeShellApplication {
+    name = "xfce-window-direction";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.gawk
+      pkgs.gnugrep
+      pkgs.wmctrl
+      pkgs.xdotool
+      pkgs.xprop
+    ];
+    text = ''
+      action="''${1:-}"
+      direction="''${2:-}"
+      case "$action" in focus|move) ;; *) echo "usage: xfce-window-direction <focus|move> <left|right|up|down>" >&2; exit 2 ;; esac
+      case "$direction" in left|right|up|down) ;; *) echo "usage: xfce-window-direction <focus|move> <left|right|up|down>" >&2; exit 2 ;; esac
+
+      active="$(xdotool getactivewindow 2>/dev/null)" || exit 0
+      active_id="$(printf '0x%08x' "$active")"
+      desktop="$(wmctrl -d | awk '$2 == "*" { print $1 }')"
+
+      # Same step as the GNOME extension's directional move.
+      step=80
+
+      if [ "$action" = move ]; then
+        read -r x y < <(wmctrl -lG | awk -v id="$active_id" '$1 == id { print $3, $4 }') || exit 0
+        [ -n "''${x:-}" ] || exit 0
+        # wmctrl lists client positions shifted by the frame; undo that so the
+        # static-gravity move below lands exactly one step away.
+        frame="$(xprop -id "$active_id" _NET_FRAME_EXTENTS 2>/dev/null || true)"
+        frame="''${frame#*=}"
+        frame="''${frame//,/ }"
+        read -r frame_left _ frame_top _ <<< "$frame"
+        x=$((x - ''${frame_left:-0}))
+        y=$((y - ''${frame_top:-0}))
+        case "$direction" in
+          left) x=$((x - step)) ;;
+          right) x=$((x + step)) ;;
+          up) y=$((y - step)) ;;
+          down) y=$((y + step)) ;;
+        esac
+        exec wmctrl -i -r "$active_id" -e "10,$x,$y,-1,-1"
+      fi
+
+      # Focus the nearest visible window on this workspace in the pressed direction.
+      # Distance along the axis counts once, drift off the axis twice, so a window
+      # straight ahead beats a closer one far to the side.
+      candidates=""
+      while read -r id window_desktop x y w h _; do
+        [ "$window_desktop" = "$desktop" ] || continue
+        if xprop -id "$id" _NET_WM_STATE 2>/dev/null | grep -q _NET_WM_STATE_HIDDEN; then
+          continue
+        fi
+        candidates+="$id $x $y $w $h"$'\n'
+      done < <(wmctrl -lG)
+
+      target="$(printf '%s' "$candidates" | awk -v active="$active_id" -v direction="$direction" '
+        { cx[$1] = $2 + $4 / 2; cy[$1] = $3 + $5 / 2; ids[++n] = $1 }
+        END {
+          if (!(active in cx)) exit
+          best = ""; best_score = -1
+          for (i = 1; i <= n; i++) {
+            id = ids[i]
+            if (id == active) continue
+            dx = cx[id] - cx[active]; dy = cy[id] - cy[active]
+            if (direction == "left")  { ahead = -dx; aside = dy }
+            if (direction == "right") { ahead = dx;  aside = dy }
+            if (direction == "up")    { ahead = -dy; aside = dx }
+            if (direction == "down")  { ahead = dy;  aside = dx }
+            if (ahead <= 0) continue
+            if (aside < 0) aside = -aside
+            score = ahead + 2 * aside
+            if (best_score < 0 || score < best_score) { best = id; best_score = score }
+          }
+          print best
+        }')"
+
+      [ -z "$target" ] || exec xdotool windowraise "$target" windowfocus "$target"
+    '';
+  };
   xfceLauncherTheme = pkgs.writeText "xfce-launcher.rasi" ''
     configuration {
       show-icons: true;
@@ -479,9 +561,8 @@ let
       set_command '<Super>e' 'thunar'
       set_command '<Super>z' 'chromium'
       set_command '<Super>Escape' 'xflock4'
-      set_command '<Super>l' 'xflock4'
       set_command '<Super><Shift>e' 'xfce4-session-logout'
-      set_command '<Super><Shift><Alt>m' 'xfce4-session-logout'
+      set_command '<Super><Shift><Alt>m' 'slogout'
       set_command '<Super>v' 'xfce4-clipman-history'
       set_command '<Super>o' '${pkgs.xfdashboard}/bin/xfdashboard --toggle'
       set_command '<Alt>z' 'fcitx5-remote -t'
@@ -502,6 +583,10 @@ let
       # Let XFWM select the pointer's monitor before the window rule constrains
       # the final geometry to that monitor's usable work area.
       set_property xfwm4 /general/placement_mode string mouse
+
+      # Super + drag moves a window, Super + right-drag resizes it, as in
+      # every compositor session.
+      set_property xfwm4 /general/easy_click string Super
 
       # Match the compositor sessions' pointer-focus behavior without raising
       # windows merely because the pointer crossed them.
@@ -540,10 +625,7 @@ let
       set_wm '<Super>d' show_desktop_key
       set_wm '<Super>Tab' cycle_windows_key
       set_wm '<Super><Shift>Tab' cycle_reverse_windows_key
-      set_wm '<Super>Left' tile_left_key
-      set_wm '<Super>Right' tile_right_key
-      set_wm '<Super>Up' tile_up_key
-      set_wm '<Super>Down' tile_down_key
+      set_wm '<Super><Shift>q' close_window_key
       set_wm '<Super>Page_Up' maximize_window_key
       set_wm '<Super>Page_Down' hide_window_key
 
@@ -554,6 +636,24 @@ let
         set_wm "<Super><Shift>$workspace" "move_window_workspace_''${workspace}_key"
         # KDE uses Super+Alt+number for the same move-to-workspace action.
         set_wm "<Super><Alt>$workspace" "move_window_workspace_''${workspace}_key"
+      done
+
+      # Directional focus and move: identical keys in every session. The arrows
+      # and H/J/K/L focus; Shift or Ctrl with H/J/K/L moves the window. XFWM's
+      # own tiling default on Super+arrows is cleared so it cannot grab them.
+      for key in Left Right Up Down; do
+        set_wm "<Super>$key" void
+      done
+      for pair in h:left j:down k:up l:right Left:left Down:down Up:up Right:right; do
+        key="''${pair%%:*}"
+        direction="''${pair##*:}"
+        set_command "<Super>$key" "${xfceWindowDirection}/bin/xfce-window-direction focus $direction"
+      done
+      for pair in h:left j:down k:up l:right; do
+        key="''${pair%%:*}"
+        direction="''${pair##*:}"
+        set_command "<Super><Shift>$key" "${xfceWindowDirection}/bin/xfce-window-direction move $direction"
+        set_command "<Super><Primary>$key" "${xfceWindowDirection}/bin/xfce-window-direction move $direction"
       done
 
       set_wm '<Super><Primary>Left' left_workspace_key

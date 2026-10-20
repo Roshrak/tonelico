@@ -13,6 +13,7 @@
     ./sessions/gnome.nix
     ./shared/overview.nix
     ./shared/portals.nix
+    ./shared/file-picker.nix
     ./shared/session-lifecycle.nix
     ./shared/session-catalog.nix
     ./shared/theme-profiles.nix

@@ -7,6 +7,7 @@ let
     { name = "Settings"; command = "gnome-control-center"; binding = "<Super>comma"; }
     { name = "Fcitx toggle"; command = "fcitx5-remote -t"; binding = "<Alt>z"; }
     { name = "Logout menu"; command = "gnome-session-quit --logout-dialog"; binding = "<Super><Shift>e"; }
+    { name = "Logout now"; command = "slogout"; binding = "<Super><Shift><Alt>m"; }
   ];
   paths = lib.genList (i: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom${toString i}/") (builtins.length commands);
 in
