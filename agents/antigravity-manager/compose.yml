@@ -16,3 +16,7 @@ services:
       - ABV_BIND_LOCAL_ONLY=false
       - ABV_DATA_DIR=/root/.antigravity_tools
     restart: unless-stopped
+    # tini as PID 1 forwards SIGTERM; without it the app ignores SIGTERM and every
+    # shutdown waits the full 10s docker stop timeout.
+    init: true
+    stop_grace_period: 2s
