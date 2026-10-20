@@ -9,6 +9,7 @@ let
     export WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-wayland-1}"
     export DISPLAY="''${DISPLAY:-:0}"
     export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    export GTK_USE_PORTAL=1
     exec ${chromium}/bin/chromium --ozone-platform=x11 --remote-debugging-port=9222 "$@"
   '';
   scripts = [
@@ -40,6 +41,7 @@ in
       executable = true;
       text = ''
         #!${pkgs.runtimeShell}
+        export GTK_USE_PORTAL=1
         exec ${discord}/bin/Discord --ozone-platform=x11 "$@"
       '';
     };
