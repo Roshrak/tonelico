@@ -15,7 +15,7 @@
       boot.loader.efi.canTouchEfiVariables = true;
       # Boot straight into the default generation; hold Space at power-on (or run
       # `systemctl reboot --boot-loader-menu=10`) to get the menu and older generations.
-      boot.loader.timeout = 0;
+      boot.loader.timeout = 5;
       boot.kernelPackages = pkgs.linuxPackages_latest;
       # Never expose the physical PC-speaker bell. Desktop/media audio continues
       # through PipeWire; these modules are only for legacy console beeps.
