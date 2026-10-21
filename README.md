@@ -46,18 +46,6 @@ SDDM to greetd under a running Plasma session would end that session halfway thr
 touchpad fix, Intel NPU compiler). The installer refuses other hardware unless you pass
 `--same-hardware`; then edit `nixos/hosts/tonelico/default.nix` first.
 
-## What is not in this repo
-
-Logins and personal data cannot live in git. Add these by hand after install:
-
-- Claude Code, Codex and AGY sign-ins; `hermes auth add openai-codex`
-- Antigravity accounts (web UI at <http://127.0.0.1:8045>)
-- Browser profiles and passwords, Telegram session
-- Hermes memories and conversation history
-
-Secrets you give the installer are stored only in `~/.config/tonelico/secrets.env` (mode 600).
-The repo holds `@TELEGRAM_USER_ID@`-style placeholders where a personal value used to be.
-
 ## Keybindings
 
 The same keys work in every session (Sway, Niri, MangoWC, Hyprland, KDE, GNOME, XFCE). See
