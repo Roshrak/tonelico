@@ -60,7 +60,7 @@
 
     /* Neutrals / Greys (Surface Mapping) */
     --grey1: #76706c;
-    --grey2: #4e4a47;
+    --grey2: #57514e;
     --grey3: #514c49;
     --grey4: #474240;
     --grey5: #3c3836;
