@@ -9,3 +9,5 @@ backup-*/
 *.backup.*
 # nixos-generate-config's root compatibility file. Each machine generates its own.
 /hardware-configuration.nix
+# Machine-specific hardware file (disk UUIDs). install.sh regenerates it on each machine.
+/hosts/*/hardware-configuration.nix
