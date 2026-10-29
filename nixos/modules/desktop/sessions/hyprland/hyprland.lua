@@ -203,5 +203,3 @@ hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("noctalia msg media previous"), { locke
 -- Skip the window popin effect on fullscreen windows.
 hl.window_rule({ name = "audit-fullscreen-no-animation", match = { fullscreen = true }, no_anim = true })
 
--- The file picker (Yazi in Kitty, from the desktop portal) floats in the middle.
-hl.window_rule({ name = "tonelico-file-picker", match = { class = "^tonelico-file-picker$" }, float = true, size = "1250 760", center = true, border_size = 0, no_shadow = true })

@@ -21,11 +21,27 @@ BorderActivate=9
 shakecursorEnabled=false
 tonelico-window-keysEnabled=true
 
+[Tiling][300d51a5-43ad-4cd3-b8f0-afdf04cb9c70][418ea21f-8c84-4573-ba8d-9d5b330c64e8]
+padding=4
+tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
+
+[Tiling][300d51a5-43ad-4cd3-b8f0-afdf04cb9c70][fe93f910-aeb8-45e7-8698-b070af5239b5]
+padding=4
+tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
+
 [Tiling][94df4783-34d1-452f-9f0c-8b3f6b5b0f2b][418ea21f-8c84-4573-ba8d-9d5b330c64e8]
 padding=4
 tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
 
 [Tiling][94df4783-34d1-452f-9f0c-8b3f6b5b0f2b][fe93f910-aeb8-45e7-8698-b070af5239b5]
+padding=4
+tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
+
+[Tiling][a451d3be-9777-460f-ba46-987d6eee1145][418ea21f-8c84-4573-ba8d-9d5b330c64e8]
+padding=4
+tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
+
+[Tiling][a451d3be-9777-460f-ba46-987d6eee1145][fe93f910-aeb8-45e7-8698-b070af5239b5]
 padding=4
 tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
 
@@ -50,6 +66,22 @@ padding=4
 tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
 
 [Tiling][d2bcf152-4278-4cb9-8834-c19e6f3f7315][fe93f910-aeb8-45e7-8698-b070af5239b5]
+padding=4
+tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
+
+[Tiling][d52e5bf3-7535-4b5e-b91a-7eaf2457b4de][418ea21f-8c84-4573-ba8d-9d5b330c64e8]
+padding=4
+tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
+
+[Tiling][d52e5bf3-7535-4b5e-b91a-7eaf2457b4de][fe93f910-aeb8-45e7-8698-b070af5239b5]
+padding=4
+tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
+
+[Tiling][dc2a6c36-1776-4813-aaa4-d7f09541aaff][418ea21f-8c84-4573-ba8d-9d5b330c64e8]
+padding=4
+tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
+
+[Tiling][dc2a6c36-1776-4813-aaa4-d7f09541aaff][fe93f910-aeb8-45e7-8698-b070af5239b5]
 padding=4
 tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
 

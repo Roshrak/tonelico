@@ -20,7 +20,7 @@
       xdg.configFile."hypr/hyprland.lua".text =
         portable ../../desktop/sessions/hyprland/hyprland.lua;
 
-      # Mango's animation helper, Noctalia, Fcitx, GTK, Plasma and XFCE write their
+      # Mango's animation helper, Noctalia, Fcitx, GTK and Plasma write their
       # own runtime settings. Seed portable defaults only on a new machine; never
       # replace existing user state or make those targets read-only symlinks.
       home.activation.seedDesktopDefaults = lib.hm.dag.entryAfter [ "writeBoundary" ] ''

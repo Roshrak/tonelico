@@ -107,10 +107,8 @@
           xdg-desktop-portal-gtk.service \
           xdg-desktop-portal-wlr.service \
           xdg-desktop-portal-gnome.service \
-          xdg-desktop-portal-xapp.service \
           xdg-desktop-portal-hyprland.service \
-          plasma-xdg-desktop-portal-kde.service \
-          xfce4-notifyd.service 2>/dev/null || true
+          plasma-xdg-desktop-portal-kde.service 2>/dev/null || true
         /run/current-system/sw/bin/systemctl --user unset-environment \
           THEME_PROFILE \
           NOCTALIA_STATE_HOME \
@@ -142,8 +140,7 @@
           NIX_GSETTINGS_OVERRIDES_DIR \
           DISPLAY \
           XAUTHORITY \
-          TONELICO_XAPP_PORTAL \
-          TONELICO_X11_WINDOW_PLACEMENT 2>/dev/null || true
+          2>/dev/null || true
         # This D-Bus helper cannot remove entries (--unset is unsupported). Set
         # the old session values to empty in the D-Bus activation environment;
         # the next session imports its actual values. Do not pass --systemd here:
@@ -179,8 +176,7 @@
           NIX_GSETTINGS_OVERRIDES_DIR= \
           DISPLAY= \
           XAUTHORITY= \
-          TONELICO_XAPP_PORTAL= \
-          TONELICO_X11_WINDOW_PLACEMENT= 2>/dev/null || true
+          2>/dev/null || true
       '';
 
       # Plasma launches its compositor through user units that can outlive the

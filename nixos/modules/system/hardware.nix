@@ -22,6 +22,9 @@
         powerOnBoot = true;
       };
       services.upower.enable = true;
+      # Pinned during the GNOME/XFCE/X11 removal (was implied by the GNOME module):
+      # Plasma's Thunderbolt settings and device authorization use bolt.
+      services.hardware.bolt.enable = true;
       services.power-profiles-daemon.enable = true;
     }
   ;

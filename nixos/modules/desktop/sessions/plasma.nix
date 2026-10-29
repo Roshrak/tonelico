@@ -6,8 +6,7 @@
     { pkgs, ... }:
 
     let
-      # Super+Shift/Ctrl+H/J/K/L nudges the active window, matching the GNOME
-      # extension and the XFCE helper (80 px per press). KWin has no built-in
+      # Super+Shift/Ctrl+H/J/K/L nudges the active window (80 px per press). KWin has no built-in
       # keyboard move-by-step action.
       windowKeys = pkgs.runCommand "tonelico-kwin-window-keys" { } ''
         dir=$out/share/kwin/scripts/tonelico-window-keys

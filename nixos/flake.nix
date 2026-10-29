@@ -29,7 +29,7 @@
     claude-code-nix.url = "github:sadjow/claude-code-nix";
     # Match the newer AGY and OpenCode builds already installed in the user
     # profile while moving them into the NixOS system profile.
-    llm-agents.url = "github:numtide/llm-agents.nix/a621acfa43a25731694a8ef64fcbd5a00241e085";
+    llm-agents.url = "github:numtide/llm-agents.nix/e452052b9efb54fd59f8a06cbc09978fb542a3c2";
     # Hermes CLI and Telegram gateway, pinned to the current upstream release.
     hermes-agent.url = "tarball+https://codeload.github.com/NousResearch/hermes-agent/tar.gz/refs/tags/v2026.9.24";
   };

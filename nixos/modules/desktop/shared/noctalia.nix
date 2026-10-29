@@ -33,7 +33,6 @@
           idle.timeout = 300;
         };
       };
-      services.xserver.desktopManager.runXdgAutostartIfNone = true;
 
       # Noctalia supplies the bar, launcher, notifications, control center,
       # wallpaper, lock screen, OSD, tray, and clipboard history.

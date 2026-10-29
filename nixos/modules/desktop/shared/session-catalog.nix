@@ -4,22 +4,18 @@
     { config, lib, pkgs, ... }:
 
     let
+      greeter = config.services.displayManager.noctalia-greeter;
       waylandNames = [
         "mango"
         "niri"
         "sway"
         "plasma"
         "hyprland"
-        "gnome"
       ];
       waylandPackages = lib.filter (
         package: lib.any (name: builtins.elem name waylandNames) (package.providedSessions or [ ])
       ) config.services.displayManager.sessionPackages;
       packagePaths = lib.concatStringsSep " " (map toString waylandPackages);
-      xfceSessionPackages = lib.filter (
-        package: builtins.pathExists "${package}/share/xsessions/xfce.desktop"
-      ) config.services.displayManager.sessionPackages;
-      xfcePackagePaths = lib.concatStringsSep " " (map toString xfceSessionPackages);
 
       dmSessionsShare =
         pkgs.runCommand "tonelico-curated-desktop-sessions"
@@ -29,7 +25,7 @@
           ''
             mkdir -p "$out/share/wayland-sessions" "$out/share/xsessions"
 
-            for name in mango niri sway plasma hyprland gnome; do
+            for name in mango niri sway plasma hyprland; do
               source=""
               for package in ${packagePaths}; do
                 candidate="$package/share/wayland-sessions/$name.desktop"
@@ -64,10 +60,6 @@
                   sed 's|^Exec=.*|Exec=/run/current-system/sw/bin/hyprland-session-guarded|' "$source" \
                     > "$out/share/wayland-sessions/$name.desktop"
                   ;;
-                gnome)
-                  sed 's|^Exec=|Exec=/run/current-system/sw/bin/desktop-session-client GNOME wayland -- |' "$source" \
-                    > "$out/share/wayland-sessions/$name.desktop"
-                  ;;
               esac
             done
 
@@ -91,36 +83,30 @@
 
             # Keep alternate sessions out of Noctalia Greeter even when their package
             # is linked into the system profile alongside the selected session.
-            for name in hyprland-uwsm xfce-wayland; do
+            for name in hyprland-uwsm; do
               hide_session wayland "$name"
             done
-
-            xfce_source=""
-            for package in ${xfcePackagePaths}; do
-              candidate="$package/share/xsessions/xfce.desktop"
-              if [ -f "$candidate" ]; then
-                xfce_source="$candidate"
-                break
-              fi
-            done
-            if [ -z "$xfce_source" ]; then
-              echo "The evaluated XFCE session package did not provide xsessions/xfce.desktop" >&2
-              exit 1
-            fi
-            cp "$xfce_source" "$out/share/xsessions/xfce.desktop"
           '';
     in
     {
       environment.systemPackages = [ dmSessionsShare ];
 
+      # The upstream module exposes the entire NixOS session registry through
+      # XDG_DATA_DIRS. Show the greeter only the curated entries exported by the
+      # system profile.
+      services.greetd.settings.default_session.command = lib.mkForce (
+        "${pkgs.coreutils}/bin/env XDG_DATA_DIRS=/run/current-system/sw/share "
+        + "${greeter.package}/bin/noctalia-greeter-session -- ${greeter.greeter-args}"
+      );
+
+      # No X11 desktop is installed; the Wayland sessions run X clients through
+      # Xwayland and xwayland-satellite.
+      services.xserver.enable = false;
+
       assertions = [
         {
-          assertion = builtins.length waylandNames == 6;
-          message = "The curated Noctalia Greeter Wayland session allowlist must contain exactly six sessions.";
-        }
-        {
-          assertion = xfceSessionPackages != [ ];
-          message = "The evaluated XFCE session package must provide the native NixOS X11 session entry.";
+          assertion = builtins.length waylandNames == 5;
+          message = "The curated Noctalia Greeter Wayland session allowlist must contain exactly five sessions.";
         }
         {
           assertion =
