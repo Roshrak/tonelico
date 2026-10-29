@@ -9,7 +9,7 @@
       # [preferred] sections into /etc.
       xdg.portal.config = {
         mango = {
-          "org.freedesktop.impl.portal.FileChooser" = lib.mkForce "termfilechooser";
+          "org.freedesktop.impl.portal.FileChooser" = lib.mkForce "kde";
           default = [ "gtk" ];
           "org.freedesktop.impl.portal.ScreenCast" = "wlr";
           "org.freedesktop.impl.portal.Screenshot" = "wlr";
@@ -21,7 +21,7 @@
           # general UI backend and choose GNOME specifically for capture.
           default = lib.mkForce [ "gtk" ];
           "org.freedesktop.impl.portal.Access" = "gtk";
-          "org.freedesktop.impl.portal.FileChooser" = lib.mkForce "termfilechooser";
+          "org.freedesktop.impl.portal.FileChooser" = lib.mkForce "kde";
           "org.freedesktop.impl.portal.Notification" = "gtk";
           "org.freedesktop.impl.portal.ScreenCast" = "gnome";
           "org.freedesktop.impl.portal.Screenshot" = "gnome";
@@ -29,14 +29,14 @@
         };
 
         sway = {
-          "org.freedesktop.impl.portal.FileChooser" = lib.mkForce "termfilechooser";
+          "org.freedesktop.impl.portal.FileChooser" = lib.mkForce "kde";
           # Keep the upstream Sway GTK + wlroots routing and add the shared
           # Secret Service portal explicitly.
           "org.freedesktop.impl.portal.Secret" = "gnome-keyring";
         };
 
         hyprland = {
-          "org.freedesktop.impl.portal.FileChooser" = lib.mkForce "termfilechooser";
+          "org.freedesktop.impl.portal.FileChooser" = lib.mkForce "kde";
           default = [ "gtk" ];
           "org.freedesktop.impl.portal.GlobalShortcuts" = "hyprland";
           "org.freedesktop.impl.portal.ScreenCast" = "hyprland";
@@ -45,29 +45,15 @@
         };
 
         kde = {
-          "org.freedesktop.impl.portal.FileChooser" = lib.mkForce "termfilechooser";
           default = [ "kde" ];
           "org.freedesktop.impl.portal.Secret" = "kwallet";
         };
 
-        gnome = {
-          "org.freedesktop.impl.portal.FileChooser" = lib.mkForce "termfilechooser";
-          default = [
-            "gnome"
-            "gtk"
-          ];
-          "org.freedesktop.impl.portal.Secret" = "gnome-keyring";
-        };
-
-        xfce = {
-          "org.freedesktop.impl.portal.FileChooser" = lib.mkForce "termfilechooser";
-          default = [ "gtk" ];
-          "org.freedesktop.impl.portal.Settings" = "xapp";
-          "org.freedesktop.impl.portal.Screenshot" = "xapp";
-          "org.freedesktop.impl.portal.Secret" = "xapp-gnome-keyring";
-        };
-
       };
+
+      # Chromium, Electron (Discord, ...) and Firefox only use the portal file picker when
+      # GTK_USE_PORTAL is set; otherwise they open their own GTK dialog.
+      environment.sessionVariables.GTK_USE_PORTAL = "1";
     }
   ;
 }

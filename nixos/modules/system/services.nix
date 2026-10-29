@@ -14,6 +14,11 @@
       });
       services.udisks2.enable = true;
       services.gnome.gnome-keyring.enable = true;
+      # Pinned during the GNOME/XFCE/X11 removal (was implied by the GNOME module):
+      # colord is used by Plasma/KWin color management, and glib-networking provides
+      # TLS to GTK/GIO applications in the remaining sessions.
+      services.colord.enable = true;
+      services.gnome.glib-networking.enable = true;
       services.accounts-daemon.enable = true;
       programs.dconf.enable = true;
       programs.gdk-pixbuf.modulePackages = [ pkgs.librsvg ];

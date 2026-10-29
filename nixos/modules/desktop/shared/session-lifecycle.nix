@@ -56,13 +56,6 @@
         unset THEME_SESSION_LEASE_HELD
       '';
 
-      gnomeGSettingsOverrides = pkgs.gnome.nixos-gsettings-overrides.override {
-        inherit (config.services.desktopManager.gnome)
-          extraGSettingsOverrides
-          extraGSettingsOverridePackages
-          favoriteAppsOverride
-          ;
-      };
       # Place the startup pointer on the laptop panel where compositor IPC allows
       # a safe one-shot warp. Niri centers the cursor on its focus-at-startup
       # output natively, and its Kanshi hook repeats that on hotplug. All four
@@ -142,93 +135,6 @@
         esac
       '';
 
-      desktopSessionClient = pkgs.writeShellScriptBin "desktop-session-client" ''
-        set -u
-        ${sessionLeaseGuard}
-        if [ "$#" -lt 4 ]; then
-          echo "usage: desktop-session-client GNOME wayland [--] <command> [args...]" >&2
-          exit 2
-        fi
-
-        desktop="$1"
-        session_type="$2"
-        shift 2
-        # Wayland session entries use -- to separate the session wrapper from Exec.
-        if [ "$1" = -- ]; then shift; fi
-        [ "$#" -gt 0 ] || { echo "missing session command" >&2; exit 2; }
-
-        case "$desktop" in
-          GNOME) ;;
-          *) echo "unsupported desktop session: $desktop" >&2; exit 2 ;;
-        esac
-        [ "$session_type" = wayland ] || exit 2
-
-        /run/current-system/sw/bin/theme-session-admit || exit $?
-
-        # Remove only cross-session display and desktop markers. Preserve the
-        # shared user D-Bus, runtime directory, audio, Fcitx and application state.
-        unset WAYLAND_DISPLAY NIRI_SOCKET SWAYSOCK \
-          MANGO_INSTANCE_SIGNATURE HYPRLAND_INSTANCE_SIGNATURE \
-          KDE_FULL_SESSION KDE_SESSION_VERSION KDE_SESSION_UID KDE_SESSION_VT \
-          KDE_APPLICATIONS_AS_SCOPE GNOME_DESKTOP_SESSION_ID GNOME_SETUP_DISPLAY \
-          MATE_DESKTOP_SESSION_ID CINNAMON_VERSION LXQT_SESSION_CONFIG \
-          LXQT_SESSION_ID AWESOME_CONF THEME_PROFILE NOCTALIA_STATE_HOME \
-          NOCTALIA_CONFIG_HOME KITTY_CONFIG_DIRECTORY QT_QPA_PLATFORMTHEME
-        unset DISPLAY XAUTHORITY NIXOS_OZONE_WL MOZ_ENABLE_WAYLAND
-
-        export XDG_CURRENT_DESKTOP="$desktop"
-        export XDG_SESSION_DESKTOP="$desktop"
-        export XDG_SESSION_TYPE="$session_type"
-        # These are interactive user sessions. GNOME's LocalSearch service checks
-        # the class in the systemd user manager before it will start.
-        export XDG_SESSION_CLASS=user
-        export DESKTOP_SESSION="$desktop"
-        unset NIX_GSETTINGS_OVERRIDES_DIR
-        case "$desktop" in
-          GNOME)
-            export NIX_GSETTINGS_OVERRIDES_DIR="${gnomeGSettingsOverrides}/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas"
-            ;;
-        esac
-
-        session_vars=(XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE XDG_SESSION_CLASS XDG_SESSION_ID DESKTOP_SESSION)
-        [ -n "''${DISPLAY:-}" ] && session_vars+=(DISPLAY)
-        [ -n "''${XAUTHORITY:-}" ] && session_vars+=(XAUTHORITY)
-        [ -n "''${WAYLAND_DISPLAY:-}" ] && session_vars+=(WAYLAND_DISPLAY)
-        [ -n "''${NIX_GSETTINGS_OVERRIDES_DIR:-}" ] && session_vars+=(NIX_GSETTINGS_OVERRIDES_DIR)
-
-        # Clear display-bound state even if the previous compositor exited without
-        # running its logout hook. Never restart the user manager or kill apps.
-        /run/current-system/sw/bin/theme-session-cleanup >/dev/null 2>&1 || true
-        if [ "$desktop" = GNOME ]; then
-          # GNOME 50 aborts when a previous desktop left these user targets
-          # active. Stop only the graphical-session targets at this login
-          # boundary; keep the shared user manager and unrelated apps running.
-          /run/current-system/sw/bin/systemctl --user stop \
-            graphical-session.target graphical-session-pre.target || exit 1
-        fi
-        /run/current-system/sw/bin/systemctl --user import-environment \
-          "''${session_vars[@]}" 2>/dev/null || true
-        /run/current-system/sw/bin/dbus-update-activation-environment --systemd \
-          "''${session_vars[@]}" 2>/dev/null || true
-
-        if [ "$desktop" != GNOME ]; then
-          /run/current-system/sw/bin/systemctl --user start geoclue-agent.service 2>/dev/null || true
-        fi
-        on_exit() {
-          rc=$?
-          trap - EXIT TERM INT HUP
-          /run/current-system/sw/bin/theme-session-cleanup >/dev/null 2>&1 || true
-          exit "$rc"
-        }
-        trap on_exit EXIT
-        trap 'exit 129' HUP
-        trap 'exit 130' INT
-        trap 'exit 143' TERM
-
-        "$@"
-        exit $?
-      '';
-
       hyprlandSessionGuarded = pkgs.writeShellScriptBin "hyprland-session-guarded" ''
         set -u
         ${sessionLeaseGuard}
@@ -287,12 +193,12 @@
       '';
     in
     {
-      # GNOME's module disables NixOS's demo agent globally because GNOME Shell
-      # supplies its own. The six other retained sessions keep the demo agent.
+      # Keep NixOS's geoclue demo agent for the five sessions. It is started per
+      # session, never at login.
       services.geoclue2.enableDemoAgent = lib.mkForce true;
       systemd.user.services.geoclue-agent.wantedBy = lib.mkForce [ ];
 
-      # GNOME's schema override is set only for the GNOME session by its bridge.
+      # Never export the GNOME settings override directory, to any session.
       environment.sessionVariables.NIX_GSETTINGS_OVERRIDES_DIR = lib.mkForce null;
 
       # Cloudflare WARP ships this tray helper as a default.target user service.
@@ -313,7 +219,6 @@
 
       environment.systemPackages = [
         themeSessionLease
-        desktopSessionClient
         desktopMainPointer
         hyprlandSessionGuarded
       ];

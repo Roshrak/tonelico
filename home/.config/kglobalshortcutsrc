@@ -24,7 +24,7 @@ mute=Volume Mute,Volume Mute,Mute
 
 [ksmserver]
 Halt Without Confirmation=,,Shut Down Without Confirmation
-Lock Session=Meta+Escape\tScreensaver,Meta+L\tScreensaver,Lock Session
+Lock Session=Meta+Esc\tScreensaver,Meta+L\tScreensaver,Lock Session
 Log Out=Ctrl+Alt+Del\tMeta+Shift+E,Ctrl+Alt+Del,Show Logout Screen
 Log Out Without Confirmation=none,,Log Out Without Confirmation
 LogOut=,,Log Out
@@ -107,6 +107,14 @@ Switch to Screen to the Left=,,Switch to Screen to the Left
 Switch to Screen to the Right=,,Switch to Screen to the Right
 Toggle Night Color=none,none,Suspend/Resume Night Light
 Toggle Window Raise/Lower=,,Toggle Window Raise/Lower
+Tonelico Move Window down (Ctrl)=Meta+Ctrl+J,none,Move window down (Super+Ctrl+J)
+Tonelico Move Window down (Shift)=Meta+Shift+J,none,Move window down (Super+Shift+J)
+Tonelico Move Window left (Ctrl)=Meta+Ctrl+H,none,Move window left (Super+Ctrl+H)
+Tonelico Move Window left (Shift)=Meta+Shift+H,none,Move window left (Super+Shift+H)
+Tonelico Move Window right (Ctrl)=Meta+Ctrl+L,none,Move window right (Super+Ctrl+L)
+Tonelico Move Window right (Shift)=Meta+Shift+L,none,Move window right (Super+Shift+L)
+Tonelico Move Window up (Ctrl)=Meta+Ctrl+K,none,Move window up (Super+Ctrl+K)
+Tonelico Move Window up (Shift)=Meta+Shift+K,none,Move window up (Super+Shift+K)
 Walk Through Windows=Alt+Tab,Meta+Tab\tAlt+Tab,Walk Through Windows
 Walk Through Windows (Reverse)=Alt+Shift+Tab,Meta+Shift+Tab\tAlt+Shift+Tab,Walk Through Windows (Reverse)
 Walk Through Windows Alternative=Meta+Tab,none,Walk Through Windows Alternative
@@ -270,28 +278,17 @@ _launch=Meta+Z
 [services][kitty.desktop]
 _launch=Meta+Return
 
-[services][org.kde.spectacle.desktop]
-CurrentMonitorScreenShot=
-OpenWithoutScreenshot=
-RectangularRegionScreenShot=Print
-FullScreenScreenShot=Meta+Print
-ActiveWindowScreenShot=Ctrl+Print
-_launch=
-
-[services][org.kde.dolphin.desktop]
-_launch=Meta+E
-
-[services][systemsettings.desktop]
-_launch=Meta+,
-
 [services][org.kde.krunner.desktop]
 _launch=Meta+Space\tAlt+Space\tAlt+F2
 
-[services][tonelico-control-center.desktop]
-_launch=Meta+S
+[services][org.kde.plasma-systemmonitor.desktop]
+_launch=
 
-[services][tonelico-fcitx-toggle.desktop]
-_launch=Alt+Z
+[services][org.kde.spectacle.desktop]
+ActiveWindowScreenShot=Ctrl+Print
+FullScreenScreenShot=Meta+Print
+RectangularRegionScreenShot=Print
+_launch=
 
-[services][tonelico-logout.desktop]
-_launch=Meta+Shift+Alt+M
+[services][systemsettings.desktop]
+_launch=Meta+,

@@ -18,7 +18,6 @@
       "utilities"
       "ai"
       "desktop-configuration"
-      "gnome"
       "agents"
       "scripts"
       "home-base"

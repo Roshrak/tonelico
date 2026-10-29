@@ -84,7 +84,6 @@ in
     vpl-gpu-rt
     intel-compute-runtime
   ];
-  services.xserver.videoDrivers = [ "modesetting" ];
   services.thermald.enable = true;
 
   environment.sessionVariables.LIBVA_DRIVER_NAME = "iHD";

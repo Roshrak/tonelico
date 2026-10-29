@@ -1,9 +1,9 @@
 {
-  "last_report_path": "/home/aesc/.hermes/logs/curator/20261016-185251",
-  "last_run_at": "2026-10-16T18:52:51.994722+00:00",
-  "last_run_duration_seconds": 0.358403,
+  "last_report_path": "/home/aesc/.hermes/logs/curator/20261023-193920",
+  "last_run_at": "2026-10-23T19:39:20.710709+00:00",
+  "last_run_duration_seconds": 0.486379,
   "last_run_summary": "auto: no changes; llm: skipped (consolidation off)",
   "last_run_summary_shown_at": null,
   "paused": false,
-  "run_count": 6
+  "run_count": 7
 }

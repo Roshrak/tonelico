@@ -165,5 +165,3 @@ bindsym $mod+Shift+c reload
 bindsym $mod+Shift+r restart
 bindsym $mod+Shift+Mod1+m exit
 
-# The file picker (Yazi in Kitty, from the desktop portal) floats in the middle.
-for_window [app_id="tonelico-file-picker"] floating enable, border none, resize set width 1250 height 760, move position center
