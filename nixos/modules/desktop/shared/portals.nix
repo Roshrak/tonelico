@@ -1,9 +1,22 @@
 { ... }:
 {
   nixos.portals =
-    { lib, ... }:
+    { lib, pkgs, ... }:
 
     {
+      # Upstream session modules each add their own portal backend, so the same
+      # packages were listed several times (gtk x4, wlr x2). D-Bus then reported
+      # every duplicate service file on each boot. Each backend is listed once.
+      xdg.portal.extraPortals = lib.mkForce [
+        pkgs.xdg-desktop-portal-gtk
+        pkgs.xdg-desktop-portal-wlr
+        pkgs.xdg-desktop-portal-gnome
+        pkgs.xdg-desktop-portal-hyprland
+        pkgs.kdePackages.xdg-desktop-portal-kde
+        pkgs.kdePackages.kwallet
+        pkgs.gnome-keyring
+      ];
+
       # Use the NixOS portal module's typed config so these files replace the
       # upstream per-DE defaults cleanly instead of concatenating duplicate
       # [preferred] sections into /etc.

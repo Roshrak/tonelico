@@ -58,6 +58,11 @@ in
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      # Only Acer machines have this firmware interface. Any other machine skips
+      # the unit (exit 1 in ExecCondition is a skip, not a failure).
+      ExecCondition = pkgs.writeShellScript "acer-wmi-battery-only-on-acer" ''
+        grep -qx 'Acer' /sys/class/dmi/id/sys_vendor
+      '';
       # Extra modules live outside kmod's default /lib/modules on NixOS.
       ExecStart = "${pkgs.kmod}/bin/modprobe --dirname /run/current-system/kernel-modules acer_wmi_battery enable_health_mode=1";
       # Also reapply when the module is already loaded. Verify the driver's
