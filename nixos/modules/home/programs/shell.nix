@@ -25,6 +25,16 @@
           fi
         '';
       };
+
+      programs.starship = {
+        enable = true;
+        enableBashIntegration = true;
+        settings = {
+          add_newline = true;
+          command_timeout = 1000;
+          nix_shell.format = "via [$symbol$state( \\($name\\))]($style) ";
+        };
+      };
     }
   ;
 }
