@@ -1,9 +1,0 @@
-{
-  "role": "sol_reviewer",
-  "provider": "openai-codex",
-  "model": "gpt-5.6-sol",
-  "reasoning": "high",
-  "review_type": "DELTA_ONLY_RECHECK",
-  "completed": true,
-  "failed": false
-}

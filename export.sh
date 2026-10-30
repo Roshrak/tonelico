@@ -123,7 +123,8 @@ if [ -d "$proj" ]; then
 fi
 if [ -d "$HERMES/software-factory" ]; then
   mkdir -p "$sf/hermes-software-factory"
-  rsync -a --chmod=u+rwX,go+rX --no-links --exclude='runs/' --exclude='*.log' --exclude='*.pdf' --exclude='paper_text.txt' --exclude='__pycache__' --exclude='*.pyc' \
+  # orchestration_artifacts/ holds raw model transcripts (they quoted a hard-coded API key); not config.
+  rsync -a --chmod=u+rwX,go+rX --no-links --exclude='runs/' --exclude='orchestration_artifacts/' --exclude='*.log' --exclude='*.pdf' --exclude='paper_text.txt' --exclude='__pycache__' --exclude='*.pyc' \
     "$HERMES/software-factory"/ "$sf/hermes-software-factory"/
 fi
 
