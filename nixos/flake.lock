@@ -34,6 +34,22 @@
         "type": "github"
       }
     },
+    "chromium-nixpkgs": {
+      "locked": {
+        "lastModified": 1793183032,
+        "narHash": "sha256-56mFMf8heLNfYhcgbrh4GpN5x+G9JOfTFXZC3n6w0qM=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "08d3a97586f6b6343b3b5e799980773629432610",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-26.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "claude-code-nix": {
       "inputs": {
         "nixpkgs": "nixpkgs",
@@ -688,6 +704,7 @@
     },
     "root": {
       "inputs": {
+        "chromium-nixpkgs": "chromium-nixpkgs",
         "claude-code-nix": "claude-code-nix",
         "codex-nixpkgs": "codex-nixpkgs",
         "flake-parts": "flake-parts",

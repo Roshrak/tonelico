@@ -5,7 +5,7 @@
     let
       home = config.home.homeDirectory;
       portable = path: lib.replaceStrings [ "/home/aesc" ] [ home ] (builtins.readFile path);
-      chromium = pkgs.chromium.override { commandLineArgs = [ "--password-store=basic" ]; };
+      chromium = pkgs.chromium-latest.override { commandLineArgs = [ "--password-store=basic" ]; };
       discord = pkgs.discord.override { commandLineArgs = "--ozone-platform=x11"; };
       hermes = inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.messaging;
       chromiumLauncher = pkgs.writeShellScript "chromium-app" ''
