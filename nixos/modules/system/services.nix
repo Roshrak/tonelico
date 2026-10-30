@@ -19,6 +19,14 @@
       # TLS to GTK/GIO applications in the remaining sessions.
       services.colord.enable = true;
       services.gnome.glib-networking.enable = true;
+      # Nautilus (installed) uses the localsearch indexer and the tinysparql store for
+      # search and recent files. Both were implied by the GNOME module before its removal.
+      services.gnome.localsearch.enable = true;
+      services.gnome.tinysparql.enable = true;
+      # NixOS lists every D-Bus package twice (its own dbus-1 dir and system-path).
+      # dbus-broker logs "Ignoring duplicate name" for each one on every boot and
+      # reload; the classic dbus-daemon resolves the same names without warnings.
+      services.dbus.implementation = "dbus";
       services.accounts-daemon.enable = true;
       programs.dconf.enable = true;
       programs.gdk-pixbuf.modulePackages = [ pkgs.librsvg ];
