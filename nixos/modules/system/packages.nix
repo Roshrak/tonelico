@@ -10,6 +10,8 @@
         # setup (xrandr --output HDMI-1 ...) and by shared thumbnail, icon and
         # GTK theme consumers in the remaining sessions.
         xrandr
+        # nft for firewall inspection (also used by Docker's rootless daemon).
+        nftables
         gst-thumbnailers
         glycin-thumbnailer
         desktop-file-utils
