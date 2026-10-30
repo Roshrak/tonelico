@@ -193,8 +193,20 @@
 
         "$SYSTEMCTL" --user stop \
           plasma-workspace-wayland.target \
-          plasma-workspace.target \
-          "$KWIN_UNIT" 2>/dev/null || true
+          plasma-workspace.target 2>/dev/null || true
+
+        # Plasma's client services are PartOf graphical-session.target, not the
+        # targets above, and use Restart=on-failure. Stop them while KWin (and its
+        # Xwayland) still runs; otherwise they lose their display, exit 1 and are
+        # restarted without one, which fails and dumps core on every logout.
+        clients=()
+        while read -r unit _; do
+          [ "$unit" = "$KWIN_UNIT" ] || clients+=("$unit")
+        done < <("$SYSTEMCTL" --user list-units --type=service --state=active,activating,reloading \
+          --plain --no-legend 'plasma-*.service' 2>/dev/null)
+        [ "''${#clients[@]}" -eq 0 ] || "$SYSTEMCTL" --user stop "''${clients[@]}" 2>/dev/null || true
+
+        "$SYSTEMCTL" --user stop "$KWIN_UNIT" 2>/dev/null || true
 
         kwin_inactive() {
           local properties load="" state="" key value
