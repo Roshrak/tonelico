@@ -1,7 +1,0 @@
-{
-  "role": "Sol Reviewer",
-  "model": "gpt-5.6-sol",
-  "review_type": "STEP_CONFORMANCE_REVIEW",
-  "step": 7,
-  "exit_code": 0
-}

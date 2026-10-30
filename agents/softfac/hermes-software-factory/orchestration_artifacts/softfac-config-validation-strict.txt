@@ -1,7 +1,0 @@
-One implementation step only. Preserve the intended SoftFac role contract exactly: Astra is planner, Aider is sole Builder, Luna Debugger is invoked only on failed tests or Sol route=luna and returns diagnosis JSON, Sol Reviewer independently approves/rejects. Do not modify Luna, Builder slicing, test runner, worktree isolation, checkpointing, scope/hash gates, credential handling, or Aider audit logic.
-
-Strictly edit only these production locations: Config.__post_init__ (add if absent) and config_from_args in lib/hermes_factory_v2.py. Tests may append exactly one table-driven test in tests/test_factory_v2.py. Do not remove or alter existing production functions.
-
-Behavior: max_debug_attempts and max_review_cycles reject bool, float (include 1.5), str, None and negative int with FactoryError category config; zero/positive int valid. role_timeout/builder_timeout/test_timeout reject bool, float (include 1.5), str, None, zero/negative int with FactoryError category config; positive int valid. config_from_args must pass input values unchanged; no max clamp. No other behavior change.
-
-Before finishing, inspect git diff and revert any change outside those exact locations. Test command is executed by factory in the candidate worktree: C:/Users/HH18/AppData/Local/hermes/hermes-agent/venv/Scripts/python.exe -m unittest discover -s tests -p test_factory_v2.py. Do not invent another source path. Sol must approve exact diff. No main merge.
