@@ -4,7 +4,7 @@
     { pkgs, ... }:
     {
       home.packages = with pkgs; [
-        (chromium.override { commandLineArgs = [ "--password-store=basic" ]; })
+        (chromium-latest.override { commandLineArgs = [ "--password-store=basic" ]; })
       ];
     }
   ;

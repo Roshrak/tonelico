@@ -18,6 +18,9 @@
     # newer Codex CLI independently. This avoids a broad system upgrade just
     # to receive Codex fixes.
     codex-nixpkgs.url = "github:NixOS/nixpkgs/master";
+    # Chromium follows the current 26.05 branch on its own, so browser security
+    # updates do not require moving the whole system to a newer nixpkgs.
+    chromium-nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     mango.url = "github:mangowm/mango";
     noctalia.url = "github:noctalia-dev/noctalia/cachix";
     lotus.url = "github:LotusInputMethod/fcitx5-lotus";
