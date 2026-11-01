@@ -10,10 +10,11 @@ import { fileURLToPath } from "node:url";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const launcher = path.join(repo, "scripts", "agy-control-mcp");
-const clients = (process.env.DOCTOR_CLIENTS || "claude,codex,opencode,hermes").split(",");
+const clients = (process.env.DOCTOR_CLIENTS || "claude,agy,codex,opencode,hermes").split(",");
 const requiredTools = ["agy_status", "agy_capabilities", "agy_delegate", "agy_workflow_start", "agy_workflow_wait", "agy_apply"];
 const configFiles = {
   claude: undefined, // checked through `claude mcp get`, not a file
+  agy: path.join(os.homedir(), ".gemini", "config", "mcp_config.json"),
   codex: path.join(os.homedir(), ".codex", "config.toml"),
   opencode: path.join(os.homedir(), ".config", "opencode", "opencode.json"),
   hermes: path.join(os.homedir(), ".hermes", "config.yaml"),

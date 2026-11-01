@@ -50,7 +50,7 @@ test("bounded clerk retries one transient failure, validates provenance, and aud
   assert.equal(sawPrompt, true);
   const audit = JSON.parse(await fs.readFile(path.join(workDirectory, "worker-run.json"), "utf8"));
   assert.equal(audit.attempt_count, 2);
-  assert.equal(audit.worker_model, "gemini-3.8-flash-high");
+  assert.equal(audit.worker_model, "gemini-4-argon-high");
 });
 
 test("bounded clerk refuses outside work directories without launching or creating them", async () => {

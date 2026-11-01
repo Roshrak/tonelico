@@ -26,10 +26,10 @@ For eligible implementation work, call `agy_status`, then `agy_delegate` with `d
 
 ## Automatic model profiles
 
-- `fast` uses `gemini-3.8-flash-high` as the primary workhorse model and Claude only if Gemini cannot run.
-- `reasoning` also uses `gemini-3.8-flash-high` first for migrations, architecture, algorithms, public contracts, and cross-module root-cause work; Claude is the fallback.
-- `expert` uses `claude-opus-4-6-thinking` for security, concurrency, corruption, nondeterministic bugs, and high-risk minimal fixes. Codex still reviews every result.
-- Automatic routing uses only Gemini 3.8 Flash High and Claude Opus. Never choose Sonnet, GPT-OSS, or older Gemini models automatically.
+- `fast` uses `gemini-4-argon-high` as the primary workhorse model, with `gemini-3.8-flash-high` and Claude as fallbacks if Argon cannot run.
+- `reasoning` also uses `gemini-4-argon-high` first for migrations, architecture, algorithms, public contracts, and cross-module root-cause work; `gemini-3.8-flash-high` and Claude are the fallbacks.
+- `expert` uses `gemini-4-argon-high` first (with `claude-opus-4-6-thinking` and `gemini-3.8-flash-high` as fallbacks) for security, concurrency, corruption, nondeterministic bugs, and high-risk minimal fixes. Codex still reviews every result.
+- Automatic routing uses Gemini 4 Argon High (`gemini-4-argon-high`), Gemini 3.8 Flash High (`gemini-3.8-flash-high`), and Claude Opus. Never choose Sonnet, GPT-OSS, or older Gemini models automatically.
 
 After delegation, call `agy_wait`, `agy_report`, and every UTF-8 page of `agy_diff`; review the entire patch before any follow-up or application. `agy_apply` always requires explicit user approval. Call `agy_cleanup` only after a terminal run is safe to discard.
 

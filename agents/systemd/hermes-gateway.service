@@ -1,7 +1,7 @@
 [Unit]
 Description=Hermes Agent Gateway - Messaging Platform Integration
-After=network-online.target
-Wants=network-online.target
+After=network-online.target aistudio2api.service
+Wants=network-online.target aistudio2api.service
 StartLimitIntervalSec=0
 
 [Service]
