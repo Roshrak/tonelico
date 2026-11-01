@@ -37,6 +37,10 @@
             #!${pkgs.runtimeShell}
             set -euo pipefail
             "${home}/.local/bin/obs-fix-recording-paths"
+            # OBS 32.1.2's Wayland hotkey backend crashes in libxkbcommon on keyboard
+            # keymap/modifier events (3 coredumps 2026-11-01). Under Xwayland libobs
+            # uses its X11 backend instead; screen capture still goes through the portal.
+            export QT_QPA_PLATFORM=xcb
             exec ${pkgs.obs-studio}/bin/obs "$@"
           '';
         };
