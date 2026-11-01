@@ -68,7 +68,7 @@ function unwrapResult(payload: Record<string, unknown>): Record<string, unknown>
 
 export class AntigravityClerkRunner {
   private readonly executableName = "agy";
-  private readonly defaultWorkerModel = "gemini-3.8-flash-high";
+  private readonly defaultWorkerModel = "gemini-4-argon-high";
   private readonly maxBundleCharacters = 200_000;
   private readonly runProcess: WorkerProcess;
 

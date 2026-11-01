@@ -1,7 +1,10 @@
 model:
-  provider: agy-rotator
-  default: gemini-3.8-flash-high
+  provider: aistudio2api
+  default: gemini-4-argon
   max_tokens: 65536
+  aliases:
+    aistudio: aistudio2api/gemini-4-argon
+    aistudio-pro: aistudio2api/gemini-3.1-pro-preview
 providers:
   agy-rotator:
     api: http://127.0.0.1:8045/v1
@@ -11,9 +14,15 @@ providers:
     api: http://127.0.0.1:8765/v1
     default_model: gemini-3.8-flash-high
     api_key: agy-local-key
+  aistudio2api:
+    api: http://127.0.0.1:2048/v1
+    default_model: gemini-4-argon
+    api_key: not-needed
 fallback_providers:
   - provider: agy-pro
     model: gemini-3.8-flash-high
+  - provider: aistudio2api
+    model: gemini-3.8-flash
 credential_pool_strategies:
   gemini: fill_first
   default: fill_first
@@ -57,6 +66,7 @@ onboarding:
   seen:
     busy_input_prompt: true
     profile_build_offered: true
+    tool_progress_prompt: true
 _config_version: 40
 mcp_servers:
   paddleocr:
@@ -172,3 +182,8 @@ known_builtin_toolsets:
 # fallback_model:
 #   provider: openrouter
 #   model: anthropic/claude-sonnet-4
+agent:
+  reasoning_effort: xhigh
+web:
+  backend: keenable
+  extract_backend: keenable

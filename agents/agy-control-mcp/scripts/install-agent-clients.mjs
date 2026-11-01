@@ -63,6 +63,20 @@ const clients = {
     log("claude", "registered at user scope");
   },
 
+  async agy() {
+    const file = path.join(os.homedir(), ".gemini", "config", "mcp_config.json");
+    const current = await readIfExists(file);
+    const config = current ? JSON.parse(current) : { mcpServers: {} };
+    config.mcpServers = {
+      ...(config.mcpServers || {}),
+      [serverName]: {
+        args: ["--client", "agy"],
+        command: launcher,
+      },
+    };
+    await write("agy", file, current, `${JSON.stringify(config, null, 2)}\n`);
+  },
+
   async codex() {
     const file = path.join(os.homedir(), ".codex", "config.toml");
     const current = await readIfExists(file);
