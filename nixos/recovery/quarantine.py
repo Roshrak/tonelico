@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """Post-install boot gate: retain protected entries and quarantine only rejected ones."""
-import hashlib,json,os,shlex,stat,tempfile
+import hashlib,json,os,re,shlex,stat,tempfile
 from pathlib import Path
 
-PROTECTED={
- 128:'/nix/store/iiqszz4m6859cl2q80pl606j7va32gk1-nixos-system-tonelico-nix-26.05.20260927.cf5e765',
- 129:'/nix/store/zwwx7k1daydzxa9q4hkgyncwvr3vcg1r-nixos-system-tonelico-nix-26.05.20260927.cf5e765',
-}
+FALLBACK_PROFILE='/nix/var/nix/profiles/system-profiles/fallback'
 REJECTED={
  130:'/nix/store/ndx0lwjaqrv1kkdkwmrmq3r0a16l0b1f-nixos-system-tonelico-nix-26.05.20260927.cf5e765',
  131:'/nix/store/4gjy25xrs8mxx141vksrkx3lri5ayxph-nixos-system-tonelico-nix-26.05.20260927.cf5e765',
@@ -44,13 +41,19 @@ def sync_dir(p):
  try:os.fsync(fd)
  finally:os.close(fd)
 
-def quarantine(boot,protected=PROTECTED,rejected=REJECTED,uid=0):
+def protected_entries(profile=FALLBACK_PROFILE):
+ m=re.fullmatch(r'fallback-([0-9]+)-link',os.readlink(profile))
+ if not m:raise RuntimeError('Unexpected fallback profile link: '+profile)
+ return {'nixos-fallback-generation-%s.conf'%m.group(1):os.path.realpath(profile)}
+
+def quarantine(boot,protected=None,rejected=REJECTED,uid=0):
+ if protected is None:protected=protected_entries()
  boot=Path(boot);checked_path(boot,uid,True)
  loader=boot/'loader';entries=loader/'entries'
  checked_path(loader,uid,True);checked_path(entries,uid,True)
  # Validate every fallback and payload before changing any rejected entry.
- for n,top in protected.items():
-  f=entry(entries/('nixos-generation-%s.conf'%n),top,uid)
+ for name,top in protected.items():
+  f=entry(entries/name,top,uid)
   for key,resource in [('linux','kernel'),('initrd','initrd')]:
    value=Path(f.get(key,''))
    if not value.is_absolute() or '..' in value.parts:raise RuntimeError('Unsafe/missing boot payload path')
