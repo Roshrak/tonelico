@@ -6,7 +6,7 @@
 
   # The current desktop configuration contains intentional /home/aesc paths.
   primaryUser = "aesc";
-  retainLocalRecovery = false; # Preserve this laptop's verified fallbacks.
+  retainLocalRecovery = false; # Validate this laptop's named fallback at every boot install.
   userUid = 1000;
   userGid = 100;
 
