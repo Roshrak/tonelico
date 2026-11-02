@@ -50,18 +50,44 @@ _TOOL_EMOJIS = {
 }
 
 
-def _sanitize_history_snapshot(raw_history: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
-    """Return a clean deep-copied transcript snapshot ending at the last complete assistant message."""
+def _sanitize_history_snapshot(
+    raw_history: Optional[List[Dict[str, Any]]],
+    max_messages: int = 10,
+    max_total_chars: int = 16000,
+) -> List[Dict[str, Any]]:
+    """Return a lightweight recent transcript window so parallel workers never trigger context compaction."""
     if not raw_history or not isinstance(raw_history, list):
         return []
-    snapshot = copy.deepcopy(raw_history)
-    while snapshot:
-        last = snapshot[-1]
-        role = last.get("role") if isinstance(last, dict) else None
-        if role == "assistant" and not last.get("tool_calls"):
+    clean_turns: List[Dict[str, Any]] = []
+    for msg in raw_history:
+        if not isinstance(msg, dict):
+            continue
+        role = msg.get("role")
+        if role not in ("user", "assistant"):
+            continue
+        if role == "assistant" and msg.get("tool_calls"):
+            continue
+        content = msg.get("content")
+        if not isinstance(content, str) or not content.strip():
+            continue
+        text = content.strip()
+        if len(text) > 2500:
+            text = text[:2500] + "\n...[truncated for fast parallel context]..."
+        clean_turns.append({"role": role, "content": text})
+
+    while clean_turns and clean_turns[-1].get("role") != "assistant":
+        clean_turns.pop()
+
+    selected: List[Dict[str, Any]] = []
+    total_chars = 0
+    for msg in reversed(clean_turns[-max_messages:]):
+        c_len = len(msg.get("content", ""))
+        if selected and total_chars + c_len > max_total_chars:
             break
-        snapshot.pop()
-    return snapshot
+        selected.append(msg)
+        total_chars += c_len
+    selected.reverse()
+    return selected
 
 
 async def _sync_parallel_turn_to_transcript(
