@@ -64,7 +64,13 @@ in
         grep -qx 'Acer' /sys/class/dmi/id/sys_vendor
       '';
       # Extra modules live outside kmod's default /lib/modules on NixOS.
-      ExecStart = "${pkgs.kmod}/bin/modprobe --dirname /run/current-system/kernel-modules acer_wmi_battery enable_health_mode=1";
+      ExecStart = pkgs.writeShellScript "load-acer-wmi-battery" ''
+        if [ -d "/run/current-system/kernel-modules/lib/modules/$(uname -r)" ]; then
+          exec ${pkgs.kmod}/bin/modprobe --dirname /run/current-system/kernel-modules acer_wmi_battery enable_health_mode=1
+        else
+          exec ${pkgs.kmod}/bin/modprobe --dirname /run/booted-system/kernel-modules acer_wmi_battery enable_health_mode=1
+        fi
+      '';
       # Also reapply when the module is already loaded. Verify the driver's
       # firmware readback; loading a module alone does not establish success.
       ExecStartPost = pkgs.writeShellScript "verify-acer-battery-limit" ''

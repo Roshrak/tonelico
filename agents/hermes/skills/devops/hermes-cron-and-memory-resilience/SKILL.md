@@ -44,11 +44,17 @@ Use when configuring or troubleshooting:
    - Check `/proc/<pid>/cmdline` for any active Nix build (`nixos-rebuild`, `update-system.sh`, `nix build`, `nix flake update`); if none is running, execute `/run/current-system/sw/bin/nix-collect-garbage --delete-older-than 7d`.
    - Clean Hermes temporary caches (`~/.hermes/{audio_cache,image_cache}`, `sandboxes` >2d, `cron/output` >3d, `cache/{scratch,terminal-output}` >1d).
 
-### 2. OOM-Safe NixOS Updates & Replica Repository Hygiene (`~/tonelico`)
-1. Keep `max-jobs = 2; cores = 4;` set in `/etc/nixos/modules/system/base.nix` and pass `--max-jobs 2 --cores 4` (or `--max-jobs 1 --cores 4` for background runs) to `nixos-rebuild build` / `nix build` — `/etc/nixos/modules/desktop/shared/overview.nix` applies a local patch to KWin, forcing source compilation of `kwin` and `plasma-workspace` that triggers kernel OOM if allowed to spawn unlimited `cc1plus` jobs.
-2. For long background NixOS updates (`/home/aesc/.local/bin/tonelico-safe-update`), launch inside an isolated, memory-bounded systemd user unit (`systemd-run --user --unit=tonelico-safe-update.service -p MemoryHigh=8G -p MemoryMax=10G -p CPUWeight=50 -p Nice=10`), pin the evaluated `.drv` and `--out-link` under `/home/aesc/.local/share/nix-roots/` until `switch` completes, and send progress updates every 10 minutes via `/home/aesc/.local/bin/telegram_send.py`.
-3. Never hardcode API keys or fallback secrets inside `/etc/nixos/home/files/bin/*`, `~/.local/lib/*.py`, `~/.local/bin/*`, or `~/.hermes/config.yaml`. Store keys in `/home/aesc/.hermes/.env` (`0600`), reference `key_env:` in `~/.hermes/config.yaml`, and refresh `/home/aesc/tonelico` exclusively via `/home/aesc/tonelico/export.sh` (which runs `scripts/check-secrets.sh` with `gitleaks` and local canary secret checks).
-4. After running any `sudo nix` command in `/etc/nixos`, verify `/etc/nixos/.git/index` and `/etc/nixos/flake.lock` are owned by `aesc:users` (`sudo chown -R aesc:users /etc/nixos/.git /etc/nixos/flake.lock`).
+### 2. Fast Binary-Cached & OOM-Safe NixOS Updates (`~/tonelico`)
+1. Keep `max-jobs = 2; cores = 4;` set in `/etc/nixos/modules/system/base.nix` and pass `--max-jobs 2 --cores 4` to `nixos-rebuild build` / `nix build` in `/home/aesc/vivian/update-system.sh` and `/home/aesc/vivian/rebuild-system.sh` so any source build cannot spawn unbounded `cc1plus` jobs and trigger kernel OOM.
+2. Eliminate local C++/C source rebuilds so updates and fresh installs pull pre-built binaries from `cache.nixos.org`:
+   - **KDE/KWin (`overview.nix`)**: Never patch `kwin` via `kdePackages.overrideScope` — modifying `kwin` invalidates the binary cache for 10 KDE C++ packages (`kwin`, `kwin-x11`, `plasma-workspace`, `plasma-desktop`, `kdeplasma-addons`, `powerdevil`, `plasma-pa`, `plasma-browser-integration`, `xdg-desktop-portal-kde`, `kinfocenter`). Instead, bind pointer chords via a lightweight systemd user service (`tonelico-plasma-overview-chord`) that invokes `dbus-send --session --type=method_call --dest=org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut string:Overview`.
+   - **GVFS (`services.nix`)**: Use `services.gvfs.package = pkgs.gnome.gvfs;` (pre-built with `gnomeSupport = true` on `cache.nixos.org`) and `systemd.user.services.gvfs-daemon.path = [ pkgs.wsdd ];` instead of `gvfs.overrideAttrs`.
+   - **Xwayland (`services.nix`)**: Pin `programs.xwayland.package = pkgs.xwayland;` when `services.flatpak.enable = true` — Flatpak enables `fonts.fontDir.enable = true`, which otherwise causes NixOS to override `xwayland` with a custom `-Ddefault_font_path` meson flag and compile it from source.
+   - **Flake Inputs (`flake.nix`)**: Never point flake inputs at `github:NixOS/nixpkgs/master` (use `nixos-unstable` or `nixos-26.05` so Hydra binaries are already cached), and set `inputs.nixpkgs.follows = "nixpkgs";` on third-party inputs (`mango`, `lotus`, `claude-code-nix`) so they reuse the system `nixpkgs` store paths.
+   - **Audit Source Builds Before Switching**: Verify zero unexpected source compiles remain by inspecting `.drv` files in `nix-store --realise --dry-run <toplevel.drv>` that do not contain `preferLocalBuild`.
+3. For background NixOS updates (`/home/aesc/.local/bin/tonelico-safe-update.py`), launch inside an isolated, memory-bounded systemd user unit (`systemd-run --user --unit=tonelico-safe-update.service -p MemoryHigh=8G -p MemoryMax=10G -p CPUWeight=50 -p Nice=10`), pin the evaluated `.drv` and `--out-link` under `/home/aesc/.local/share/nix-roots/` until `switch` completes, and send progress updates every 10 minutes via `/home/aesc/.local/bin/telegram_send.py`.
+4. Never hardcode API keys or fallback secrets inside `/etc/nixos/home/files/bin/*`, `~/.local/lib/*.py`, `~/.local/bin/*`, or `~/.hermes/config.yaml`. Store keys in `/home/aesc/.hermes/.env` (`0600`), reference `key_env:` in `~/.hermes/config.yaml`, and refresh `/home/aesc/tonelico` exclusively via `/home/aesc/tonelico/export.sh` (which runs `scripts/check-secrets.sh` with `gitleaks` and local canary secret checks).
+5. After running any `sudo nix` command in `/etc/nixos`, verify `/etc/nixos/.git/index` and `/etc/nixos/flake.lock` are owned by `aesc:users` (`sudo chown -R aesc:users /etc/nixos/.git /etc/nixos/flake.lock`).
 
 ### 3. Concurrent Multi-Order Execution (`parallel-orders` Plugin)
 1. Keep `parallel-orders` enabled under `plugins.enabled` in `/home/aesc/.hermes/config.yaml` (`/home/aesc/.hermes/plugins/parallel-orders/__init__.py`).
@@ -67,7 +73,7 @@ Use when configuring or troubleshooting:
 2. In `/home/aesc/aistudio2api/aistudio2api`, wait up to 25 seconds for network/DNS readiness (`getent hosts aistudio.google.com`) before launching `./aistudio2api-core`, and export `AUTO_START=true`.
 3. Keep `aistudio2api-watchdog.timer` (`OnBootSec=15s`, `OnUnitActiveSec=30s`) enabled so `/home/aesc/.local/bin/aistudio2api-watchdog` queries `http://127.0.0.1:2048/api/status` and sends `POST http://127.0.0.1:2048/api/control/start` (with Basic Auth from `/home/aesc/aistudio2api/.env`) whenever `state == "STOPPED"`.
 
-### 3. Protect Persistent Memory (`hermes-memory-guard`)
+### 5. Protect Persistent Memory (`hermes-memory-guard`)
 1. Maintain the Git-versioned memory vault at `/home/aesc/.local/share/hermes-memory-vault/repo` and atomic SQLite backup at `/home/aesc/.local/share/hermes-memory-vault/state.db.bak` via `/home/aesc/.local/bin/hermes-memory-guard`.
 2. Ensure both `hermes-memory-guard.path` (`PathChanged=` on `MEMORY.md`, `USER.md`, `SOUL.md`, `AGENTS.md`) and `hermes-memory-guard.timer` (`OnUnitActiveSec=5m`) remain enabled:
    ```bash
@@ -75,7 +81,7 @@ Use when configuring or troubleshooting:
    ```
 3. If `MEMORY.md`, `USER.md`, `SOUL.md`, or `AGENTS.md` is intentionally shortened by more than 50%, run `/home/aesc/.local/bin/hermes-memory-guard --accept-shrink` immediately afterward so the anti-truncation guard commits the smaller file instead of reverting it.
 
-### 4. Ephemeral Live Progress Window on Telegram
+### 6. Ephemeral Live Progress Window on Telegram
 1. Configure `/home/aesc/.hermes/config.yaml` under both `display:` and `display.platforms.telegram:` so progress updates accumulate in a single message bubble and auto-delete once the final reply is delivered:
    ```yaml
    display:
