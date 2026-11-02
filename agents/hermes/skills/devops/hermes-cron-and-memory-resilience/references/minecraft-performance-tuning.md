@@ -45,10 +45,14 @@
      ```text
      -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -XX:+ZGenerational -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+ParallelRefProcEnabled -XX:+PerfDisableSharedMem -XX:+UseTransparentHugePages -Dfml.ignorePatchDiscrepancies=true -Dfml.ignoreInvalidMinecraftCertificates=true
      ```
-3. **Wayland & Mesa Threaded OpenGL Environment**:
-   - Set `Env` in `instance.cfg` to:
+3. **Wayland & Mesa Threaded OpenGL Environment (Qt INI Comma Pitfall)**:
+   - Close PrismLauncher before editing `prismlauncher.cfg` or `instance.cfg` so its in-memory `QSettings` state does not overwrite disk edits on launch or exit.
+   - Never put unquoted comma-separated JSON inside `Env={...}` in `instance.cfg` — Qt's `QSettings::IniFormat` parser splits unquoted strings containing `,` into a `QStringList`, fails `QJsonDocument::fromJson`, and resets `Env={}` (causing SDL3 to fall back to XWayland and fail OpenGL context creation).
+   - Instead, keep `Env={\"SDL_VIDEO_DRIVER\":\"wayland\"}` as a single comma-free key and pass all driver environment variables via `WrapperCommand`:
      ```ini
-     Env={\"MESA_SHADER_CACHE_MAX_SIZE\":\"4G\",\"SDL_VIDEO_DRIVER\":\"wayland\",\"__GL_THREADED_OPTIMIZATIONS\":\"1\",\"mesa_glthread\":\"true\",\"vblank_mode\":\"0\"}
+     Env={\"SDL_VIDEO_DRIVER\":\"wayland\"}
+     OverrideCommands=true
+     WrapperCommand="/run/current-system/sw/bin/env SDL_VIDEO_DRIVER=wayland mesa_glthread=true MESA_SHADER_CACHE_MAX_SIZE=4G vblank_mode=0"
      ```
 4. **Keep `JavaPath` Synced Across NixOS Rebuilds**:
    - After a `nixos-rebuild switch` that updates OpenJDK, inspect `strings $(which prismlauncher) | grep openjdk-25` and update `JavaPath=` in `prismlauncher.cfg` and every `instances/*/instance.cfg` so subsequent Nix garbage collection does not invalidate a stale `/nix/store/...-openjdk-25.../bin/java` path.

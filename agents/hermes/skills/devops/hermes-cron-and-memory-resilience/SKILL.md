@@ -60,8 +60,19 @@ Use when configuring or troubleshooting:
 
 ### 3. Concurrent Multi-Order Execution (`parallel-orders` Plugin)
 1. Keep `parallel-orders` enabled under `plugins.enabled` in `/home/aesc/.hermes/config.yaml` (`/home/aesc/.hermes/plugins/parallel-orders/__init__.py`).
-2. In `register(ctx)`, patch `GatewayBusySessionMixin._handle_active_session_busy_message` (from `gateway.run_busy`) and `GatewayInboundMixin._hm_handle_running_session_message` (from `gateway.run_inbound`) so follow-up messages sent while a turn is already running spawn an isolated concurrent `AIAgent` task (`asyncio.create_task`) with its own ephemeral progress bubble rather than interrupting or steering the active turn.
-3. Only pass through to interrupt/steer when the user sends an explicit stop keyword (`stop`, `cancel`, `abort`, `dừng`, `thôi`, `/stop`) or prefixes the message with `steer:` / `/steer`.
+2. In `register(ctx)`, save the original methods once (`_orig_busy_handler_before_parallel`, `_orig_inbound_running_before_parallel`) and patch `GatewayBusySessionMixin._handle_active_session_busy_message` (from `gateway.run_busy`) and `GatewayInboundMixin._hm_handle_running_session_message` (from `gateway.run_inbound`) so follow-up messages sent while a turn is running spawn an isolated concurrent `AIAgent` task (`_run_parallel_order`) rather than interrupting or steering the active turn.
+3. Keep `_sanitize_history_snapshot` bounded to a lightweight recent window (`max_messages=10`, `max_total_chars=16000`, `user`/`assistant` text only, no `tool_calls`) so parallel workers start immediately without triggering context compaction.
+4. Keep all active live progress bubbles (both primary `TurnRunner` bubbles and `_ParallelProgressBubble` instances) anchored at the **bottom** of the Telegram chat below any newly arrived user messages or completed results from other parallel processes:
+   - Mark progress bubble sends with a `contextvars.ContextVar("_IS_PROGRESS_SEND", default=False)` so two concurrent progress bubbles never trigger each other to re-send (preventing infinite leapfrogging).
+   - Wrap `TelegramAdapter` delivery methods (`send`, `send_image`, `send_image_file`, `send_multiple_images`, `send_voice`, `send_video`, `send_document`) and inbound events to advance `_LATEST_PERMANENT_MSG_ID[chat_id]` whenever `_IS_PROGRESS_SEND.get()` is `False`.
+   - Whenever `_LATEST_PERMANENT_MSG_ID[chat_id] > int(progress_msg_id)`, delete the stale progress bubble above the result and re-post it at the bottom of the chat with its accumulated lines.
+5. Hot-reload edits to `/home/aesc/.hermes/plugins/parallel-orders/__init__.py` into the running gateway without restarting `hermes-gateway.service` via:
+   ```python
+   from gateway.control_socket import reload_gateway_plugins
+   from hermes_constants import get_hermes_home
+   reload_gateway_plugins(get_hermes_home())
+   ```
+6. Only pass through to interrupt/steer when the user sends an explicit stop keyword (`stop`, `cancel`, `abort`, `dừng`, `thôi`, `/stop`) or prefixes the message with `steer:` / `/steer`.
 
 ### 4. Pin Nix Store Dependencies & Harden `aistudio2api` Startup
 1. Pin all `/nix/store/...` environments and binaries referenced directly by user systemd units or wrapper scripts (`hermes-agent-env`, `hermes-agent-pkg`, `agy-python-env`, `mc-python`, and `aistudio2api-xvfb`) with permanent Nix GC roots so `nix-collect-garbage` never deletes them:
@@ -99,7 +110,8 @@ Use when configuring or troubleshooting:
 ## Pitfalls
 - Never reference a `/nix/store/...` path in a systemd unit or wrapper script without registering a symlink root via `nix-store --add-root` — `nix-collect-garbage` deletes unrooted store paths and breaks the service on its next restart.
 - Avoid literal `&` characters inside `#` comments in foreground `terminal` tool calls — the backgrounding guard scans the raw command string and rejects foreground execution when `&` is present.
-- Use a bracketed first character in `pkill -f` patterns (e.g. `pkill -f "[n]et.fabricmc"`) when running inside `terminal` tool calls — unbracketed `pkill -f` matches the subshell's own `bash -c` command line and kills the tool call with `SIGTERM` (`exit -15`).
+- Use a bracketed first character in `pkill -f` patterns (e.g. `pkill -f "[n]et.fabricmc"`) and skip `os.getpid()`/`os.getppid()` and `"bash"`/`"sh"` processes when scanning `ps -eo pid,comm,args` inside `terminal` tool calls — unguarded matches hit the outer `bash -c` wrapper and kill the tool call with `SIGTERM` (`exit -15`).
+- Avoid combining `@dataclasses.dataclass` with `from __future__ import annotations` in plugin modules that may be executed via `spec.loader.exec_module` prior to `sys.modules` insertion — Python 3.12's `dataclasses._is_type` inspects `sys.modules.get(cls.__module__).__dict__` and raises `AttributeError` when the module is not yet registered; use a standard `__init__` method instead.
 - Use `.py` scripts (not `.sh` scripts) for `no_agent=True` Hermes cronjobs on NixOS — the gateway scheduler invokes `.sh` via `shutil.which("bash")`, which fails when `/run/current-system/sw/bin` is absent from the service environment's default `PATH`.
 - Check `/proc/<pid>/cmdline` for active `-profile /tmp/aistudio-camoufox-*` arguments before deleting `/tmp/aistudio-camoufox-*` directories — deleting an active Camoufox profile crashes the running `aistudio2api` browser worker.
 - Run `PRAGMA quick_check(1)` on `state.db` before backing it up to `state.db.bak` — blindly copying `state.db` without an integrity check overwrites a healthy backup if the live database is ever corrupted.

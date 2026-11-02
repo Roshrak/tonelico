@@ -28,11 +28,7 @@ providers:
     api: http://127.0.0.1:2048/v1
     default_model: gemini-4-argon
     key_env: AISTUDIO2API_API_KEY
-fallback_providers:
-- provider: agy-pro
-  model: gemini-3.8-flash-high
-- provider: aistudio2api
-  model: gemini-3.8-flash
+fallback_providers: []
 credential_pool_strategies:
   gemini: fill_first
   default: fill_first
