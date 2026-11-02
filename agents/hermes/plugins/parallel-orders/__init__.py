@@ -799,10 +799,11 @@ def register(ctx) -> None:
 
         from gateway.run_busy import GatewayBusySessionMixin
 
-        if getattr(GatewayBusySessionMixin, "_parallel_orders_patched", False):
-            return
-
-        orig_busy_handler = GatewayBusySessionMixin._handle_active_session_busy_message
+        if not hasattr(GatewayBusySessionMixin, "_orig_busy_handler_before_parallel"):
+            GatewayBusySessionMixin._orig_busy_handler_before_parallel = (
+                GatewayBusySessionMixin._handle_active_session_busy_message
+            )
+        orig_busy_handler = GatewayBusySessionMixin._orig_busy_handler_before_parallel
 
         async def patched_handle_active_session_busy_message(
             self, event: Any, session_key: str
@@ -846,7 +847,11 @@ def register(ctx) -> None:
         with suppress(Exception):
             from gateway.run_inbound import GatewayInboundMixin
 
-            orig_inbound_running = GatewayInboundMixin._hm_handle_running_session_message
+            if not hasattr(GatewayInboundMixin, "_orig_inbound_running_before_parallel"):
+                GatewayInboundMixin._orig_inbound_running_before_parallel = (
+                    GatewayInboundMixin._hm_handle_running_session_message
+                )
+            orig_inbound_running = GatewayInboundMixin._orig_inbound_running_before_parallel
 
             async def patched_hm_handle_running_session_message(
                 self, event: Any, source: Any, _quick_key: str
