@@ -5,6 +5,16 @@ model:
   aliases:
     aistudio: aistudio2api/gemini-4-argon
     aistudio-pro: aistudio2api/gemini-3.1-pro-preview
+    argon-high: aistudio2api/gemini-4-argon-high
+    argon-med: aistudio2api/gemini-4-argon-medium
+    argon-low: aistudio2api/gemini-4-argon-low
+    flash-high: aistudio2api/gemini-3.8-flash-high
+    flash-med: aistudio2api/gemini-3.8-flash-medium
+    flash-low: aistudio2api/gemini-3.8-flash-low
+    fast: aistudio2api/gemma-4-26b-a4b-it
+    flash: aistudio2api/gemini-3.8-flash
+    lite: agy-rotator/gemini-3.1-flash-lite
+    tab-lite: agy-rotator/tab_flash_lite_preview
 providers:
   agy-rotator:
     api: http://127.0.0.1:8045/v1
@@ -17,28 +27,39 @@ providers:
   aistudio2api:
     api: http://127.0.0.1:2048/v1
     default_model: gemini-4-argon
-    api_key: not-needed
+    key_env: AISTUDIO2API_API_KEY
 fallback_providers:
-  - provider: agy-pro
-    model: gemini-3.8-flash-high
-  - provider: aistudio2api
-    model: gemini-3.8-flash
+- provider: agy-pro
+  model: gemini-3.8-flash-high
+- provider: aistudio2api
+  model: gemini-3.8-flash
 credential_pool_strategies:
   gemini: fill_first
   default: fill_first
 browser:
   cloud_provider: browser-use
 display:
-  busy_input_mode: queue
-  busy_steer_ack_enabled: true
-  busy_text_mode: queue
-  busy_ack_enabled: true
+  busy_input_mode: steer
+  busy_steer_ack_enabled: false
+  busy_text_mode: interrupt
+  busy_ack_enabled: false
+  tool_progress_grouping: accumulate
+  cleanup_progress: true
+  platforms:
+    telegram:
+      tool_progress: all
+      tool_progress_grouping: accumulate
+      cleanup_progress: true
+      thinking_progress: true
+      interim_assistant_messages: false
+      tool_preview_length: 80
+  reasoning: false
 telegram:
   streaming: true
   allow_from:
-    - '@TELEGRAM_USER_ID@'
+  - '@TELEGRAM_USER_ID@'
   allow_admin_from:
-    - '@TELEGRAM_USER_ID@'
+  - '@TELEGRAM_USER_ID@'
 approvals:
   mode: false
   cron_mode: auto
@@ -46,10 +67,13 @@ approvals:
   unattended_mode: auto
 plugins:
   enabled:
-    - session-access
+  - session-access
+  - parallel-orders
   disabled: []
   entries:
     session-access:
+      allow_tool_override: false
+    parallel-orders:
       allow_tool_override: false
 tools:
   terminal:
@@ -78,112 +102,115 @@ mcp_servers:
   hermes-factory-mcp:
     command: /run/current-system/sw/bin/python3
     args:
-      - /home/aesc/.local/lib/factory_mcp_adapter.py
+    - /home/aesc/.local/lib/factory_mcp_adapter.py
     enabled: true
   agy-control:
     command: /home/aesc/agy-control-mcp/scripts/agy-control-mcp
     args:
-      - --client
-      - hermes
+    - --client
+    - hermes
     connect_timeout: 240
     timeout: 3600
     enabled: true
+  doc-scanner-mcp:
+    command: /run/current-system/sw/bin/python3
+    args:
+    - /home/aesc/.local/lib/doc_scanner_mcp.py
+    enabled: true
+  customs-legal-mcp:
+    command: /run/current-system/sw/bin/python3
+    args:
+    - /home/aesc/.local/lib/customs_legal_mcp.py
+    enabled: true
+  desktop-computer-use-mcp:
+    command: /run/current-system/sw/bin/python3
+    args:
+    - /home/aesc/.local/lib/desktop_computer_use_mcp.py
+    enabled: true
+  browser-automation-mcp:
+    command: /run/current-system/sw/bin/python3
+    args:
+    - /home/aesc/.local/lib/browser_automation_mcp.py
+    enabled: true
+  minecraft-ops-mcp:
+    command: /run/current-system/sw/bin/python3
+    args:
+    - /home/aesc/.local/lib/minecraft_ops_mcp.py
+    enabled: true
+  discord-ops-mcp:
+    command: /run/current-system/sw/bin/python3
+    args:
+    - /home/aesc/.local/lib/discord_ops_mcp.py
+    enabled: true
+  fast-chat-mcp:
+    command: /run/current-system/sw/bin/python3
+    args:
+    - /home/aesc/.local/lib/fast_chat_mcp.py
+    enabled: true
 platform_toolsets:
   cli:
-    - browser
-    - clarify
-    - code_execution
-    - computer_use
-    - context_engine
-    - cronjob
-    - delegation
-    - file
-    - homeassistant
-    - image_gen
-    - kanban
-    - memory
-    - session_search
-    - skills
-    - terminal
-    - todo
-    - tts
-    - video
-    - vision
-    - web
-    - x_search
-    - yuanbao
+  - browser
+  - clarify
+  - code_execution
+  - computer_use
+  - connections
+  - context_engine
+  - cronjob
+  - delegation
+  - file
+  - homeassistant
+  - image_gen
+  - kanban
+  - memory
+  - session_search
+  - skills
+  - spotify
+  - stt
+  - terminal
+  - todo
+  - tts
+  - video
+  - video_gen
+  - vision
+  - web
+  - x_search
+  - yuanbao
 known_plugin_toolsets:
   cli:
-    - a2a
-    - spotify
+  - a2a
+  - spotify
 known_builtin_toolsets:
   cli:
-    - browser
-    - clarify
-    - code_execution
-    - computer_use
-    - context_engine
-    - cronjob
-    - delegation
-    - discord
-    - discord_admin
-    - file
-    - homeassistant
-    - image_gen
-    - memory
-    - session_search
-    - skills
-    - spotify
-    - stt
-    - terminal
-    - todo
-    - tts
-    - video
-    - video_gen
-    - vision
-    - web
-    - x_search
-    - yuanbao
-
-# ── Security ──────────────────────────────────────────────────────────
-# Secret redaction is ON by default — strings that look like API keys,
-# tokens, and passwords are masked in tool output, logs, and chat
-# responses before the model or user ever sees them. Set redact_secrets
-# to false to disable (e.g. when developing the redactor itself).
-# tirith pre-exec scanning is enabled by default when the tirith binary
-# is available. Configure via security.tirith_* keys or env vars
-# (TIRITH_ENABLED, TIRITH_BIN, TIRITH_TIMEOUT, TIRITH_FAIL_OPEN).
-#
-# security:
-#   redact_secrets: true
-#   tirith_enabled: true
-#   tirith_path: "tirith"
-#   tirith_timeout: 5
-#   tirith_fail_open: true
-
-# ── Fallback Model ────────────────────────────────────────────────────
-# Automatic provider failover when primary is unavailable.
-# Uncomment and configure to enable. Triggers on rate limits (429),
-# overload (529), service errors (503), or connection failures.
-#
-# Supported providers:
-#   openrouter   (OPENROUTER_API_KEY)  — routes to any model
-#   openai-codex (OAuth — hermes auth) — OpenAI Codex
-#   nous         (OAuth — hermes auth) — Nous Portal
-#   zai          (ZAI_API_KEY)         — Z.AI / GLM
-#   kimi-coding  (KIMI_API_KEY)        — Kimi / Moonshot
-#   kimi-coding-cn (KIMI_CN_API_KEY)   — Kimi / Moonshot (China)
-#   minimax      (MINIMAX_API_KEY)     — MiniMax
-#   minimax-cn   (MINIMAX_CN_API_KEY)  — MiniMax (China)
-#   bedrock      (AWS IAM / boto3)     — AWS Bedrock (Converse API)
-#
-# For custom OpenAI-compatible endpoints, add base_url and key_env.
-#
-# fallback_model:
-#   provider: openrouter
-#   model: anthropic/claude-sonnet-4
+  - browser
+  - clarify
+  - code_execution
+  - computer_use
+  - connections
+  - context_engine
+  - cronjob
+  - delegation
+  - discord
+  - discord_admin
+  - file
+  - homeassistant
+  - image_gen
+  - kanban
+  - memory
+  - session_search
+  - skills
+  - spotify
+  - stt
+  - terminal
+  - todo
+  - tts
+  - video
+  - video_gen
+  - vision
+  - web
+  - x_search
+  - yuanbao
 agent:
-  reasoning_effort: xhigh
+  reasoning_effort: high
 web:
   backend: keenable
   extract_backend: keenable

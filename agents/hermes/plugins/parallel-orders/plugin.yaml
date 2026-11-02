@@ -1,0 +1,5 @@
+name: parallel-orders
+version: 1.0.0
+description: "Run new user orders concurrently in parallel when a turn is already active on the session, instead of cutting off or queueing behind the active order."
+author: "Hermes Agent"
+hooks: []

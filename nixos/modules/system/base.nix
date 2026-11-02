@@ -4,6 +4,8 @@
     { lib, ... }:
     {
       nix.settings = {
+        max-jobs = 2;
+        cores = 4;
         experimental-features = [
           "nix-command"
           "flakes"

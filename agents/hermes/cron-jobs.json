@@ -3,7 +3,7 @@
     "name": "Hermes & System 12h Cleanup",
     "script": "clean-system.py",
     "no_agent": true,
-    "schedule": "every 720m",
+    "schedule": "0 9,21 * * *",
     "deliver": "telegram:@TELEGRAM_USER_ID@"
   }
 ]

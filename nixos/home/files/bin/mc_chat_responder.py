@@ -16,6 +16,31 @@ import collections
 LOG_PATH = "/home/aesc/.local/share/PrismLauncher/instances/Fabulously Optimized/minecraft/logs/latest.log"
 UINPUT_BIN = "/home/aesc/.local/bin/uinput_type"
 BRIDGE_URL = "http://127.0.0.1:8765/v1/chat/completions"
+def _load_local_secret(env_var: str, env_file: str, file_key: str) -> str:
+    val = os.environ.get(env_var, "").strip()
+    if val:
+        return val
+    for candidate, k in (
+        (os.path.expanduser("~/.hermes/.env"), env_var),
+        (os.path.expanduser(f"~/{env_file}"), file_key),
+    ):
+        try:
+            if os.path.exists(candidate):
+                with open(candidate, "r", encoding="utf-8", errors="ignore") as fh:
+                    for line in fh:
+                        if line.startswith(f"{k}="):
+                            return line.split("=", 1)[1].strip().strip('"').strip("'")
+        except OSError:
+            pass
+    return "not-needed"
+
+FAST_BRIDGE_ENDPOINTS = [
+    ("http://127.0.0.1:8045/v1/chat/completions", "gemini-3.1-flash-lite", _load_local_secret("AGY_ROTATOR_API_KEY", "agm-docker/.env", "API_KEY")),
+    ("http://127.0.0.1:8045/v1/chat/completions", "gemini-3.8-flash-low", _load_local_secret("AGY_ROTATOR_API_KEY", "agm-docker/.env", "API_KEY")),
+    ("http://127.0.0.1:2048/v1/chat/completions", "gemini-3.8-flash-low", _load_local_secret("AISTUDIO2API_API_KEY", "aistudio2api/.env", "PROXY_API_KEY")),
+    (BRIDGE_URL, "gemini-3.8-flash-low", "agy-local-key"),
+]
+LLM_REPLY_CACHE = collections.OrderedDict()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -301,41 +326,80 @@ def query_gemini_brain(sender: str, message: str) -> str:
     is_owner_user = is_owner(sender)
     is_broonie_user = is_broonie(sender)
 
-    # Direct action pre-check
+    # 1. Instant 0ms direct action pre-check
     direct_action, direct_arg = check_direct_actions(sender, message)
     if direct_action == "REFUSE_LOGOFF":
         return f"Sorry {clean_sender}, only Roshrak and Broonie can tell me to log off!"
     elif direct_action == "LOGOFF" and (is_owner_user or is_broonie_user):
         return f"Logging off as requested by {clean_sender}. Cya! [ACTION:LOGOFF]"
+    elif direct_action == "COMMAND" and direct_arg:
+        if direct_arg == "tpaccept":
+            return f"Accepting teleport right now, {clean_sender}! [ACTION:COMMAND tpaccept]"
+        elif direct_arg == "spawn":
+            return f"Heading to spawn now, {clean_sender}! [ACTION:COMMAND spawn]"
+        elif direct_arg == "home":
+            return f"Heading home now, {clean_sender}! [ACTION:COMMAND home]"
+        else:
+            return f"Running /{direct_arg} now, {clean_sender}! [ACTION:COMMAND {direct_arg}]"
+
+    # 2. Instant 0ms reflex answers for common status/AFK questions
+    m_lower = message.lower().strip()
+    if any(q in m_lower for q in ("where u", "where are u", "where is roshrak", "is roshrak there", "where is he")):
+        return f"{clean_sender}, Roshrak is AFK right now, I am Morgan keeping watch!"
+    if any(q in m_lower for q in ("who are you", "what are you", "are you a bot", "is this a bot")):
+        return f"Hey {clean_sender}! I am Morgan AI running on Roshrak's NixOS laptop."
+    if re.search(r"\b(jump|do a jump)\b", m_lower):
+        return f"Jumping for you, {clean_sender}! [ACTION:JUMP]"
+
+    # 3. Check LRU cache
+    cache_key = (clean_sender.lower(), m_lower)
+    if cache_key in LLM_REPLY_CACHE:
+        LLM_REPLY_CACHE.move_to_end(cache_key)
+        return LLM_REPLY_CACHE[cache_key]
 
     user_context = f"Sender: {clean_sender} (Owner: {is_owner_user}, Broonie: {is_broonie_user})\nMessage: {message}"
 
-    payload = {
-        "model": "gemini-3.8-flash-low",
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_context}
-        ],
-        "max_tokens": 50,
-        "temperature": 0.15
-    }
-    req = urllib.request.Request(
-        BRIDGE_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"}
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            ans = data["choices"][0]["message"]["content"].strip()
-            if ans.upper() == "IGNORE" or not ans:
-                return ""
-            ans = re.sub(r'[\r\n"\'`]+', ' ', ans).strip()
-            ans = "".join(c for c in ans if c.isascii() or c in "[]:").strip()
-            return ans
-    except Exception as e:
-        logger.warning(f"AI bridge request failed ({e}), using fallback")
-        return fallback_answer(sender, message)
+    # 4. Multi-tier low-latency LLM cascade (~900ms via Gemma-4 / Flash-Lite -> fallback to 8765)
+    for url, model_id, api_key in FAST_BRIDGE_ENDPOINTS:
+        payload = {
+            "model": model_id,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_context}
+            ],
+            "max_tokens": 256,
+            "temperature": 0.15
+        }
+        headers = {"Content-Type": "application/json"}
+        if api_key and api_key != "not-needed":
+            headers["Authorization"] = f"Bearer {api_key}"
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=4.5 if url != BRIDGE_URL else 10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                ans = (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+                if not ans:
+                    continue
+                if ans.upper() == "IGNORE":
+                    return ""
+                if "no longer available" in ans.lower():
+                    continue
+                ans = re.sub(r'[\r\n"\'`]+', ' ', ans).strip()
+                ans = "".join(c for c in ans if c.isascii() or c in "[]:").strip()
+                if ans:
+                    LLM_REPLY_CACHE[cache_key] = ans
+                    if len(LLM_REPLY_CACHE) > 128:
+                        LLM_REPLY_CACHE.popitem(last=False)
+                    return ans
+        except Exception as e:
+            logger.debug(f"Fast endpoint {url} ({model_id}) skipped: {e}")
+
+    logger.warning("All AI bridge endpoints failed, using fallback")
+    return fallback_answer(sender, message)
 
 def handle_response_actions(sender: str, raw_response: str) -> tuple[str, list[tuple[str, str]]]:
     actions = []
@@ -614,17 +678,17 @@ def send_command(command: str):
     cmd_name = command.lstrip('/')
     if not cmd_name:
         return False
-    return _guarded_input(['slash','sleep:250',f'type:{cmd_name}','sleep:250','enter','sleep:200'],f'/{cmd_name}')
+    return _guarded_input(['slash','sleep:120',f'type:{cmd_name}','sleep:120','enter','sleep:100'],f'/{cmd_name}')
 
 
 def send_chat(reply: str):
     if not reply or reply.upper() == 'IGNORE':
         return False
-    return _guarded_input(['t','sleep:250',f'type:{reply}','sleep:250','enter','sleep:200'],reply)
+    return _guarded_input(['t','sleep:120',f'type:{reply}','sleep:120','enter','sleep:100'],reply)
 
 
 def execute_jump():
-    return _guarded_input(['type: ','sleep:200'])
+    return _guarded_input(['type: ','sleep:120'])
 
 
 def execute_logoff(sender: str):
@@ -679,7 +743,7 @@ def main():
 
             line = f.readline()
             if not line:
-                time.sleep(0.5)
+                time.sleep(0.05)
                 continue
 
             line = line.strip()

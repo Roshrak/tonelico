@@ -64,8 +64,13 @@ Protocol for inspecting, diagnosing, and fixing browser DOM issues, visual artif
      ```
    - This provides instant gratification and preserves active form inputs, playback, or work in progress.
 
-## 5. Independent Verification
+## 5. Automating Embedded Router / Admin Web UIs over CDP
+- **Server-side active-page state:** Embedded `.asp`/CGI web servers (e.g., Econet/ZTE/ISP ONTs) track the last-requested `.asp` page in server-side session state. Fetching other `.asp` pages via background `fetch()` shifts the server's active page context and causes subsequent form submissions to redirect or fail. Always navigate the tab back to the target page (`location.href = '/cgi-bin/...'`) and wait for `onload` initialization before calling `doSubmit()`.
+- **Custom dropdown (`custom-select`) synchronization:** When `<select>` elements are wrapped in `.custom-select` containers, call the page's native selector helper (e.g., `setSelect(id, val)` / `cs_chooseoption`) and invoke its visibility/change handler (e.g., `Show_DNS_mode()`, `RATypeClick()`, `typev6Click()`) rather than setting `.value` alone, ensuring both hidden form fields and visible UI controls serialize accurately.
+- **Upstream IPv6 verification before enabling LAN SLAAC/DHCPv6:** ISP ONTs often display a delegated WAN `/64` prefix (`wan_ipv6_stt: up`) even when the upstream OLT drops outbound IPv6 packets (`ping6_ret: 1`). After enabling LAN SLAAC/DHCPv6, immediately verify end-to-end routing with `ping -6 -c 3 -W 2 2606:4700:4700::1111`; if packet loss is 100%, disable LAN SLAAC and DHCPv6 so clients do not suffer Happy Eyeballs connection timeouts.
+
+## 6. Independent Verification
 - Follow the Three-Stage Execution Invariant:
   - Take a screenshot with `grim` (exporting `WAYLAND_DISPLAY=wayland-1`).
-  - Run local OCR (`mcp__paddleocr__ocr`) on the captured image.
-  - Verify that the artifact text is 100% absent from the OCR output.
+  - Run local OCR (`mcp__paddleocr__ocr`) or `vision_analyze` on the captured image, and re-read live DOM state via CDP `Runtime.evaluate`.
+  - Verify that the target state is confirmed both in the DOM and on screen.
