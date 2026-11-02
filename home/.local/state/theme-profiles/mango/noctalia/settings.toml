@@ -1,4 +1,4 @@
-config_version = 15
+config_version = 16
 
 [bar.default]
 background_opacity = 0.34999999217689037
@@ -56,7 +56,7 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
     type = "login_box"
 
         [lockscreen_widgets.widget."lockscreen-login-box@HDMI-A-1".settings]
-        background_color = "surface_variant"
+        background_color = "surface_container"
         background_opacity = 0.88
         background_radius = 12.0
         center_password_text = false
@@ -83,7 +83,7 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
     type = "login_box"
 
         [lockscreen_widgets.widget."lockscreen-login-box@HEADLESS-1".settings]
-        background_color = "surface_variant"
+        background_color = "surface_container"
         background_opacity = 0.88
         background_radius = 12.0
         center_password_text = false
@@ -110,7 +110,7 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
     type = "login_box"
 
         [lockscreen_widgets.widget."lockscreen-login-box@eDP-1".settings]
-        background_color = "surface_variant"
+        background_color = "surface_container"
         background_opacity = 0.88
         background_radius = 12.0
         center_password_text = false
@@ -159,16 +159,16 @@ wallpaper_scheme = "m3-tonal-spot"
 directory = "/home/aesc/Pictures/Wallpapers"
 
     [wallpaper.default]
-    path = "/home/aesc/Pictures/Wallpapers/panes.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_mento__f67538d98eaf6f373f3f6e0eb1ba8d49.jpg"
 
     [wallpaper.last]
-    path = "/home/aesc/Pictures/Wallpapers/panes.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_mento__f67538d98eaf6f373f3f6e0eb1ba8d49.jpg"
 
     [wallpaper.monitors.HDMI-A-1]
     path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
 
     [wallpaper.monitors.eDP-1]
-    path = "/home/aesc/Pictures/Wallpapers/panes.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_mento__f67538d98eaf6f373f3f6e0eb1ba8d49.jpg"
 
     [[wallpaper.favorite]]
     palette_source = "wallpaper"
