@@ -7,11 +7,9 @@
       services.gvfs.enable = true;
       # GVFS spawns wsdd by name; give this package the missing discovery helper.
       # Keep the full GNOME integration and existing wrapper arguments.
-      services.gvfs.package = (pkgs.gvfs.override { gnomeSupport = true; }).overrideAttrs (old: {
-        preFixup = (old.preFixup or "") + ''
-          gappsWrapperArgs+=(--prefix PATH : "${pkgs.wsdd}/bin")
-        '';
-      });
+      programs.xwayland.package = pkgs.xwayland;
+      services.gvfs.package = pkgs.gnome.gvfs;
+      systemd.user.services.gvfs-daemon.path = [ pkgs.wsdd ];
       services.udisks2.enable = true;
       services.gnome.gnome-keyring.enable = true;
       # Pinned during the GNOME/XFCE/X11 removal (was implied by the GNOME module):

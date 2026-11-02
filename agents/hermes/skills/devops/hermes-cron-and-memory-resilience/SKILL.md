@@ -15,10 +15,10 @@ metadata:
 
 ## When to Use
 Use when configuring or troubleshooting:
-1. Hermes scheduled cronjobs (`cronjob_manage`) and automated disk/Nix-store cleanup scripts on NixOS.
-2. Persistent startup and self-healing for `aistudio2api` (`127.0.0.1:2048`) across reboots and Nix garbage collection.
-3. Ephemeral live tool-progress bubbles on Telegram (`cleanup_progress: true`).
-4. Tamper-resistant backup and self-healing protection for Hermes persistent memory (`MEMORY.md`, `USER.md`, `SOUL.md`, `AGENTS.md`, `state.db`, and `skills/`).
+1. Hermes scheduled cronjobs (`cronjob_manage`), automated disk/Nix-store cleanup (`clean-system.py`), and OOM-safe NixOS system updates (`tonelico-safe-update`).
+2. Concurrent multi-order execution on busy Gateway sessions (`parallel-orders` plugin) and ephemeral live tool-progress bubbles on Telegram (`cleanup_progress: true`).
+3. Persistent startup and self-healing for `aistudio2api` (`127.0.0.1:2048`) across reboots and Nix garbage collection.
+4. Tamper-resistant backup, secret hygiene (`~/tonelico/export.sh`), and self-healing protection for Hermes persistent memory (`MEMORY.md`, `USER.md`, `SOUL.md`, `AGENTS.md`, `state.db`, `plugins/`, and `skills/`).
 
 ## Procedure
 
@@ -34,17 +34,28 @@ Use when configuring or troubleshooting:
        no_agent=True,
    )
    ```
-2. Write Hermes cron scripts in Python (`.py`) inside `/home/aesc/.hermes/scripts/` and prepend `/run/current-system/sw/bin:/etc/profiles/per-user/aesc/bin:/home/aesc/.local/bin` to `os.environ["PATH"]` inside the script.
+2. Write Hermes cron scripts in Python (`.py`) inside `/home/aesc/.hermes/scripts/` and prepend `/run/wrappers/bin:/run/current-system/sw/bin:/etc/profiles/per-user/aesc/bin:/home/aesc/.nix-profile/bin:/home/aesc/.local/bin` to `os.environ["PATH"]` inside the script.
 3. Clean the following targets on every 12h run without gating behind an artificial low-disk threshold:
-   - Run `/home/aesc/.local/bin/hermes-memory-guard --backup-db` first so memory files and `state.db` are verified and backed up before any deletion.
-   - Empty FreeDesktop Trash (`~/.local/share/Trash/{files,info,expunged}`).
+   - Run `/home/aesc/.local/bin/hermes-memory-guard --backup-db` first so memory files, `plugins/`, `skills/`, and `state.db` are verified and backed up before any deletion.
+   - Clean FreeDesktop Trash items (`~/.local/share/Trash/{files,info,expunged}`) that have been in the Trash for **at least 12 hours** (`TRASH_MAX_AGE = 12 * 3600`), reading `DeletionDate=` (or `st_mtime`) from `~/.local/share/Trash/info/<item>.trashinfo` rather than the original file's `st_mtime`.
    - Delete desktop thumbnails older than 7 days (`~/.cache/thumbnails`).
    - Purge Chromium caches (`~/.cache/chromium/*/{Cache,Code Cache,GPUCache}`).
    - Clean user-owned `/tmp` items older than 2 days (and orphaned `/tmp/aistudio-camoufox-*` profiles older than 6 hours that are not referenced in any active `/proc/<pid>/cmdline`).
-   - Run `/run/current-system/sw/bin/nix-collect-garbage --delete-older-than 7d`.
+   - Check `/proc/<pid>/cmdline` for any active Nix build (`nixos-rebuild`, `update-system.sh`, `nix build`, `nix flake update`); if none is running, execute `/run/current-system/sw/bin/nix-collect-garbage --delete-older-than 7d`.
    - Clean Hermes temporary caches (`~/.hermes/{audio_cache,image_cache}`, `sandboxes` >2d, `cron/output` >3d, `cache/{scratch,terminal-output}` >1d).
 
-### 2. Pin Nix Store Dependencies & Harden `aistudio2api` Startup
+### 2. OOM-Safe NixOS Updates & Replica Repository Hygiene (`~/tonelico`)
+1. Keep `max-jobs = 2; cores = 4;` set in `/etc/nixos/modules/system/base.nix` and pass `--max-jobs 2 --cores 4` (or `--max-jobs 1 --cores 4` for background runs) to `nixos-rebuild build` / `nix build` — `/etc/nixos/modules/desktop/shared/overview.nix` applies a local patch to KWin, forcing source compilation of `kwin` and `plasma-workspace` that triggers kernel OOM if allowed to spawn unlimited `cc1plus` jobs.
+2. For long background NixOS updates (`/home/aesc/.local/bin/tonelico-safe-update`), launch inside an isolated, memory-bounded systemd user unit (`systemd-run --user --unit=tonelico-safe-update.service -p MemoryHigh=8G -p MemoryMax=10G -p CPUWeight=50 -p Nice=10`), pin the evaluated `.drv` and `--out-link` under `/home/aesc/.local/share/nix-roots/` until `switch` completes, and send progress updates every 10 minutes via `/home/aesc/.local/bin/telegram_send.py`.
+3. Never hardcode API keys or fallback secrets inside `/etc/nixos/home/files/bin/*`, `~/.local/lib/*.py`, `~/.local/bin/*`, or `~/.hermes/config.yaml`. Store keys in `/home/aesc/.hermes/.env` (`0600`), reference `key_env:` in `~/.hermes/config.yaml`, and refresh `/home/aesc/tonelico` exclusively via `/home/aesc/tonelico/export.sh` (which runs `scripts/check-secrets.sh` with `gitleaks` and local canary secret checks).
+4. After running any `sudo nix` command in `/etc/nixos`, verify `/etc/nixos/.git/index` and `/etc/nixos/flake.lock` are owned by `aesc:users` (`sudo chown -R aesc:users /etc/nixos/.git /etc/nixos/flake.lock`).
+
+### 3. Concurrent Multi-Order Execution (`parallel-orders` Plugin)
+1. Keep `parallel-orders` enabled under `plugins.enabled` in `/home/aesc/.hermes/config.yaml` (`/home/aesc/.hermes/plugins/parallel-orders/__init__.py`).
+2. In `register(ctx)`, patch `GatewayBusySessionMixin._handle_active_session_busy_message` (from `gateway.run_busy`) and `GatewayInboundMixin._hm_handle_running_session_message` (from `gateway.run_inbound`) so follow-up messages sent while a turn is already running spawn an isolated concurrent `AIAgent` task (`asyncio.create_task`) with its own ephemeral progress bubble rather than interrupting or steering the active turn.
+3. Only pass through to interrupt/steer when the user sends an explicit stop keyword (`stop`, `cancel`, `abort`, `dừng`, `thôi`, `/stop`) or prefixes the message with `steer:` / `/steer`.
+
+### 4. Pin Nix Store Dependencies & Harden `aistudio2api` Startup
 1. Pin all `/nix/store/...` environments and binaries referenced directly by user systemd units or wrapper scripts (`hermes-agent-env`, `hermes-agent-pkg`, `agy-python-env`, `mc-python`, and `aistudio2api-xvfb`) with permanent Nix GC roots so `nix-collect-garbage` never deletes them:
    ```bash
    mkdir -p /home/aesc/.local/share/nix-roots /home/aesc/.local/bin

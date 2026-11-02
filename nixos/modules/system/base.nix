@@ -17,10 +17,14 @@
         extra-substituters = [
           "https://noctalia.cachix.org"
           "https://cache.numtide.com"
+          "https://niri-epireyn.cachix.org"
+          "https://nix-community.cachix.org"
         ];
         extra-trusted-public-keys = [
           "noctalia.cachix.org-1:pCOR47nnMEo5thcxNDtzWpOxNFQsBRglJzxWPp3dkU4="
           "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
+          "niri-epireyn.cachix.org-1:tlVyFN7CtsDT+ZcLPS+ekFWeT1X6X4OqvWqbBMyIzFA="
+          "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
         ];
       };
       nix.registry.nixpkgs.flake = inputs.nixpkgs;

@@ -17,19 +17,28 @@
     # Keep the base system on the supported 26.05 channel while tracking the
     # newer Codex CLI independently. This avoids a broad system upgrade just
     # to receive Codex fixes.
-    codex-nixpkgs.url = "github:NixOS/nixpkgs/master";
+    codex-nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     # Chromium follows the current 26.05 branch on its own, so browser security
     # updates do not require moving the whole system to a newer nixpkgs.
     chromium-nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
-    mango.url = "github:mangowm/mango";
+    mango = {
+      url = "github:mangowm/mango";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     noctalia.url = "github:noctalia-dev/noctalia/cachix";
-    lotus.url = "github:LotusInputMethod/fcitx5-lotus";
+    lotus = {
+      url = "github:LotusInputMethod/fcitx5-lotus";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     niri.url = "github:epireyn/niri-flake";
     noctalia-greeter = {
       url = "github:noctalia-dev/noctalia-greeter";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    claude-code-nix.url = "github:sadjow/claude-code-nix";
+    claude-code-nix = {
+      url = "github:sadjow/claude-code-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # Match the newer AGY and OpenCode builds already installed in the user
     # profile while moving them into the NixOS system profile.
     llm-agents.url = "github:numtide/llm-agents.nix/e452052b9efb54fd59f8a06cbc09978fb542a3c2";
@@ -45,10 +54,14 @@
     extra-substituters = [
       "https://noctalia.cachix.org"
       "https://cache.numtide.com"
+      "https://niri-epireyn.cachix.org"
+      "https://nix-community.cachix.org"
     ];
     extra-trusted-public-keys = [
       "noctalia.cachix.org-1:pCOR47nnMEo5thcxNDtzWpOxNFQsBRglJzxWPp3dkU4="
       "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
+      "niri-epireyn.cachix.org-1:tlVyFN7CtsDT+ZcLPS+ekFWeT1X6X4OqvWqbBMyIzFA="
+      "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
     ];
   };
 }
