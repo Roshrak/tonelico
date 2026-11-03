@@ -39,6 +39,7 @@ import datetime
 import json
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
@@ -650,6 +651,51 @@ async def _try_instant_reflex_while_busy(
         sent = await adapter.send(
             chat_id=source.chat_id,
             content=msg,
+            reply_to=reply_anchor,
+            metadata=thread_metadata,
+        )
+        _record_permanent_message(chat_id_str, getattr(sent, "message_id", None))
+        return True
+
+    mc_ctl_match = re.match(
+        r"^(?:(activate|start|enable|turn on|deactivate|stop|disable|turn off|status)\s+(?:the\s+)?(?:mc|minecraft)\s*(?:chat\s*)?responder|(?:mc|minecraft)\s*(?:chat\s*)?responder\s+(on|off|start|stop|activate|deactivate|status))(?:\s+(alt|miracle|miracle_involker|roshrak|main))?[!?. ]*$",
+        lower,
+    )
+    if mc_ctl_match:
+        verb = (mc_ctl_match.group(1) or mc_ctl_match.group(2) or "").strip()
+        acct = (mc_ctl_match.group(3) or "roshrak").strip()
+        if verb in ("activate", "start", "enable", "turn on", "on"):
+            ctl_action = "start"
+        elif verb in ("deactivate", "stop", "disable", "turn off", "off"):
+            ctl_action = "stop"
+        else:
+            ctl_action = "status"
+
+        def _run_mc_ctl() -> str:
+            res = subprocess.run(
+                ["/home/aesc/.local/bin/mc_responder_ctl", ctl_action, acct],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            try:
+                info = json.loads(res.stdout)
+                st = info.get("status", ctl_action)
+                gate = info.get("gate", {})
+                running = info.get("running", [])
+                if st == "activated":
+                    return f"✅ **MC Chat Responder Activated**\n• Account: `{gate.get('user')}` (`{gate.get('persona')}` persona)\n• Instance: `{gate.get('instance')}`\n• Process: `{running[0] if running else 'starting'}`"
+                elif st == "deactivated":
+                    return "🛑 **MC Chat Responder Deactivated** (0 processes running)."
+                else:
+                    return f"ℹ️ **MC Chat Responder Status**: `{st}`\n• Gate Active: `{gate.get('active')}` (`{gate.get('user')}`)\n• Running: `{len(running)}` process(es)"
+            except Exception:
+                return (res.stdout or res.stderr or "Done.").strip()
+
+        reply_msg = await asyncio.to_thread(_run_mc_ctl)
+        sent = await adapter.send(
+            chat_id=source.chat_id,
+            content=reply_msg,
             reply_to=reply_anchor,
             metadata=thread_metadata,
         )

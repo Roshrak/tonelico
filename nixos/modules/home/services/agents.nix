@@ -27,18 +27,16 @@
       };
       systemd.user.services.mc-chat-responder = {
         Unit = {
-          Description = "Minecraft Auto Chat Responder for Roshrak (Morgan AI)";
+          Description = "Minecraft Auto Chat Responder (Controlled strictly via Telegram / Hermes CLI)";
           After = [ "network.target" "agy-bridge.service" ];
           Wants = [ "agy-bridge.service" ];
         };
         Service = {
           Type = "simple";
           ExecStart = "${pkgs.python3}/bin/python3 ${home}/.local/bin/mc_chat_responder.py";
-          Restart = "on-failure";
-          RestartSec = 3;
+          Restart = "no";
           Environment = [ "HOME=${home}" "PATH=${path}" "XDG_RUNTIME_DIR=%t" ];
         };
-        Install.WantedBy = [ "default.target" ];
       };
       # The gateway's base unit belongs to the installed Hermes runtime. Preserve
       # it without restarting it; Home Manager owns the NixOS ExecReload adapter.

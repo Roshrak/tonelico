@@ -160,11 +160,12 @@ class MinecraftOpsMcpServer:
             },
             {
                 "name": "mc_bot_responder_control",
-                "description": "Start, stop, or restart the mc_chat_responder.py background service.",
+                "description": "Activate (start), deactivate (stop), restart, or check status of mc_chat_responder (strictly via Telegram or Hermes CLI).",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "action": {"type": "string", "description": "start, stop, restart, or status"},
+                        "account": {"type": "string", "description": "roshrak (main) or alt (Miracle_Involker). Default: roshrak"},
                     },
                     "required": ["action"],
                 },
@@ -348,17 +349,17 @@ class MinecraftOpsMcpServer:
                 return _ok({"running": len(procs) > 0, "processes": procs, "log_tail": log_tail})
 
             elif name == "mc_bot_responder_control":
-                act = args["action"].lower()
-                if act in ("stop", "restart"):
-                    subprocess.run(["pkill", "-f", "mc_chat_responder.py"], timeout=5)
-                    time.sleep(0.3)
-                if act in ("start", "restart"):
-                    subprocess.Popen(
-                        f"nohup python3 {BOT_SCRIPT} >/dev/null 2>&1 &",
-                        shell=True,
-                    )
-                    time.sleep(0.5)
-                return self.call_tool("mc_bot_responder_status", {"tail_lines": 15})
+                act = args["action"].lower().strip()
+                acct = args.get("account", "roshrak").lower().strip()
+                res = subprocess.run(
+                    ["/home/aesc/.local/bin/mc_responder_ctl", act, acct],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if res.returncode != 0:
+                    return _err(res.stderr or res.stdout or "mc_responder_ctl failed")
+                return _ok(json.loads(res.stdout) if res.stdout.strip().startswith("{") else res.stdout)
 
             elif name == "mc_list_mods_and_packs":
                 inst = args.get("instance", DEFAULT_INSTANCE)

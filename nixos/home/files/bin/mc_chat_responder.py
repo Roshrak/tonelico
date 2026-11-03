@@ -1091,19 +1091,21 @@ def execute_jump():
     return _guarded_input(['type: ','sleep:120'])
 
 
-def execute_logoff(sender: str):
-    if not is_authorized_to_logoff(sender):
-        logger.warning('Unauthorized logoff attempt blocked')
-        return False
-    if not _guarded_input(['slash','sleep:250','type:disconnect','sleep:250','enter','sleep:200'], '/disconnect', close_after=True):
-        return False
-    # Only stop this helper after the exact game-window close was accepted.
+GATE_FILE = "/home/aesc/.local/state/hermes/mc_responder_gate.json"
+
+
+def is_gate_authorized() -> bool:
     try:
-        _ipc_command(['systemctl','--user','stop','mc-chat-responder.service'])
-    except InputRefused as exc:
-        logger.warning('Minecraft logoff completed; responder stop was not confirmed: %s',exc)
+        with open(GATE_FILE, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        return bool(data.get("active") is True)
+    except Exception:
         return False
-    sys.exit(0)
+
+
+def execute_logoff(sender: str):
+    logger.warning('In-game logoff/deactivation blocked: mc_chat_responder can ONLY be controlled from Telegram or Hermes CLI.')
+    return False
 
 
 def open_log_stream():
@@ -1124,18 +1126,30 @@ def main():
     parser.add_argument("--log", default=None, help="Explicit log path")
     args = parser.parse_args()
 
+    if os.environ.get("HERMES_MC_AUTHORIZED") != "1" or not is_gate_authorized():
+        logger.error("Refused to start: mc_chat_responder can ONLY be activated via Telegram or Hermes Agent CLI.")
+        sys.exit(0)
+
     configure_session(user=args.user, persona=args.persona, instance=args.instance, log=args.log)
     logger.info(f"Starting Minecraft Chat Responder for {ACTIVE_USER} ({ACTIVE_PERSONA} persona), monitoring {LOG_PATH}")
     while not os.path.exists(LOG_PATH):
+        if not is_gate_authorized():
+            sys.exit(0)
         time.sleep(2)
 
     f, current_ino = open_log_stream()
     last_sent_time = 0.0
-    last_tpa_time = 0.0
+    last_gate_check = time.time()
     seen_messages = set()
 
     try:
         while True:
+            if time.time() - last_gate_check > 1.0:
+                if not is_gate_authorized():
+                    logger.info("Gate deactivated via Telegram/Hermes CLI. Stopping responder.")
+                    sys.exit(0)
+                last_gate_check = time.time()
+
             # Check if log file was rotated (new inode) or truncated
             try:
                 current_stat = os.stat(LOG_PATH)
@@ -1162,7 +1176,7 @@ def main():
             chat_idx = line.find("[CHAT]")
             chat_content = clean_mc_codes(line[chat_idx + 6:].strip())
 
-            # 1. Server teleport requests: ALWAYS auto-accept
+            # 1. Ignore server teleport notifications (no auto-tpaccept from in-game)
             if (
                 "has requested to teleport to you" in chat_content or
                 "has requested that you teleport to them" in chat_content or
@@ -1173,11 +1187,6 @@ def main():
                 (not chat_content.startswith("<") and "type /tpaccept" in chat_content.lower()) or
                 (not chat_content.startswith("<") and "teleport request" in chat_content.lower())
             ):
-                now = time.time()
-                if now - last_tpa_time > 3.0:
-                    logger.info(f"Incoming server TPA request: '{chat_content}'. Auto-accepting via /tpaccept!")
-                    if send_command("tpaccept"):
-                        last_tpa_time = now
                 continue
 
             # 2. Ignore join/leave notifications (NO auto-greetings)

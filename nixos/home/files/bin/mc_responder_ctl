@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+"""Strict controller for mc_chat_responder.py.
+Can ONLY be invoked from Hermes Agent (Telegram Gateway or Hermes Agent CLI).
+"""
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+GATE_FILE = Path("/home/aesc/.local/state/hermes/mc_responder_gate.json")
+BOT_SCRIPT = "/home/aesc/.local/bin/mc_chat_responder.py"
+PYTHON_BIN = "/nix/store/kp6p38x6zb21n7gdlnp9nsm2aagq7sg2-python3-3.13.17/bin/python3"
+
+
+def verify_hermes_origin() -> str:
+    """Walk process tree up to PID 1 to ensure the caller is Hermes (Telegram gateway or Hermes CLI)."""
+    if os.environ.get("AI_AGENT") == "hermes-agent" or os.environ.get("HERMES_AGENT") == "true":
+        return "hermes-agent-env"
+    pid = os.getpid()
+    visited = set()
+    while pid > 1 and pid not in visited:
+        visited.add(pid)
+        try:
+            cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\x00", b" ").decode("utf-8", errors="ignore").lower()
+            if any(k in cmdline for k in ("hermes", "minecraft_ops_mcp", "run_turn_runner", "gateway")):
+                return f"pid:{pid}"
+            status = Path(f"/proc/{pid}/status").read_text(encoding="utf-8", errors="ignore")
+            ppid = 0
+            for line in status.splitlines():
+                if line.startswith("PPid:"):
+                    ppid = int(line.split(":", 1)[1].strip())
+                    break
+            pid = ppid
+        except Exception:
+            break
+    return ""
+
+
+def get_running_responder_pids() -> list[tuple[int, str]]:
+    found = []
+    my_pid = os.getpid()
+    for p in Path("/proc").iterdir():
+        if not p.name.isdigit():
+            continue
+        pid = int(p.name)
+        if pid == my_pid:
+            continue
+        try:
+            args = [a.decode("utf-8", errors="ignore") for a in (p / "cmdline").read_bytes().split(b"\x00") if a]
+            if len(args) >= 2 and "python" in os.path.basename(args[0]) and args[1].endswith("mc_chat_responder.py"):
+                found.append((pid, " ".join(args)))
+        except Exception:
+            continue
+    return found
+
+
+def stop_all():
+    subprocess.run(["systemctl", "--user", "stop", "mc-chat-responder.service"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for pid, _ in get_running_responder_pids():
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except Exception:
+            pass
+    time.sleep(0.2)
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: mc_responder_ctl <start|stop|restart|status> [roshrak|alt]")
+        sys.exit(1)
+
+    action = sys.argv[1].lower().strip()
+    target = sys.argv[2].lower().strip() if len(sys.argv) >= 3 else "roshrak"
+
+    origin = verify_hermes_origin()
+    if not origin and action in ("start", "activate", "on", "stop", "deactivate", "off", "restart"):
+        print("ERROR: Refused! mc_chat_responder can ONLY be activated or deactivated via Telegram or Hermes Agent CLI.", file=sys.stderr)
+        sys.exit(403)
+
+    GATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    if action in ("stop", "deactivate", "off"):
+        gate = {
+            "active": False,
+            "persona": target,
+            "instance": "asDFasfd" if target == "alt" else "Fabulously Optimized",
+            "user": "Miracle_Involker" if target == "alt" else "Roshrak",
+            "updated_by": origin or "hermes",
+            "updated_at": time.time(),
+        }
+        GATE_FILE.write_text(json.dumps(gate, indent=2), encoding="utf-8")
+        stop_all()
+        procs = [f"{p}: {c}" for p, c in get_running_responder_pids()]
+        print(json.dumps({"status": "deactivated", "running": procs, "gate": gate}, indent=2))
+        return
+
+    if action in ("start", "activate", "on", "restart"):
+        stop_all()
+        is_alt = target in ("alt", "miracle", "miracle_involker", "asdfasfd")
+        persona = "alt" if is_alt else "roshrak"
+        instance = "asDFasfd" if is_alt else "Fabulously Optimized"
+        user = "Miracle_Involker" if is_alt else "Roshrak"
+        gate = {
+            "active": True,
+            "persona": persona,
+            "instance": instance,
+            "user": user,
+            "updated_by": origin or "hermes",
+            "updated_at": time.time(),
+        }
+        GATE_FILE.write_text(json.dumps(gate, indent=2), encoding="utf-8")
+        env = os.environ.copy()
+        env["HERMES_MC_AUTHORIZED"] = "1"
+        subprocess.Popen(
+            [PYTHON_BIN, BOT_SCRIPT, "--instance", instance, "--user", user, "--persona", persona],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            env=env,
+            start_new_session=True,
+        )
+        time.sleep(0.4)
+        procs = [f"{p}: {c}" for p, c in get_running_responder_pids()]
+        print(json.dumps({"status": "activated", "running": procs, "gate": gate}, indent=2))
+        return
+
+    # status
+    gate = {}
+    if GATE_FILE.exists():
+        try:
+            gate = json.loads(GATE_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    procs = [f"{p}: {c}" for p, c in get_running_responder_pids()]
+    print(json.dumps({"status": "active" if procs else "inactive", "running": procs, "gate": gate}, indent=2))
+
+
+if __name__ == "__main__":
+    main()
