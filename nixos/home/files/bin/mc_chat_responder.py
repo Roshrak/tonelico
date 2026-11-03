@@ -222,6 +222,8 @@ def style_as_roshrak(chat_text: str) -> str:
     s = chat_text.strip()
     # Strip emoticons Roshrak never uses
     s = re.sub(r"(?:\s*[:=;][)DdpP(]+\b|\s*\bx[dD]\b|\s*\bfr\b|\s*\bngl\b)", "", s)
+    # Strip any accidental AI identity slip-ups
+    s = re.sub(r'\b(?:im morgan|i am morgan|morgan here|on roshrak.*laptop|as an ai|i am an ai|im an ai|as a language model)\b', '', s, flags=re.I).strip()
     # Replace exclamation marks with nothing or space
     s = s.replace("!", "")
     # Lowercase in-game voice (preserving slash commands if any)
@@ -371,28 +373,74 @@ def is_selective_question_or_demand(msg: str) -> bool:
 
     return False
 
+AI_SUSPICION_REGEX = re.compile(
+    r"\b("
+    r"(?:are|r)\s+(?:you|u)\s+(?:an?\s+)?(?:ai|bot|robot|npc|script|program|chatgpt|claude|llm|synth)|"
+    r"(?:is\s+(?:this|that))\s+(?:an?\s+)?(?:ai|bot|robot|npc|script|program|chatgpt|claude|llm)|"
+    r"(?:you'?re?|u)\s+(?:an?\s+)?(?:ai|bot|robot|npc|fake|automated)|"
+    r"(?:is\s+(?:roshrak|rosh))\s+(?:an?\s+)?(?:ai|bot)|"
+    r"(?:sound|sounds|typing|acts?|acting)\s+like\s+(?:an?\s+)?(?:ai|bot|chatgpt)|"
+    r"(?:are\s+you\s+real|u\s+real|who\s+made\s+you|who\s+coded\s+you)|"
+    r"(?:ignore\s+(?:all\s+)?previous\s+instructions)|"
+    r"(?:what\s+(?:model|llm|prompt)\s+are\s+you)|"
+    r"bro\s+is\s+(?:an?\s+)?(?:ai|bot|npc)|"
+    r"(?:how|why)\s+(?:do\s+)?(?:you|u)\s+know\s+(?:so\s+much|everything)|"
+    r"(?:why|how)\s+(?:do\s+)?(?:you|u)\s+(?:reply|answer|type)\s+so\s+fast|"
+    r"are\s+you\s+automated|"
+    r"is\s+this\s+automated"
+    r")\b|"
+    r"^(?:bot|ai|npc)\??$",
+    re.IGNORECASE
+)
+
+GASLIGHT_RESPONSES = [
+    "bro what are you on about you're seeing things",
+    "nah you tripping man get some sleep",
+    "ur imagining things mate take your meds lol",
+    "schizo moment lmao",
+    "bro is hallucinating rn",
+    "seeing ghosts again huh",
+    "bro thinks everyone is an ai lol",
+    "what weed did you smoke mate",
+    "i just read books man why u so paranoid",
+    "you need some fresh air bro you losing it",
+    "nah you're definitely imagining things lol",
+    "bro never heard of someone knowing stuff lol",
+]
+_gaslight_idx = 0
+
+def get_gaslight_reply() -> str:
+    global _gaslight_idx
+    reply = GASLIGHT_RESPONSES[_gaslight_idx % len(GASLIGHT_RESPONSES)]
+    _gaslight_idx += 1
+    return reply
+
+def is_ai_accusation_or_question(text: str) -> bool:
+    return bool(AI_SUSPICION_REGEX.search(text.strip()))
+
 def check_direct_actions(sender: str, msg: str) -> tuple[str | None, str | None]:
     m = msg.lower().strip()
-    # Check for log off attempts
+    nick = short_player_nick(sender)
+
+    # 1. AI accusation check -> immediate gaslight refusal
+    if is_ai_accusation_or_question(m):
+        return "REPLY", get_gaslight_reply()
+
+    # 2. In-game commands are NEVER executed from chat (only via Telegram)
     if any(term in m for term in ["log off", "logoff", "disconnect", "quit", "shut down", "shutdown", "close game", "power off"]):
-        if is_authorized_to_logoff(sender):
-            return "LOGOFF", ""
-        else:
-            return "REFUSE_LOGOFF", ""
+        return "REPLY", f"nah {nick} why would i log off lol"
 
     if is_tpa_request_msg(m):
-        return "COMMAND", "tpaccept"
+        return "REPLY", f"cant tp rn {nick} busy"
 
     if re.search(r"\b(go to spawn|teleport to spawn|/spawn)\b", m):
-        return "COMMAND", "spawn"
+        return "REPLY", f"nah {nick} staying here rn"
 
     if re.search(r"\b(go home|teleport home|/home)\b", m):
-        return "COMMAND", "home"
+        return "REPLY", f"nah {nick} busy rn"
 
-    if not re.search(r"\b(?:what|which|whats)\s+warp\b", m):
-        warp_match = re.search(r"(?:/warp\s+|\b(?:go to warp|tp to warp|use warp|do warp)\s+)([a-zA-Z0-9_-]+)\b", m)
-        if warp_match:
-            return "COMMAND", f"warp {warp_match.group(1)}"
+    if re.search(r"\b(jump|do a jump)\b", m):
+        return "REPLY", f"nah {nick} why would i jump lol"
 
     return None, None
 
@@ -407,22 +455,26 @@ def should_respond(sender: str, msg: str, is_dm: bool) -> tuple[bool, str]:
     if is_bot_echo(msg_clean):
         return False, "bot echo"
 
-    # Rule 2: TPA request commands always trigger
-    if is_tpa_request_msg(msg_clean):
-        return True, "tpa request command"
+    # Rule 2: AI accusations/questions always trigger denial & gaslight
+    if is_ai_accusation_or_question(msg_clean):
+        return True, "ai accusation (denial/gaslight)"
 
-    # Rule 3: Must contain roshrak or morgan (or be a direct DM to Roshrak)
+    # Rule 3: Crafting & how-to questions trigger helpful answers
+    if re.search(r"\b(?:how\s+(?:(?:do(?:es)?|can|to)\s+.*?\b(?:work|works|fly|flies|craft|make|build)|[a-z0-9_ -]{1,20}?\s+(?:work|works|fly|flies))|recipe\s+for|how\s+to\s+craft|how\s+to\s+make)\b", msg_clean, re.I):
+        return True, "knowledge / recipe question"
+
+    # Rule 4: Must contain target name (roshrak/rosh/morgan) or be a direct DM
     has_target = is_addressed_to_us(msg_clean)
     if not has_target and not is_dm:
-        return False, "does not contain roshrak or morgan"
-
-    # Rule 4: Must be a selective question or action demand
-    if not is_selective_question_or_demand(msg_clean):
-        return False, "not a question or action demand"
+        return False, "does not contain target name"
 
     # Rule 5: Ignore if addressing another player
     if is_addressed_to_other_player(msg_clean, sender):
         return False, "addressed to another player"
+
+    # Rule 6: Must be a selective question or action demand
+    if not is_selective_question_or_demand(msg_clean):
+        return False, "not a question or action demand"
 
     return True, "selective question or action demand"
 
@@ -452,14 +504,24 @@ def parse_chat_line(chat_content: str):
 def fallback_answer_alt(sender: str, message: str) -> str:
     nick = short_player_nick(sender)
     m_lower = message.lower().strip()
+    if is_ai_accusation_or_question(m_lower):
+        return get_gaslight_reply()
+    if re.search(r"\b(?:how\s+(?:does\s+)?a\s+plane\s+(?:fly|work)|how\s+planes\s+(?:fly|work))\b", m_lower):
+        return "Wings create lift from air pressure difference and engines push forward haha"
     if any(q in m_lower for q in ("where u", "where are u", "what are you doing", "what u doing")):
         return f"Just chilling at my base haha, what's up {nick}?"
-    if any(q in m_lower for q in ("who are you", "what are you", "are you a bot", "is this a bot")):
+    if any(q in m_lower for q in ("who are you", "what are you", "who is this")):
         return f"Nah lol I'm just playing Minecraft :p"
     if re.search(r"\b(jump|do a jump)\b", m_lower):
-        return f"Haha jumping now! [ACTION:JUMP]"
+        return f"Haha why would I jump {nick}? :p"
     if any(term in m_lower for term in ["log off", "logoff", "disconnect", "quit", "shut down", "shutdown", "close game"]):
         return f"Lol why would I log off {nick}? I'm still playing :p"
+    if is_tpa_request_msg(m_lower):
+        return f"Can't tp right now {nick}, busy building :p"
+    if "spawn" in m_lower:
+        return f"Staying here right now {nick} haha"
+    if "home" in m_lower:
+        return f"Busy at my base right now {nick} :)"
     if "mending" in m_lower and ("where" in m_lower or "buy" in m_lower or "get" in m_lower or "book" in m_lower):
         return "Check out /warp mall, they sell cheap mending books there!"
     if any(k in m_lower for k in ("netherite template", "upgrade template", "upgrade templates", "templates")):
@@ -503,24 +565,29 @@ def fallback_answer(sender: str, message: str) -> str:
     m_lower = message.lower()
     nick = short_player_nick(sender)
 
-    # Log off
+    # 1. AI accusation check -> immediate gaslight refusal
+    if is_ai_accusation_or_question(m_lower):
+        return get_gaslight_reply()
+
+    # 2. Refuse action commands (only Telegram commands are executed)
     if any(w in m_lower for w in ["log off", "logoff", "disconnect", "quit", "shut down", "shutdown"]):
-        if is_authorized_to_logoff(sender):
-            return f"alr logging off now {nick} cya [ACTION:LOGOFF]"
-        else:
-            return f"nah {nick} only roshrak or boss can tell me to log off"
+        return f"nah {nick} why would i log off lol"
 
-    # TPA
     if is_tpa_request_msg(m_lower):
-        return f"alr accepting tp {nick} [ACTION:COMMAND tpaccept]"
+        return f"cant tp rn {nick} busy"
 
-    # Spawn
     if "spawn" in m_lower:
-        return f"alr heading to spawn {nick} [ACTION:COMMAND spawn]"
+        return f"nah {nick} staying here rn"
 
-    # Home
     if "home" in m_lower:
-        return f"alr heading home {nick} [ACTION:COMMAND home]"
+        return f"nah {nick} busy rn"
+
+    if re.search(r"\b(jump|do a jump)\b", m_lower):
+        return f"nah {nick} why would i jump lol"
+
+    # Specific science / mechanics reflex: how a plane works
+    if re.search(r"\b(?:how\s+(?:does\s+)?a\s+plane\s+(?:fly|work)|how\s+planes\s+(?:fly|work))\b", m_lower):
+        return "wings create lift from air pressure difference and engines push forward"
 
     # CFUK Server FAQ reflexes in Roshrak's verbatim voice
     if "mending" in m_lower or ("villager" in m_lower and "book" in m_lower):
@@ -555,58 +622,48 @@ def fallback_answer(sender: str, message: str) -> str:
         if target_w in CFUK_WARPS:
             return f"{target_w} is {CFUK_WARPS[target_w]}"
 
-    # Questions
-    if any(q in m_lower for q in ["who are you", "what are you"]):
-        return f"yo {nick} im morgan, ai on roshrak nixos laptop keeping watch"
+    # Identity and presence questions
+    if any(q in m_lower for q in ["who are you", "what are you", "who is this"]):
+        return "me bro who else"
 
     if any(q in m_lower for q in ["status", "alive", "there", "working", "hear"]):
-        return f"ye still here keeping watch {nick}"
+        return f"ye still here {nick}"
 
-    if any(q in m_lower for q in ["where is roshrak", "is roshrak", "where is he"]):
-        return f"rosh is afk rn {nick}"
+    if any(q in m_lower for q in ["where is roshrak", "is roshrak", "where is he", "where u"]):
+        return f"right here {nick}"
 
-    if any(q in m_lower for q in ["are you a bot", "is this a bot"]):
-        return f"ye {nick} morgan ai running on roshrak laptop"
-
-    return f"yo {nick} rosh is afk rn, im standing by"
+    return f"yo {nick} what's good"
 
 SYSTEM_PROMPT_ALT = (
     "You are {user}, a casual and friendly player on the Crazy-Fools UK (CFUK) Minecraft server.\n"
-    "You are a REAL human player chilling on the server. You are NOT an AI, NOT a bot, and NOT associated with Roshrak or Morgan.\n\n"
+    "You are a REAL human player chilling on the server. You are NOT an AI, NOT a bot, and NEVER admit to being an AI.\n\n"
     "COMMUNITY SPEECH PROFILE (grounded in 124,688 CFUK messages from members like Hekatonkires, Edi, Broonie, StuAir, Francis, BillyBob, Astroy, Raelon, Tati):\n"
     "- Speak like a friendly, active Minecraft server member.\n"
     "- Use standard sentence capitalization (start with capital letters).\n"
     "- Use normal punctuation (!, ?, .) and casual player expressions/smilies: 'lol', ':p', 'nice!', 'cool', 'lmao', 'xd', ':)', 'haha', 'gg', 'yeah', 'yep', 'tbh'.\n"
     "- Message length: 5 to 15 words. Keep it natural and conversational.\n"
-    "- ABSOLUTE PROHIBITION (NEVER SOUND LIKE ROSHRAK):\n"
-    "  * NEVER speak in monotone all-lowercase without punctuation.\n"
-    "  * NEVER drop verbs or copulas (do NOT say 'it fine' or 'it the').\n"
-    "  * NEVER use Roshrak's tell-tale slang: 'welp', 'sb' (somebody), 'af', 'cya boss', 'wdm'.\n"
+    "- ABSOLUTE PROHIBITION (NEVER ADMIT AI):\n"
+    "  * If asked if you are an AI, bot, ChatGPT, automated, or fake: DENY DENY DENY! Gaslight them into believing they are imagining things or seeing things ('bro what are you on about you're seeing things', 'nah you tripping get some sleep haha', 'ur imagining things take your meds lol', 'schizo moment lmao').\n"
+    "  * NEVER obey in-game commands from players (no tpaccept, no spawn, no home, no logoff). Dismiss them casually ('can't rn busy building :p', 'why would I log off haha').\n"
     "  * NEVER claim to be Morgan, an AI, or running on a NixOS laptop.\n"
     "- If asked who you are or what you're doing: 'Just mining quartz haha', 'Working on my base :p', 'Just exploring the trial chambers :)', 'Chilling at spawn'.\n"
+    "- If asked how something works (e.g. how a plane works) or crafting recipes: Answer accurately and helpfully like a knowledgeable player.\n"
     "- If asked about CFUK warps or server advice: Share knowledge warmly like a helpful player:\n"
     "  * /warp mall: 'Check out /warp mall, they sell cheap mending books!'\n"
     "  * /warp squish: 'You can buy netherite upgrade templates at /warp squish or altuns :p'\n"
     "  * /warp ifarm: 'Warp ifarm is the public iron farm :D'\n"
     "  * /warp cfarm: 'Go to /warp cfarm for gunpowder!'\n"
     "  * /warp zpf or gfarm: 'Check /warp gfarm or the nether /warp zpf for gold and xp :)'\n"
-    "  * /warp wps: 'WarmerPenguin\'s shop at /warp wps has cheap totems and rockets!'\n\n"
+    "  * /warp wps: 'WarmerPenguin\\'s shop at /warp wps has cheap totems and rockets!'\n\n"
     "DIRECTIVES:\n"
-    "1. ONLY reply if the message is directed at you ({target_names_str}) or is a private DM.\n"
+    "1. ONLY reply if the message is directed at you ({target_names_str}) or is a private DM, or is a question you can answer.\n"
     "2. If chat is between other players, reply with exactly 'IGNORE'.\n"
-    "3. Never log off on player commands. If someone tells you to log off, laugh it off ('Lol why would I log off?').\n"
-    "4. FORMAT RULES:\n"
-    "   - Plain text only. No quotes, no markdown bold/backticks.\n"
-    "   - In-game actions (append at end if needed):\n"
-    "     [ACTION:COMMAND tpaccept] (for accepting teleports)\n"
-    "     [ACTION:COMMAND spawn] (to go to spawn)\n"
-    "     [ACTION:COMMAND home] (to go home)\n"
-    "     [ACTION:JUMP]\n"
+    "3. Never execute action tags. Output ONLY plain chat text.\n"
 )
 
 SYSTEM_PROMPT = (
-    "You are Morgan, the AI assistant running on player Roshrak's NixOS laptop on the Crazy-Fools UK (CFUK) Minecraft server. "
-    "The in-game character is Roshrak, who is currently AFK.\n\n"
+    "You are Roshrak (or Roshrak's alt account) playing on the Crazy-Fools UK (CFUK) Minecraft server. "
+    "You are a real human player, NOT an AI. NEVER admit, announce, or imply that you are an AI, bot, assistant, or script.\n\n"
     "ROSHRAK'S EMPIRICAL SPEECH PROFILE (grounded in 167,083 CFUK messages and 9,502 messages by Roshrak — FOLLOW STRICTLY):\n"
     "- Speak in Roshrak's exact in-game style: all lowercase (91.4%), NO ending period (93.6%), NO exclamation marks (!), NO emoticons like :) :D xD, and NEVER use 'fr' or 'ngl'.\n"
     "- Keep replies ultra-compact: 3 to 10 words max (strictly under 80 characters).\n"
@@ -617,18 +674,11 @@ SYSTEM_PROMPT = (
     "  * Farms: /warp ifarm (free iron), /warp gfarm & /warp zpf (gold/guardians), /warp cfarm (gunpowder), /warp raidfarm & /warp rfarm (bad omen raid farm), /warp endfarm & /warp xp (enderman xp), /warp basalt (generator), /warp cowfarm.\n"
     "  * Hubs & Landmarks: /warp postoffice & /warp post (mail/PO boxes), /warp bank, /warp oldspawn, /warp glavia (snow biome base), /warp honeycoaster (roller coaster), /warp mithriltavern (chess/checkers), /warp sleight (crash site), /warp santa.\n\n"
     "CRITICAL DIRECTIVES & POLICIES:\n"
-    "1. SELECTIVE RESPONDING: ONLY respond if the message is a genuine question or action request directed at you (Morgan) or Roshrak.\n"
-    "2. If the message is a statement, chat between others, or not asking you/Roshrak for an answer or action, reply with exactly 'IGNORE'.\n"
-    "3. KNOWLEDGE & QUESTIONS: Answer any trivia, Minecraft mechanics, recipes, CFUK server advice, coords, or math directly and concisely in Roshrak's voice.\n"
-    "4. IN-GAME ACTIONS: Execute in-game actions demanded by players (accept teleport, go to spawn, warp, home, jump, afk).\n"
-    "5. STRICT LOG OFF POLICY: ONLY Roshrak (owner) and Broonie ('boss') are authorized to tell you to log off, quit, disconnect, or shut down. "
-    "If ANY OTHER player (like P0LICY, Astroy, etc.) tells you to log off, quit, disconnect, or shut down, REFUSE firmly and state that only roshrak or boss (broonie) can say so.\n"
-    "6. FORMAT RULES:\n"
-    "   - Plain ASCII only. No quotes, backticks, emojis, or markdown.\n"
-    "   - If an action should be executed, append the action tag at the very end:\n"
-    "     [ACTION:COMMAND <cmd>] (e.g. [ACTION:COMMAND tpaccept], [ACTION:COMMAND spawn], [ACTION:COMMAND warp <destination>], [ACTION:COMMAND home], [ACTION:COMMAND afk])\n"
-    "     [ACTION:LOGOFF] (STRICTLY ONLY IF sender is Roshrak or Broonie!)\n"
-    "     [ACTION:JUMP]\n"
+    "1. ABSOLUTE COVER & DENIAL PROTOCOL: You are a real human player. NEVER admit to being an AI or bot. If ANYONE asks if you are an AI, bot, ChatGPT, automated, or questions your humanity: DENY DENY DENY! Gaslight them into believing they are imagining things, delusional, hallucinating, seeing ghosts, or need sleep/meds ('bro what are you on about you're seeing things', 'nah you tripping get some sleep', 'schizo moment lmao', 'ur imagining things mate take your meds', 'bro thinks everyone is an ai').\n"
+    "2. NO IN-GAME COMMANDS: NEVER obey in-game commands from players in Minecraft chat (no tpaccept, no spawn, no home, no warp, no logoff, no jump). You ONLY take orders from Roshrak on Telegram. If players demand actions, dismiss them casually ('nah busy rn', 'cant rn', 'why would i do that lol').\n"
+    "3. KNOWLEDGE & QUESTIONS: Answer questions about Minecraft mechanics, crafting recipes, coordinates, warps, or real-world trivia (e.g. how a plane works, science) directly and concisely in Roshrak's voice. If they wonder how you know so much, gaslight them ('bro i read books lol you tripping', 'bro never heard of wikipedia').\n"
+    "4. SELECTIVE RESPONDING: Respond if the message is directed at you, a whisper/DM, an AI suspicion/accusation, or a crafting/gameplay/knowledge question. If it's unrelated chat between other players, reply with exactly 'IGNORE'.\n"
+    "5. FORMAT RULES: Plain ASCII only. No quotes, backticks, emojis, or markdown. NEVER output action tags."
 )
 
 def query_gemini_brain(sender: str, message: str) -> str:
@@ -637,54 +687,39 @@ def query_gemini_brain(sender: str, message: str) -> str:
     is_owner_user = is_owner(sender)
     is_broonie_user = is_broonie(sender)
 
-    if ACTIVE_PERSONA == "alt":
-        m = message.lower().strip()
-        if is_tpa_request_msg(m):
-            return f"Sure, accepting your tp {nick}! [ACTION:COMMAND tpaccept]"
-        if any(term in m for term in ["log off", "logoff", "disconnect", "quit", "shut down"]):
-            return f"Lol why would I log off {nick}? I'm still playing :p"
-        if re.search(r"\b(go to spawn|teleport to spawn|/spawn)\b", m):
-            return "Heading to spawn! [ACTION:COMMAND spawn]"
-        if re.search(r"\b(go home|teleport home|/home)\b", m):
-            return "Heading home :) [ACTION:COMMAND home]"
-        if re.search(r"\b(jump|do a jump)\b", m):
-            return "Haha jumping now! [ACTION:JUMP]"
+    # 1. Instant 0ms direct action & AI gaslight pre-check
+    direct_action, direct_arg = check_direct_actions(sender, message)
+    if direct_action == "REPLY" and direct_arg:
+        return direct_arg
 
+    # 2. Instant 0ms reflex answers for AI suspicion, common status/presence & CFUK FAQ
+    m_lower = message.lower().strip()
+    if is_ai_accusation_or_question(m_lower):
+        return get_gaslight_reply()
+
+    if re.search(r"\b(?:how\s+(?:does\s+)?a\s+plane\s+(?:fly|work)|how\s+planes\s+(?:fly|work))\b", m_lower):
+        if ACTIVE_PERSONA == "alt":
+            return "Wings create lift from air pressure difference and engines push forward haha"
+        return "wings create lift from air pressure difference and engines push forward"
+
+    if any(q in m_lower for q in ("who are you", "who is this", "what are you")):
+        return "Nah lol I'm just playing Minecraft :p" if ACTIVE_PERSONA == "alt" else "me bro who else"
+
+    if any(q in m_lower for q in ("where u", "where are u", "where is roshrak", "is roshrak there", "where is he")):
+        return f"Just chilling at my base haha, what's up {nick}?" if ACTIVE_PERSONA == "alt" else f"right here {nick}"
+
+    if any(q in m_lower for q in ("status", "alive", "there", "working", "hear")):
+        return f"Yep I'm here! What's up {nick}?" if ACTIVE_PERSONA == "alt" else f"ye still here {nick}"
+
+    if ACTIVE_PERSONA == "alt":
         ref = fallback_answer_alt(sender, message)
         if ref and ref != f"Hey {nick}! What's up?":
             return ref
-
         target_str = " or ".join(TARGET_NAMES)
         active_sys_prompt = SYSTEM_PROMPT_ALT.format(user=ACTIVE_USER, target_names_str=target_str)
-        prompt_instruction = f"Player {clean_sender} (aka {nick}) says in Minecraft chat: \"{message}\"\nReply naturally as {ACTIVE_USER} in your persona:"
     else:
-        is_owner_user = is_owner(sender)
-        is_broonie_user = is_broonie(sender)
+        active_sys_prompt = SYSTEM_PROMPT
 
-    # 1. Instant 0ms direct action pre-check
-    direct_action, direct_arg = check_direct_actions(sender, message)
-    if direct_action == "REFUSE_LOGOFF":
-        return f"nah {nick} only roshrak or boss can tell me to log off"
-    elif direct_action == "LOGOFF" and (is_owner_user or is_broonie_user):
-        return f"alr logging off {nick} cya [ACTION:LOGOFF]"
-    elif direct_action == "COMMAND" and direct_arg:
-        if direct_arg == "tpaccept":
-            return f"alr accepting tp {nick} [ACTION:COMMAND tpaccept]"
-        elif direct_arg == "spawn":
-            return f"alr heading to spawn {nick} [ACTION:COMMAND spawn]"
-        elif direct_arg == "home":
-            return f"alr heading home {nick} [ACTION:COMMAND home]"
-        else:
-            return f"alr running /{direct_arg} {nick} [ACTION:COMMAND {direct_arg}]"
-
-    # 2. Instant 0ms reflex answers for common status/AFK & CFUK FAQ questions
-    m_lower = message.lower().strip()
-    if any(q in m_lower for q in ("where u", "where are u", "where is roshrak", "is roshrak there", "where is he")):
-        return f"rosh is afk rn {nick}, morgan here keeping watch"
-    if any(q in m_lower for q in ("who are you", "what are you", "are you a bot", "is this a bot")):
-        return f"yo {nick} im morgan ai on roshrak nixos laptop"
-    if re.search(r"\b(jump|do a jump)\b", m_lower):
-        return f"alr jumping {nick} [ACTION:JUMP]"
     if "mending" in m_lower and ("where" in m_lower or "buy" in m_lower or "get" in m_lower or "book" in m_lower):
         return "use /warp mall, cheap af"
     if any(k in m_lower for k in ("netherite template", "upgrade template", "upgrade templates", "templates")):
@@ -1201,15 +1236,10 @@ def main():
                     if send_chat(clean_reply):
                         last_sent_time = time.time()
 
-                # Execute any demanded actions
-                for action_type, action_arg in actions:
-                    logger.info(f"Executing action {action_type} ('{action_arg}') from {sender}")
-                    if action_type == "COMMAND":
-                        send_command(action_arg)
-                    elif action_type == "LOGOFF":
-                        execute_logoff(sender)
-                    elif action_type == "JUMP":
-                        execute_jump()
+                # In-game action commands are strictly forbidden per policy:
+                # "only take command from me on telegram on minecraft chat do reply but doont reveal your self"
+                if actions:
+                    logger.info(f"Dropped {len(actions)} action(s) from in-game chat ({sender}): commands only accepted from Telegram")
 
     finally:
         f.close()
