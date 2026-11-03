@@ -1068,13 +1068,13 @@ def send_command(command: str):
     cmd_name = command.lstrip('/')
     if not cmd_name:
         return False
-    return _guarded_input(['slash','sleep:120',f'type:{cmd_name}','sleep:120','enter','sleep:100'],f'/{cmd_name}')
+    return _guarded_input(['sleep:200', 'slash', 'sleep:250', f'type:{cmd_name}', 'sleep:150', 'enter', 'sleep:100'], f'/{cmd_name}')
 
 
 def send_chat(reply: str):
     if not reply or reply.upper() == 'IGNORE':
         return False
-    return _guarded_input(['t','sleep:120',f'type:{reply}','sleep:120','enter','sleep:100'],reply)
+    return _guarded_input(['sleep:200', 't', 'sleep:250', f'type:{reply}', 'sleep:150', 'enter', 'sleep:100'], reply)
 
 
 def execute_jump():
