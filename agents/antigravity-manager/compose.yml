@@ -3,7 +3,7 @@ services:
     build:
       context: ./src
       dockerfile: docker/Dockerfile
-    image: antigravity-manager:4.9.6-local
+    image: antigravity-manager:5.0.0-local
     container_name: antigravity-manager
     ports:
       - "127.0.0.1:8045:8045"

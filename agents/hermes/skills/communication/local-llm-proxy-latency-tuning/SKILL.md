@@ -43,9 +43,10 @@ metadata:
    - When configuring `PROXY_API_KEY` on `aistudio2api`, synchronize all calling clients (`~/.hermes/config.yaml`, `~/.local/bin/agy`, `~/.local/lib/fast_chat_mcp.py`) with matching tokens.
    - Apply live without restarting Camoufox workers by fetching the full config object from `GET http://127.0.0.1:2048/api/config` (using HTTP Basic Auth with `ADMIN_USERNAME` and `ADMIN_PASSWORD` from `/home/aesc/aistudio2api/.env`), setting `"routing_strategy": "fill-first"` and `"first_event_hedge": "auto"`, and sending the complete modified JSON object back via `PUT http://127.0.0.1:2048/api/config`.
 
-3. Lower Hermes reasoning effort for low-latency chat:
-   - Run `hermes config set agent.reasoning_effort low --force`.
-   - Restart `hermes-gateway.service` (`systemctl --user restart hermes-gateway.service`) so gateway sessions pick up `low` effort.
+3. Lower Hermes reasoning effort for low-latency chat and enforce strict `gemini-4-argon` lock:
+   - Keep `fallback_providers: []` in `~/.hermes/config.yaml` and `fallback_model=None` in `~/.hermes/plugins/parallel-orders/__init__.py` — the user requires Hermes to run exclusively on `gemini-4-argon` and never fall back to another model; if all Argon accounts are cooling down, wait and retry on Argon rather than switching models.
+   - Set `agent.reasoning_effort: low` in `~/.hermes/config.yaml` so `gemini-4-argon` does not default to `"thinking": "high"` (which adds ~12–16s per call and consumes 3–5x daily Argon quota across the 9 Google AI Pro accounts).
+   - Hot-reload gateway plugins in-place without restarting `hermes-gateway.service` or interrupting active turns by calling `from gateway.control_socket import reload_gateway_plugins; reload_gateway_plugins(get_hermes_home())`.
    - In an already-running interactive CLI session, instruct the user to run `/reasoning low` (and `/compress` or `/new` if `input_tokens` exceeds 100k), because the CLI caches `self.reasoning_effort` in memory at startup.
 
 ### 2. Tune Sub-Second / Fast-Chat Responder Cascade (`fast-chat-mcp` & `mc-chat-responder`)
@@ -65,7 +66,11 @@ metadata:
 - Avoid the deprecated `build` upstream channel in `aistudio2api`; set `UPSTREAM_CHANNELS=playground` to prevent timeouts and legacy schema deprecation errors.
 - Set `WAA_BACKEND=spidermonkey` in `aistudio2api` to avoid heavy Camoufox browser processes and reclaim ~400–600MB RAM per account.
 - Keep `aistudio2api-watchdog.timer` (every 30s) active and pin `Xvfb` at `~/.local/share/nix-roots/aistudio2api-xvfb` — if `aistudio2api` boots before DNS is ready or loses its internal generation worker (`Error 503: AIStudio2API 生成服务已停止`), the watchdog queries `GET http://127.0.0.1:2048/api/status` and triggers `POST http://127.0.0.1:2048/api/control/start` when `state == "STOPPED"`.
-- Use `low` (not `minimal`) as `agent.reasoning_effort` when the active model is `gemini-4-argon` on `aistudio2api` — `gemini-4-argon` only declares `thinking_levels: ["LOW", "MEDIUM", "HIGH"]` in `/api/models`.
+- Use `low` (not `minimal` or `high`) as `agent.reasoning_effort` when the active model is `gemini-4-argon` on `aistudio2api` — `gemini-4-argon` only declares `thinking_levels: ["LOW", "MEDIUM", "HIGH"]` in `/api/models`, and `high` adds ~16s of thinking delay while burning daily account quota.
+- Handle both string and dict entries when inspecting `account["models"]` from `GET http://127.0.0.1:2048/api/accounts` (`m.get("id") if isinstance(m, dict) else str(m)`) — `aistudio2api` serializes `models` as plain string IDs in `/api/accounts`.
+- Avoid combining `@dataclasses.dataclass` with `from __future__ import annotations` inside Hermes Gateway plugins (`~/.hermes/plugins/*/__init__.py`) — `importlib.util.module_from_spec` executes the module before registering it in `sys.modules`, causing Python's `dataclasses._is_type` to fail on `sys.modules.get(cls.__module__).__dict__`.
+- Store original mixin methods on the class once (e.g., `GatewayBusySessionMixin._orig_busy_handler_before_parallel`) and always re-bind the wrapper in `register(ctx)` instead of returning early on a boolean guard — returning early prevents `reload_gateway_plugins(get_hermes_home())` from hot-swapping updated plugin handlers into the running gateway process.
+- Mark ephemeral progress bubble sends with a `contextvars.ContextVar` guard (`_IS_PROGRESS_SEND`) when wrapping `TelegramAdapter.send*` to sink active progress bubbles to the bottom of the chat — otherwise two concurrent progress bubbles treat each other's re-anchors as permanent messages and leapfrog indefinitely.
 - Never place `tab_flash_lite_preview` at the top of a general chat responder cascade — it is a code tab-completion model that outputs `IGNORE` on instruction-heavy chat system prompts.
 - Set `max_tokens >= 256` when calling thinking-capable Gemini or Gemma models (`gemma-4-26b-a4b-it`, `gemini-3.1-flash-lite`) and `continue` to the next fallback endpoint when `message.content` is empty (`""`) — small `max_tokens` budgets (`<=120`) get consumed by internal reasoning tokens, leaving `content` empty, and treating empty `content` the same as `"IGNORE"` silently drops the reply.
 - Always `rm -f ~/.local/bin/mc_chat_responder.py` before copying over it — Home Manager links `~/.local/bin/mc_chat_responder.py` into `/nix/store`, so `cp` without `rm -f` fails on the read-only store target.
