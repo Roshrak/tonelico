@@ -16,9 +16,8 @@ metadata:
 - Interactive Hermes CLI or Gateway chat turns take >5–10 seconds to respond.
 - Background chat responders (`mc-chat-responder.service`, `fast-chat-mcp`, Telegram/Discord bridges) exhibit multi-second lag or empty responses.
 - Routing or benchmarking across the local inference proxy stack:
-  - `127.0.0.1:2048` (`aistudio2api.service` — Camoufox browser-pool adapter for Google AI Studio).
-  - `127.0.0.1:8045` (`agy-rotator` rootless Docker proxy — direct HTTP API pool).
-  - `127.0.0.1:8765` (`agy-bridge.service` — CLI subprocess wrapper around `agy`).
+  - `127.0.0.1:2048` (`aistudio2api.service` — Camoufox/SpiderMonkey adapter for Google AI Studio).
+  - `127.0.0.1:8045` (`antigravity-manager` rootless Docker proxy — direct HTTP API pool).
 
 ## Procedure
 
@@ -49,15 +48,28 @@ metadata:
    - Hot-reload gateway plugins in-place without restarting `hermes-gateway.service` or interrupting active turns by calling `from gateway.control_socket import reload_gateway_plugins; reload_gateway_plugins(get_hermes_home())`.
    - In an already-running interactive CLI session, instruct the user to run `/reasoning low` (and `/compress` or `/new` if `input_tokens` exceeds 100k), because the CLI caches `self.reasoning_effort` in memory at startup.
 
+4. Orchestrate Concurrent Gateway Orders (`parallel-orders` & `parallel-ops-mcp`):
+   - Route follow-up messages that reply directly to a running task's prompt/progress bubble, start with `+ ` / `steer:` / `add:`, or begin with continuation phrases (`"also ..."`, `"and ..."`, `"make sure ..."`, `"don't forget ..."`, `"instead ..."`) into the active agent via `agent.steer(...)` rather than spawning a duplicate parallel worker; prefix with `// ` or `parallel:` to force a separate parallel worker.
+   - Cap parallel worker history snapshots (`<=10` recent messages / `16k` chars) and assign an isolated `session_id` (`par_<HHMMSS>_<hex>`) per worker so concurrent tasks neither trigger context compaction locks nor collide on the shared persistent bash session.
+   - Use `parallel-ops-mcp` (`~/.local/lib/parallel_ops_mcp.py`) tools (`parallel_list_active_orders`, `parallel_steer_order`, `parallel_cancel_order`, `parallel_batch_shell`, `parallel_argon_pool_status`) to inspect/steer active orders or run up to 16 isolated shell commands in parallel.
+
 ### 2. Tune Sub-Second / Fast-Chat Responder Cascade (`fast-chat-mcp` & `mc-chat-responder`)
 1. Use a 3-tier response hierarchy for real-time chat bots:
    - **Tier 1 (0ms Reflex)**: Match deterministic commands (`/tpaccept`, `/spawn`, `/home`, `/warp`, jump) and frequent status questions (`where u`, `where is roshrak`, `who are you`, greetings) in-process before any network call.
    - **Tier 2 (0ms LRU Cache)**: Cache normalized `(sender, message)` or `(persona, message)` replies in memory with TTL expiration.
-   - **Tier 3 (~1.2s–1.8s Fast LLM Cascade)**: Route to `http://127.0.0.1:8045/v1/chat/completions` (`agy-rotator`) using `gemini-3.1-flash-lite` first and `gemini-3.8-flash-low` second, with `max_tokens: 256` and `Authorization: Bearer <AGY_ROTATOR_API_KEY>`.
+   - **Tier 3 (~1.2s–1.8s Fast LLM Cascade)**: Route to `http://127.0.0.1:8045/v1/chat/completions` (`antigravity-manager`) using `gemini-3.1-flash-lite` first and `gemini-3.8-flash-low` second, with `max_tokens: 256` and `Authorization: Bearer <AGY_ROTATOR_API_KEY>`.
 2. When deploying updates to `/home/aesc/.local/bin/mc_chat_responder.py`:
    - Edit the source of truth at `/home/aesc/tonelico/nixos/home/files/bin/mc_chat_responder.py`.
    - Unlink `/home/aesc/.local/bin/mc_chat_responder.py` (`rm -f`) before copying the updated script over, then `chmod +x` and run `systemctl --user restart mc-chat-responder.service`.
 3. Verify end-to-end latency with `mcp__fast_chat_mcp__fast_chat_mc_responder_turbo(action="test_reply")` or `mcp__fast_chat_mcp__fast_chat_benchmark_endpoints`.
+
+### 3. Provider Isolation & Antigravity-Manager Pool Synchronization
+1. Keep only two LLM providers configured across Hermes (`~/.hermes/config.yaml`, `~/.hermes/auth.json`) and local coding clients (`~/.config/opencode/opencode.json`):
+   - `aistudio2api` (`http://127.0.0.1:2048/v1`, key env `AISTUDIO2API_API_KEY`, primary model `gemini-4-argon`).
+   - `antigravity-manager` (`http://127.0.0.1:8045/v1`, key env `AGY_ROTATOR_API_KEY`, default model `gemini-3.8-flash-high`, `transport: chat_completions`, `discover_models: true`).
+2. Do not retain third-party provider credentials (`gemini`, `openai-codex`, `copilot`, `openrouter`, `anthropic`, `aioffer`, `orcarouter`, `miraiapi`) or backup config files containing private API keys.
+3. To suppress `copilot` from auto-seeding `gh auth token` into `~/.hermes/auth.json`, run `hermes auth remove copilot <id>` so `suppressed_sources.copilot` is recorded in `auth.json`.
+4. To upgrade `antigravity-manager` (`https://github.com/lbjlaq/Antigravity-Manager.git`) or headlessly link all `aistudio2api` Google accounts into `antigravity-manager` using their existing Camoufox `storage-state.json` cookies, follow `references/antigravity-manager-account-sync.md`.
 
 ## Pitfalls
 - Send the full configuration object returned by `GET /api/config` when calling `PUT http://127.0.0.1:2048/api/config` — partial JSON payloads fail validation with HTTP 400.
@@ -66,6 +78,7 @@ metadata:
 - Avoid the deprecated `build` upstream channel in `aistudio2api`; set `UPSTREAM_CHANNELS=playground` to prevent timeouts and legacy schema deprecation errors.
 - Set `WAA_BACKEND=spidermonkey` in `aistudio2api` to avoid heavy Camoufox browser processes and reclaim ~400–600MB RAM per account.
 - Keep `aistudio2api-watchdog.timer` (every 30s) active and pin `Xvfb` at `~/.local/share/nix-roots/aistudio2api-xvfb` — if `aistudio2api` boots before DNS is ready or loses its internal generation worker (`Error 503: AIStudio2API 生成服务已停止`), the watchdog queries `GET http://127.0.0.1:2048/api/status` and triggers `POST http://127.0.0.1:2048/api/control/start` when `state == "STOPPED"`.
+- Route desktop launcher (`-open-ui`) and no-argument interactive calls in `/home/aesc/aistudio2api/aistudio2api` and `~/.local/share/applications/aistudio2api.desktop` to `/home/aesc/.local/bin/aistudio2api-ui` (`chromium --app=http://127.0.0.1:2048/`) instead of invoking `aistudio2api-core -open-ui` — when `aistudio2api.service` already holds `127.0.0.1:2048`, `aistudio2api-core -open-ui` exits immediately with `bind: address already in use` before opening the dashboard.
 - Use `low` (not `minimal` or `high`) as `agent.reasoning_effort` when the active model is `gemini-4-argon` on `aistudio2api` — `gemini-4-argon` only declares `thinking_levels: ["LOW", "MEDIUM", "HIGH"]` in `/api/models`, and `high` adds ~16s of thinking delay while burning daily account quota.
 - Handle both string and dict entries when inspecting `account["models"]` from `GET http://127.0.0.1:2048/api/accounts` (`m.get("id") if isinstance(m, dict) else str(m)`) — `aistudio2api` serializes `models` as plain string IDs in `/api/accounts`.
 - Avoid combining `@dataclasses.dataclass` with `from __future__ import annotations` inside Hermes Gateway plugins (`~/.hermes/plugins/*/__init__.py`) — `importlib.util.module_from_spec` executes the module before registering it in `sys.modules`, causing Python's `dataclasses._is_type` to fail on `sys.modules.get(cls.__module__).__dict__`.
@@ -75,3 +88,7 @@ metadata:
 - Set `max_tokens >= 256` when calling thinking-capable Gemini or Gemma models (`gemma-4-26b-a4b-it`, `gemini-3.1-flash-lite`) and `continue` to the next fallback endpoint when `message.content` is empty (`""`) — small `max_tokens` budgets (`<=120`) get consumed by internal reasoning tokens, leaving `content` empty, and treating empty `content` the same as `"IGNORE"` silently drops the reply.
 - Always `rm -f ~/.local/bin/mc_chat_responder.py` before copying over it — Home Manager links `~/.local/bin/mc_chat_responder.py` into `/nix/store`, so `cp` without `rm -f` fails on the read-only store target.
 - When injecting keystrokes on Wayland/niri where `wtype` is absent, invoke `/home/aesc/.local/bin/uinput_type` with positional action tokens (`t`, `slash`, `sleep:<ms>`, `type:<text>`, `enter`, `esc`) rather than raw text or flags.
+- Pull prebuilt `lbjlaq/antigravity-manager:v<X.Y.Z>` images from Docker Hub and re-tag to `antigravity-manager:<X.Y.Z>-local` instead of running `docker compose up -d --build` in `~/agm-docker` — building the Rust backend from source takes ~9 minutes.
+- Pass `no_viewport=True` to `browser.new_context(...)`, `CAMOU_CONFIG_1=json.dumps(fp["config"])` in `env`, and normalize cookie `sameSite` values to `Strict|Lax|None` when driving `/home/aesc/aistudio2api/runtime/camoufox/camoufox-bin` with Playwright — Camoufox's Juggler protocol rejects `viewport.isMobile`, omits `navigator.userAgent` without `CAMOU_CONFIG_1` (triggering Google's `/not-supported` redirect), and rejects lowercase `sameSite` values from `storage-state.json`.
+- Gate Google Account Chooser clicks (`[data-identifier]`, `[data-email]`) on `"accountchooser" in page.url` during automated OAuth flows — the subsequent `/signin/oauth/v3/firstparty/nativeapp` consent screen also renders a `[data-email]` badge at the top, so clicking `[data-email]` unconditionally loops instead of advancing through the consent button.
+- Intercept `http://localhost:8045/**` via `page.route` and forward the OAuth callback to `http://127.0.0.1:8045` with header `Host: localhost:8045` when `antigravity-manager` binds `127.0.0.1:8045` — browsers resolving `localhost` to IPv6 `::1` otherwise fail to reach the callback listener.

@@ -1,36 +1,41 @@
 model:
   provider: aistudio2api
-  default: gemini-4-argon
+  default: gemini-4-argon-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-low-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high-high
   max_tokens: 65536
   aliases:
-    aistudio: aistudio2api/gemini-4-argon
-    aistudio-pro: aistudio2api/gemini-3.1-pro-preview
+    aistudio: aistudio2api/gemini-4-argon-high
+    argon: aistudio2api/gemini-4-argon-high
     argon-high: aistudio2api/gemini-4-argon-high
-    argon-med: aistudio2api/gemini-4-argon-medium
+    argon-med: aistudio2api/gemini-4-argon-high
     argon-low: aistudio2api/gemini-4-argon-low
-    flash-high: aistudio2api/gemini-3.8-flash-high
-    flash-med: aistudio2api/gemini-3.8-flash-medium
-    flash-low: aistudio2api/gemini-3.8-flash-low
-    fast: aistudio2api/gemma-4-26b-a4b-it
-    flash: aistudio2api/gemini-3.8-flash
-    lite: agy-rotator/gemini-3.1-flash-lite
-    tab-lite: agy-rotator/tab_flash_lite_preview
+    opus: antigravity-manager/claude-opus-4-6-thinking
+    claude-opus: antigravity-manager/claude-opus-4-6-thinking
+    opus-5.5: antigravity-manager/claude-opus-5-5-high
+    flash-high: antigravity-manager/gemini-3.8-flash-high
+    flash-med: antigravity-manager/gemini-3.8-flash-high
+    flash-low: antigravity-manager/gemini-3.8-flash-high
+    flash: antigravity-manager/gemini-3.8-flash-high
+    antigravity: antigravity-manager/gemini-3.8-flash-high
+    lite: antigravity-manager/gemini-3.1-flash-lite
+    tab-lite: antigravity-manager/tab_flash_lite_preview
 providers:
-  agy-rotator:
+  aistudio2api:
+    api: http://127.0.0.1:2048/v1
+    default_model: gemini-4-argon-high
+    key_env: AISTUDIO2API_API_KEY
+  antigravity-manager:
+    name: Antigravity Manager
     api: http://127.0.0.1:8045/v1
     default_model: gemini-3.8-flash-high
     key_env: AGY_ROTATOR_API_KEY
-  agy-pro:
-    api: http://127.0.0.1:8765/v1
-    default_model: gemini-3.8-flash-high
-    api_key: agy-local-key
-  aistudio2api:
-    api: http://127.0.0.1:2048/v1
-    default_model: gemini-4-argon
-    key_env: AISTUDIO2API_API_KEY
-fallback_providers: []
+    transport: chat_completions
+    discover_models: true
+fallback_providers:
+- provider: antigravity-manager
+  model: gemini-3.8-flash-high
+- provider: antigravity-manager
+  model: claude-opus-4-6-thinking
 credential_pool_strategies:
-  gemini: fill_first
   default: fill_first
 browser:
   cloud_provider: browser-use
@@ -65,7 +70,9 @@ plugins:
   enabled:
   - session-access
   - parallel-orders
-  disabled: []
+  disabled:
+  - copilot-provider
+  - copilot-acp-provider
   entries:
     session-access:
       allow_tool_override: false

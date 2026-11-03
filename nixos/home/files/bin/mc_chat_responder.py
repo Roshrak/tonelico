@@ -32,13 +32,21 @@ def _load_local_secret(env_var: str, env_file: str, file_key: str) -> str:
                             return line.split("=", 1)[1].strip().strip('"').strip("'")
         except OSError:
             pass
+    if env_file == ".antigravity_tools/gui_config.json":
+        try:
+            cfg_p = os.path.expanduser("~/.antigravity_tools/gui_config.json")
+            if os.path.exists(cfg_p):
+                with open(cfg_p, "r", encoding="utf-8") as fh:
+                    return json.load(fh).get("proxy", {}).get("api_key", "not-needed")
+        except Exception:
+            pass
     return "not-needed"
 
 FAST_BRIDGE_ENDPOINTS = [
-    ("http://127.0.0.1:8045/v1/chat/completions", "gemini-3.1-flash-lite", _load_local_secret("AGY_ROTATOR_API_KEY", "agm-docker/.env", "API_KEY")),
-    ("http://127.0.0.1:8045/v1/chat/completions", "gemini-3.8-flash-low", _load_local_secret("AGY_ROTATOR_API_KEY", "agm-docker/.env", "API_KEY")),
-    ("http://127.0.0.1:2048/v1/chat/completions", "gemini-3.8-flash-low", _load_local_secret("AISTUDIO2API_API_KEY", "aistudio2api/.env", "PROXY_API_KEY")),
-    (BRIDGE_URL, "gemini-3.8-flash-low", "agy-local-key"),
+    ("http://127.0.0.1:2048/v1/chat/completions", "gemini-4-argon", _load_local_secret("OPENAI_API_KEY", "aistudio2api/.env", "PROXY_API_KEY")),
+    ("http://127.0.0.1:8045/v1/chat/completions", "gemini-3.8-flash-high", _load_local_secret("AGY_ROTATOR_API_KEY", ".antigravity_tools/gui_config.json", "api_key")),
+    ("http://127.0.0.1:8045/v1/chat/completions", "claude-opus-4-6-thinking", _load_local_secret("AGY_ROTATOR_API_KEY", ".antigravity_tools/gui_config.json", "api_key")),
+    (BRIDGE_URL, "gemini-3.8-flash-high", "agy-local-key"),
 ]
 LLM_REPLY_CACHE = collections.OrderedDict()
 
@@ -55,8 +63,142 @@ logger = logging.getLogger("MCChatResponder")
 # Track messages sent by the bot to prevent self-chat loops
 BOT_SENT_HISTORY = collections.deque(maxlen=50)
 
-# Track known players active on the server
-KNOWN_PLAYERS = set(["astroy300", "astroy", "arrowsmaster", "arrows", "p0licy", "policy", "broonie", "404thread"])
+# Track known players active on the Crazy-Fools UK (CFUK) server
+KNOWN_PLAYERS = set([
+    "astroy300", "astroy", "astroy_1", "arrowsmaster", "arrows",
+    "p0licy", "policy", "edi______", "edi__", "broonie", "404thread", "404",
+    "hekatonkires", "heckatonckires", "heck", "raelon225", "raelon", "rae",
+    "johnnyboy4200", "johnny", "nand", "scotnand", "shield543", "shield",
+    "tuxedodolphin", "tux", "stinkybacon", "stinky", "septleigh08", "sept",
+    "beansandfasolki", "beans", "warmerpenguin", "penguin", "deceptivity",
+    "juliab26", "julia", "unit5", "unit", "worldy08", "worldy", "robamro",
+    "elitealphars", "elitealpha", "bonibenandanti", "sesquipedxlixn",
+    "stuair", "tati", "francis", "billybobjrsr225", "billy", "amber<3", "amber",
+    "lunar", "indigolime", "indigo", "manyeetit", "manyeet", "franklyjpp", "frank",
+    "kai", "timeno", "hunnybal", "hunny", "grassbread", "grass", "loqk",
+])
+
+CFUK_NICKNAMES = {
+    "broonie": "boss",
+    "p0licy": "pol",
+    "policy": "pol",
+    "edi______": "pol",
+    "edi__": "pol",
+    "astroy300": "astroy",
+    "astroy_1": "astroy",
+    "hekatonkires": "heck",
+    "heckatonckires": "heck",
+    "heck": "heck",
+    "raelon225": "rae",
+    "raelon": "rae",
+    "404thread": "404",
+    "johnnyboy4200": "johnny",
+    "tuxedodolphin": "tux",
+    "warmerpenguin": "penguin",
+    "septleigh08": "sept",
+    "stinkybacon": "stinky",
+    "arrowsmaster": "arrows",
+    "beansandfasolki": "beans",
+    "shield543": "shield",
+    "scotnand": "nand",
+    "stuair": "stu",
+    "billybobjrsr225": "billy",
+    "indigolime": "indigo",
+    "manyeetit": "manyeet",
+    "franklyjpp": "frank",
+    "hunnybal": "hunny",
+    "grassbread": "grass",
+}
+
+# Empirical CFUK Warps Database extracted from 167,083 messages archive
+CFUK_WARPS = {
+    # Shops & Markets
+    "apple": "cfuk apple store by francis/kai (overpriced parody devices)",
+    "mall": "potion shop & villager enchant books (cheap mending books)",
+    "bazaar": "heck's shop at new spawn (sniffer eggs, blacksmith gear)",
+    "market": "code's emporium, starqq's shop & potion stall",
+    "squish": "loqk's shop selling netherite upgrade templates and shulkers",
+    "wps": "warmerpenguin shop at new spawn (cheap totems, lvl 3 rockets, diamonds)",
+    "warmershop": "alias for /warp wps (totems, rockets, paper, diamonds)",
+    "stoneshop": "astroy's shop selling stone, steaks, rockets, and arrows",
+    "octane": "lunar's tech and gadget shop",
+    "botania": "heck's agricultural and flower shop (pitcher seeds, roses)",
+    "altunsemporium": "altun & hunnybal shop near spawn (full diamond enchant sets, netherite)",
+    "2b": "stuair's waxette sign wax shop",
+    "crazyrocket": "asuch's rocket store",
+    "policystore": "edi/policy's shop at spawn",
+    "unitshop": "unit5 / deceptivity's store",
+    "hanshop": "hannu's spawn shop selling tadpoles and frogs",
+    "cardshop": "card shop (soul taker cards)",
+    "whackmarket": "gyp5um's netherite & gear market",
+
+    # Public Community Farms & Grinders
+    "ifarm": "public iron golem farm for free iron ingots",
+    "gfarm": "public guardian and gold farm",
+    "cfarm": "public creeper farm for gunpowder",
+    "cowfarm": "public cow and mooshroom farm",
+    "spider": "public spider spawner farm (half destroyed chicken spawner)",
+    "raidfarm": "heck's public raid farm (bring bad omen buff to trigger)",
+    "rfarm": "alias for /warp raidfarm",
+    "zpf": "zombie pigman farm in the nether for gold and xp",
+    "endfarm": "public enderman farm in the End for pearls and fast xp",
+    "basalt": "public basalt generator farm (efficiency V pickaxe required)",
+    "kelpfarm": "shield's semi-manual bonemeal and kelp farm",
+    "xp": "community enderman xp grinder",
+    "colours": "dye and wool farm",
+    "dyes": "heck's automatic dye farm",
+
+    # Hubs, Transport & Services
+    "post": "spawn post office with player PO boxes (mail drop)",
+    "postoffice": "nand's spawn post office for storing items and player mail",
+    "bank": "falconbrunch's spawn bank with the fancy chandelier",
+    "square": "town square / spawn plaza",
+    "oldspawn": "original spawn with free replant crops and historical builds",
+    "oldspawn2": "second legacy spawn",
+    "spawn": "server spawn hub",
+    "glavia": "snow plain biome town near roshrak's base",
+    "cfukrail": "main cfuk railway line crossing point",
+    "acaciapark": "eastern rail junction and acacia park",
+    "townhouses": "community residential townhouse plots",
+
+    # Attractions & Minigames
+    "honeycoaster": "kai's amusement honey block roller coaster",
+    "arena": "pvp arena for cfuk olympics and combat events",
+    "mithriltavern": "sircocacola's tavern with playable chess and checkers",
+    "secretsanta": "annual christmas secret santa gift exchange hub",
+    "santa": "snow globe holiday event landmark",
+    "pazaak": "cantina band theme mini-game area",
+
+    # Notable Landmarks & Bases
+    "sleight": "crash site landmark",
+    "billysplanet": "billybob's custom planet build",
+    "arrowscastle": "arrowsmaster's fortified castle",
+    "dmitriev": "dmitriev base and faction banner",
+    "kaisvillage": "kai's community village",
+    "stumansion": "stuair's mansion with community donation chests",
+    "crescentcastle": "moon lagoon crescent castle build",
+    "angton": "angton peak tower and horse race track",
+}
+
+def short_player_nick(sender: str) -> str:
+    clean = sender.split("#")[0].strip()
+    low = clean.lower()
+    return CFUK_NICKNAMES.get(low, low)
+
+def style_as_roshrak(chat_text: str) -> str:
+    """Apply Roshrak's empirical in-game speech fingerprint (91.4% lowercase, 93.6% no trailing period, 0% !)."""
+    if not chat_text:
+        return ""
+    s = chat_text.strip()
+    # Strip emoticons Roshrak never uses
+    s = re.sub(r"(?:\s*[:=;][)DdpP(]+\b|\s*\bx[dD]\b|\s*\bfr\b|\s*\bngl\b)", "", s)
+    # Replace exclamation marks with nothing or space
+    s = s.replace("!", "")
+    # Lowercase in-game voice (preserving slash commands if any)
+    s = s.lower().strip()
+    # Strip trailing period (93.6% no ending period)
+    s = re.sub(r"\.+$", "", s).strip()
+    return s
 
 def normalize_name(name: str) -> str:
     s = name.lower()
@@ -205,9 +347,10 @@ def check_direct_actions(sender: str, msg: str) -> tuple[str | None, str | None]
     if re.search(r"\b(go home|teleport home|/home)\b", m):
         return "COMMAND", "home"
 
-    warp_match = re.search(r"\b(?:warp|go to warp)\s+([a-zA-Z0-9_-]+)\b", m)
-    if warp_match:
-        return "COMMAND", f"warp {warp_match.group(1)}"
+    if not re.search(r"\b(?:what|which|whats)\s+warp\b", m):
+        warp_match = re.search(r"(?:/warp\s+|\b(?:go to warp|tp to warp|use warp|do warp)\s+)([a-zA-Z0-9_-]+)\b", m)
+        if warp_match:
+            return "COMMAND", f"warp {warp_match.group(1)}"
 
     return None, None
 
@@ -266,56 +409,97 @@ def parse_chat_line(chat_content: str):
 
 def fallback_answer(sender: str, message: str) -> str:
     m_lower = message.lower()
-    clean_sender = sender.split("#")[0].strip()
+    nick = short_player_nick(sender)
 
     # Log off
     if any(w in m_lower for w in ["log off", "logoff", "disconnect", "quit", "shut down", "shutdown"]):
         if is_authorized_to_logoff(sender):
-            return f"Logging off now as requested by {clean_sender}. [ACTION:LOGOFF]"
+            return f"alr logging off now {nick} cya [ACTION:LOGOFF]"
         else:
-            return f"Sorry {clean_sender}, only Roshrak and Broonie can tell me to log off!"
+            return f"nah {nick} only roshrak or boss can tell me to log off"
 
     # TPA
     if is_tpa_request_msg(m_lower):
-        return f"Accepting teleport right now, {clean_sender}! [ACTION:COMMAND tpaccept]"
+        return f"alr accepting tp {nick} [ACTION:COMMAND tpaccept]"
 
     # Spawn
     if "spawn" in m_lower:
-        return f"Heading to spawn now! [ACTION:COMMAND spawn]"
+        return f"alr heading to spawn {nick} [ACTION:COMMAND spawn]"
 
     # Home
     if "home" in m_lower:
-        return f"Heading home now! [ACTION:COMMAND home]"
+        return f"alr heading home {nick} [ACTION:COMMAND home]"
+
+    # CFUK Server FAQ reflexes in Roshrak's verbatim voice
+    if "mending" in m_lower or ("villager" in m_lower and "book" in m_lower):
+        return "use /warp mall, cheap af"
+    if any(k in m_lower for k in ("netherite template", "upgrade template", "upgrade templates", "templates")):
+        return "they sell some at /warp squish or altunsemporium"
+    if "shulker" in m_lower and ("buy" in m_lower or "get" in m_lower or "where" in m_lower):
+        return "warp squish or mall, they got shulkers"
+    if any(k in m_lower for k in ("totem", "totems", "rocket", "rockets")) and any(k in m_lower for k in ("buy", "get", "where", "cheap")):
+        return "warp wps or stoneshop, cheap rockets n totems"
+    if "iron" in m_lower and any(k in m_lower for k in ("farm", "where", "get", "free")):
+        return "use /warp ifarm, free iron"
+    if any(k in m_lower for k in ("creeper farm", "gunpowder farm", "gunpowder")) and any(k in m_lower for k in ("where", "get", "farm")):
+        return "warp cfarm for gunpowder"
+    if any(k in m_lower for k in ("gold farm", "guardian farm", "guardian")) and any(k in m_lower for k in ("where", "farm", "get")):
+        return "warp gfarm or nether /warp zpf"
+    if "raid farm" in m_lower or "rfarm" in m_lower:
+        return "warp raidfarm or rfarm, bring bad omen"
+    if "post office" in m_lower or "mail" in m_lower:
+        return "warp postoffice or /warp post"
+    if "apple store" in m_lower:
+        return "warp apple for overpriced fake gadgets lol"
+    if "melon" in m_lower and ("silk" in m_lower or "fortune" in m_lower):
+        return "silk touch gives 9 slices per block, more melon per melon"
+    if "bonemeal" in m_lower or "bone meal" in m_lower or "moss farm" in m_lower:
+        return "ask astroy or heck, it the ilmango or emilia moss farm"
+
+    # Specific warp lookup (e.g. "what is warp apple", "what is warp squish")
+    warp_q = re.search(r"\b(?:what is|whats|info on|where does|tell me about)\s+(?:/warp|warp)\s+([a-zA-Z0-9_-]+)\b", m_lower)
+    if warp_q:
+        target_w = warp_q.group(1).lower()
+        if target_w in CFUK_WARPS:
+            return f"{target_w} is {CFUK_WARPS[target_w]}"
 
     # Questions
     if any(q in m_lower for q in ["who are you", "what are you"]):
-        return f"Hey {clean_sender}! I am Morgan, an AI keeping watch over Roshrak."
+        return f"yo {nick} im morgan, ai on roshrak nixos laptop keeping watch"
 
     if any(q in m_lower for q in ["status", "alive", "there", "working", "hear"]):
-        return f"I am online and keeping watch, {clean_sender}!"
+        return f"ye still here keeping watch {nick}"
 
     if any(q in m_lower for q in ["where is roshrak", "is roshrak", "where is he"]):
-        return f"{clean_sender}, Roshrak is currently AFK."
+        return f"rosh is afk rn {nick}"
 
     if any(q in m_lower for q in ["are you a bot", "is this a bot"]):
-        return f"Yes {clean_sender}, I am Morgan AI running on Roshrak's laptop."
+        return f"ye {nick} morgan ai running on roshrak laptop"
 
-    return f"Hey {clean_sender}, Roshrak is AFK right now, but I am standing by!"
+    return f"yo {nick} rosh is afk rn, im standing by"
 
 SYSTEM_PROMPT = (
-    "You are Morgan, an AI operating assistant running on player Roshrak's NixOS laptop for the Minecraft server Crazy-Fools. "
-    "The in-game player character is Roshrak, who is currently AFK.\n\n"
+    "You are Morgan, the AI assistant running on player Roshrak's NixOS laptop on the Crazy-Fools UK (CFUK) Minecraft server. "
+    "The in-game character is Roshrak, who is currently AFK.\n\n"
+    "ROSHRAK'S EMPIRICAL SPEECH PROFILE (grounded in 167,083 CFUK messages and 9,502 messages by Roshrak — FOLLOW STRICTLY):\n"
+    "- Speak in Roshrak's exact in-game style: all lowercase (91.4%), NO ending period (93.6%), NO exclamation marks (!), NO emoticons like :) :D xD, and NEVER use 'fr' or 'ngl'.\n"
+    "- Keep replies ultra-compact: 3 to 10 words max (strictly under 80 characters).\n"
+    "- Use Roshrak's natural vocabulary & shortcuts: 'yo', 'wb', 'ty', 'cya', 'alr', 'ye', 'nah', 'welp', 'hmm', 'bruh', 'imma', 'smth', 'sb' (somebody), 'tbh', 'idk', 'ik', 'rn', 'rq', 'wdm', 'af', and occasional copula-drops ('it fine', 'it not', 'it the').\n"
+    "- Use CFUK player nicknames naturally: Broonie='boss', P0LICY/edi='pol', Astroy300='astroy', Hekatonkires='heck', Raelon225='rae', 404thread='404', JohnnyBoy4200='johnny', TuxedoDolphin='tux', WarmerPenguin='penguin', SeptLeigh08='sept', StinkyBacon='stinky', StuAir='stu', BillyBobJrSr225='billy', Hunnybal='hunny', Grassbread='grass'.\n"
+    "- Know CFUK server warps & economy:\n"
+    "  * Shops: /warp apple (overpriced gadgets), /warp mall (mending books ~10 ems), /warp bazaar (heck's shop at spawn, sniffer eggs), /warp squish (netherite templates/shulkers), /warp wps & /warp warmershop (cheap totems/rockets), /warp stoneshop (astroy's stone/arrows), /warp botania (plants/seeds), /warp altunsemporium (diamond sets/netherite), /warp 2b (sign wax).\n"
+    "  * Farms: /warp ifarm (free iron), /warp gfarm & /warp zpf (gold/guardians), /warp cfarm (gunpowder), /warp raidfarm & /warp rfarm (bad omen raid farm), /warp endfarm & /warp xp (enderman xp), /warp basalt (generator), /warp cowfarm.\n"
+    "  * Hubs & Landmarks: /warp postoffice & /warp post (mail/PO boxes), /warp bank, /warp oldspawn, /warp glavia (snow biome base), /warp honeycoaster (roller coaster), /warp mithriltavern (chess/checkers), /warp sleight (crash site), /warp santa.\n\n"
     "CRITICAL DIRECTIVES & POLICIES:\n"
-    "1. SELECTIVE RESPONDING: You ONLY respond if the message is a genuine question or action request directed at you (Morgan) or Roshrak.\n"
+    "1. SELECTIVE RESPONDING: ONLY respond if the message is a genuine question or action request directed at you (Morgan) or Roshrak.\n"
     "2. If the message is a statement, chat between others, or not asking you/Roshrak for an answer or action, reply with exactly 'IGNORE'.\n"
-    "3. KNOWLEDGE & QUESTIONS: You have 100% full power to answer ANY questions (trivia, Minecraft mechanics, recipes, server advice, coords, math). Answer directly, accurately, and concisely.\n"
-    "4. IN-GAME ACTIONS: You have 100% full power to perform in-game actions demanded by players (e.g. accept teleport, go to spawn, warp, home, jump, afk).\n"
-    "5. STRICT LOG OFF POLICY: ONLY player Roshrak ('me' / owner) and Broonie ('Broonie') are authorized to tell you to log off, quit, disconnect, or shut down. "
-    "If ANY OTHER player (such as P0LICY, Astroy, or any other user) tells you to log off, quit, disconnect, or shut down, YOU MUST REFUSE firmly and clearly state that only Roshrak and Broonie can say so.\n"
+    "3. KNOWLEDGE & QUESTIONS: Answer any trivia, Minecraft mechanics, recipes, CFUK server advice, coords, or math directly and concisely in Roshrak's voice.\n"
+    "4. IN-GAME ACTIONS: Execute in-game actions demanded by players (accept teleport, go to spawn, warp, home, jump, afk).\n"
+    "5. STRICT LOG OFF POLICY: ONLY Roshrak (owner) and Broonie ('boss') are authorized to tell you to log off, quit, disconnect, or shut down. "
+    "If ANY OTHER player (like P0LICY, Astroy, etc.) tells you to log off, quit, disconnect, or shut down, REFUSE firmly and state that only roshrak or boss (broonie) can say so.\n"
     "6. FORMAT RULES:\n"
-    "   - Exactly 1 short in-game Minecraft chat sentence (strictly under 90 characters).\n"
-    "   - Plain ASCII only. Absolutely NO quotes, backticks, emojis, or markdown.\n"
-    "   - If an action should be executed, append the corresponding action tag at the end:\n"
+    "   - Plain ASCII only. No quotes, backticks, emojis, or markdown.\n"
+    "   - If an action should be executed, append the action tag at the very end:\n"
     "     [ACTION:COMMAND <cmd>] (e.g. [ACTION:COMMAND tpaccept], [ACTION:COMMAND spawn], [ACTION:COMMAND warp <destination>], [ACTION:COMMAND home], [ACTION:COMMAND afk])\n"
     "     [ACTION:LOGOFF] (STRICTLY ONLY IF sender is Roshrak or Broonie!)\n"
     "     [ACTION:JUMP]\n"
@@ -323,33 +507,60 @@ SYSTEM_PROMPT = (
 
 def query_gemini_brain(sender: str, message: str) -> str:
     clean_sender = sender.split("#")[0].strip()
+    nick = short_player_nick(sender)
     is_owner_user = is_owner(sender)
     is_broonie_user = is_broonie(sender)
 
     # 1. Instant 0ms direct action pre-check
     direct_action, direct_arg = check_direct_actions(sender, message)
     if direct_action == "REFUSE_LOGOFF":
-        return f"Sorry {clean_sender}, only Roshrak and Broonie can tell me to log off!"
+        return f"nah {nick} only roshrak or boss can tell me to log off"
     elif direct_action == "LOGOFF" and (is_owner_user or is_broonie_user):
-        return f"Logging off as requested by {clean_sender}. Cya! [ACTION:LOGOFF]"
+        return f"alr logging off {nick} cya [ACTION:LOGOFF]"
     elif direct_action == "COMMAND" and direct_arg:
         if direct_arg == "tpaccept":
-            return f"Accepting teleport right now, {clean_sender}! [ACTION:COMMAND tpaccept]"
+            return f"alr accepting tp {nick} [ACTION:COMMAND tpaccept]"
         elif direct_arg == "spawn":
-            return f"Heading to spawn now, {clean_sender}! [ACTION:COMMAND spawn]"
+            return f"alr heading to spawn {nick} [ACTION:COMMAND spawn]"
         elif direct_arg == "home":
-            return f"Heading home now, {clean_sender}! [ACTION:COMMAND home]"
+            return f"alr heading home {nick} [ACTION:COMMAND home]"
         else:
-            return f"Running /{direct_arg} now, {clean_sender}! [ACTION:COMMAND {direct_arg}]"
+            return f"alr running /{direct_arg} {nick} [ACTION:COMMAND {direct_arg}]"
 
-    # 2. Instant 0ms reflex answers for common status/AFK questions
+    # 2. Instant 0ms reflex answers for common status/AFK & CFUK FAQ questions
     m_lower = message.lower().strip()
     if any(q in m_lower for q in ("where u", "where are u", "where is roshrak", "is roshrak there", "where is he")):
-        return f"{clean_sender}, Roshrak is AFK right now, I am Morgan keeping watch!"
+        return f"rosh is afk rn {nick}, morgan here keeping watch"
     if any(q in m_lower for q in ("who are you", "what are you", "are you a bot", "is this a bot")):
-        return f"Hey {clean_sender}! I am Morgan AI running on Roshrak's NixOS laptop."
+        return f"yo {nick} im morgan ai on roshrak nixos laptop"
     if re.search(r"\b(jump|do a jump)\b", m_lower):
-        return f"Jumping for you, {clean_sender}! [ACTION:JUMP]"
+        return f"alr jumping {nick} [ACTION:JUMP]"
+    if "mending" in m_lower and ("where" in m_lower or "buy" in m_lower or "get" in m_lower or "book" in m_lower):
+        return "use /warp mall, cheap af"
+    if any(k in m_lower for k in ("netherite template", "upgrade template", "upgrade templates", "templates")):
+        return "they sell some at /warp squish or altunsemporium"
+    if "shulker" in m_lower and ("buy" in m_lower or "get" in m_lower or "where" in m_lower):
+        return "warp squish or mall, they got shulkers"
+    if any(k in m_lower for k in ("totem", "totems", "rocket", "rockets")) and any(k in m_lower for k in ("buy", "get", "where", "cheap")):
+        return "warp wps or stoneshop, cheap rockets n totems"
+    if "iron" in m_lower and any(k in m_lower for k in ("farm", "where", "get", "free")):
+        return "use /warp ifarm, free iron"
+    if any(k in m_lower for k in ("creeper farm", "gunpowder farm", "gunpowder")) and any(k in m_lower for k in ("where", "get", "farm")):
+        return "warp cfarm for gunpowder"
+    if any(k in m_lower for k in ("gold farm", "guardian farm", "guardian")) and any(k in m_lower for k in ("where", "farm", "get")):
+        return "warp gfarm or nether /warp zpf"
+    if "raid farm" in m_lower or "rfarm" in m_lower:
+        return "warp raidfarm or rfarm, bring bad omen"
+    if "post office" in m_lower or "mail" in m_lower:
+        return "warp postoffice or /warp post"
+    if "melon" in m_lower and ("silk" in m_lower or "fortune" in m_lower):
+        return "silk touch gives 9 slices per block, more melon per melon"
+
+    warp_q = re.search(r"\b(?:what is|whats|info on|where does|tell me about)\s+(?:/warp|warp)\s+([a-zA-Z0-9_-]+)\b", m_lower)
+    if warp_q:
+        target_w = warp_q.group(1).lower()
+        if target_w in CFUK_WARPS:
+            return f"{target_w} is {CFUK_WARPS[target_w]}"
 
     # 3. Check LRU cache
     cache_key = (clean_sender.lower(), m_lower)
@@ -357,9 +568,9 @@ def query_gemini_brain(sender: str, message: str) -> str:
         LLM_REPLY_CACHE.move_to_end(cache_key)
         return LLM_REPLY_CACHE[cache_key]
 
-    user_context = f"Sender: {clean_sender} (Owner: {is_owner_user}, Broonie: {is_broonie_user})\nMessage: {message}"
+    user_context = f"Sender: {clean_sender} (Nickname: {nick}, Owner: {is_owner_user}, Broonie/Boss: {is_broonie_user})\nMessage: {message}"
 
-    # 4. Multi-tier low-latency LLM cascade (~900ms via Gemma-4 / Flash-Lite -> fallback to 8765)
+    # 4. Multi-tier low-latency LLM cascade (Argon -> Antigravity Manager 3.8-flash-high -> Opus -> 8765)
     for url, model_id, api_key in FAST_BRIDGE_ENDPOINTS:
         payload = {
             "model": model_id,
@@ -367,7 +578,7 @@ def query_gemini_brain(sender: str, message: str) -> str:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_context}
             ],
-            "max_tokens": 256,
+            "max_tokens": 1024,
             "temperature": 0.15
         }
         headers = {"Content-Type": "application/json"}
@@ -379,7 +590,7 @@ def query_gemini_brain(sender: str, message: str) -> str:
             headers=headers
         )
         try:
-            with urllib.request.urlopen(req, timeout=4.5 if url != BRIDGE_URL else 10) as resp:
+            with urllib.request.urlopen(req, timeout=12) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 ans = (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
                 if not ans:
@@ -410,6 +621,7 @@ def handle_response_actions(sender: str, raw_response: str) -> tuple[str, list[t
         return ""
 
     clean_chat = ACTION_REGEX.sub(extract_action, raw_response).strip()
+    clean_chat = style_as_roshrak(clean_chat)
     return clean_chat, actions
 
 # Global uinput is seat-wide. These checks reduce accidental targeting; the

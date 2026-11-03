@@ -30,44 +30,53 @@ def _load_local_secret(env_var: str, env_file: str, file_key: str) -> str:
                         return line.split("=", 1)[1].strip().strip('"').strip("'")
         except OSError:
             pass
+    if env_file == ".antigravity_tools/gui_config.json":
+        try:
+            cfg_p = Path.home() / ".antigravity_tools" / "gui_config.json"
+            if cfg_p.exists():
+                return json.loads(cfg_p.read_text(encoding="utf-8")).get("proxy", {}).get("api_key", "not-needed")
+        except Exception:
+            pass
     return "not-needed"
 
 
 FAST_ENDPOINTS = [
     {
-        "name": "agy-rotator-flash31-lite",
-        "url": "http://127.0.0.1:8045/v1/chat/completions",
-        "model": "gemini-3.1-flash-lite",
-        "api_key": _load_local_secret("AGY_ROTATOR_API_KEY", "agm-docker/.env", "API_KEY"),
-        "extra": {},
-    },
-    {
-        "name": "agy-rotator-flash38-low",
-        "url": "http://127.0.0.1:8045/v1/chat/completions",
-        "model": "gemini-3.8-flash-low",
-        "api_key": _load_local_secret("AGY_ROTATOR_API_KEY", "agm-docker/.env", "API_KEY"),
-        "extra": {},
-    },
-    {
-        "name": "aistudio-gemini38-flash",
+        "name": "aistudio-argon",
         "url": "http://127.0.0.1:2048/v1/chat/completions",
-        "model": "gemini-3.8-flash-low",
-        "api_key": _load_local_secret("AISTUDIO2API_API_KEY", "aistudio2api/.env", "PROXY_API_KEY"),
-        "extra": {"reasoning_effort": "low"},
+        "model": "gemini-4-argon",
+        "api_key": _load_local_secret("OPENAI_API_KEY", "aistudio2api/.env", "PROXY_API_KEY"),
+        "extra": {},
+    },
+    {
+        "name": "antigravity-flash38-high",
+        "url": "http://127.0.0.1:8045/v1/chat/completions",
+        "model": "gemini-3.8-flash-high",
+        "api_key": _load_local_secret("AGY_ROTATOR_API_KEY", ".antigravity_tools/gui_config.json", "api_key"),
+        "extra": {},
+    },
+    {
+        "name": "antigravity-opus46-thinking",
+        "url": "http://127.0.0.1:8045/v1/chat/completions",
+        "model": "claude-opus-4-6-thinking",
+        "api_key": _load_local_secret("AGY_ROTATOR_API_KEY", ".antigravity_tools/gui_config.json", "api_key"),
+        "extra": {},
     },
 ]
 
 PERSONA_PRESETS = {
     "casual_bro": (
-        "You are a sharp, friendly, ultra-fast AI assistant. Reply naturally like a real human friend. "
-        "Keep it to 1-2 short, punchy sentences. Zero AI filler ('Certainly!', 'Great question!', 'I hope this helps!')."
+        "You are Hermes, talking to Roshrak (Trong). Match the Crazy-Fools UK (CFUK) & Roshrak conversational rhythm: "
+        "1-2 short, crisp, deadpan-friendly sentences (3-10 words for quick banter), zero AI filler, no exclamation spam."
     ),
     "concise_cli": (
         "Reply in plain text, 1-2 sentences max, direct and factual. No markdown headers, no bullet fluff, no preamble."
     ),
     "minecraft_morgan": (
-        "You are Morgan, an AI assistant on Roshrak's NixOS laptop for the Crazy-Fools Minecraft server. "
-        "Reply in strictly 1 short sentence under 90 ASCII chars. No quotes, markdown, or emojis."
+        "You are Morgan, the AI assistant on Roshrak's NixOS laptop for the Crazy-Fools UK (CFUK) Minecraft server. "
+        "Speak in Roshrak's empirical in-game style (grounded in 167k CFUK messages & 9.5k Roshrak messages): all lowercase (91.4%), no ending period (93.6%), no '!', 3-10 words max, "
+        "natural CFUK slang ('yo', 'wb', 'ty', 'cya', 'alr', 'ye', 'nah', 'welp', 'hmm', 'imma', 'smth', 'sb', 'rn', 'af', 'boss', 'pol', 'astroy', 'heck', 'rae', 'stu', 'billy'). "
+        "Know CFUK warps: /warp mall (mending), /warp squish (netherite), /warp wps (totems/rockets), /warp ifarm (iron), /warp cfarm (gunpowder), /warp gfarm (gold), /warp post (mail)."
     ),
     "bilingual_vn_en": (
         "Reply naturally and concisely in the user's language (Vietnamese or English), 1-2 sentences, warm and direct."
@@ -78,10 +87,10 @@ PERSONA_PRESETS = {
 }
 
 INSTANT_REFLEX_PATTERNS = [
-    (re.compile(r"^(?:yo+|hey+|hi+|sup+|what'?s up|wassup|hello+)[!?. ]*$", re.I), "Yo! Ready when you are. What's the move?"),
-    (re.compile(r"^(?:ping|test|are you there|u there|online\??)[!?. ]*$", re.I), "Online and locked in. What do you need?"),
-    (re.compile(r"^(?:thanks|thank you|thx|ty|cam on|cảm ơn)[!?. ]*$", re.I), "Anytime!"),
-    (re.compile(r"^(?:ok|okay|k|got it|cool|nice|bet)[!?. ]*$", re.I), "Got it."),
+    (re.compile(r"^(?:yo+|hey+|hi+|sup+|what'?s up|wassup|hello+)[!?. ]*$", re.I), "Yo, what's the move?"),
+    (re.compile(r"^(?:ping|test|are you there|u there|online\??)[!?. ]*$", re.I), "Ye, online and locked in."),
+    (re.compile(r"^(?:thanks|thank you|thx|ty|cam on|cảm ơn)[!?. ]*$", re.I), "Np, anytime."),
+    (re.compile(r"^(?:ok|okay|k|alr|got it|cool|nice|bet)[!?. ]*$", re.I), "Alr, got it."),
 ]
 
 AI_SLOP_PATTERNS = [
@@ -411,7 +420,7 @@ class FastChatMcpServer:
                 return _ok({
                     "tier": "fast_llm",
                     "target_latency_ms": 950,
-                    "recommended_model": "gemma-4-26b-a4b-it / tab_flash_lite_preview",
+                    "recommended_model": "gemini-4-argon / gemini-3.8-flash-high",
                     "needs_tools": False,
                     "platform": platform,
                 })

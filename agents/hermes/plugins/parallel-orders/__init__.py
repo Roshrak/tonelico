@@ -956,8 +956,7 @@ async def _run_parallel_order_inner(
                 chat_type=source.chat_type,
                 thread_id=source.thread_id,
                 session_db=getattr(runner._session_db, "_db", runner._session_db),
-                # Strictly locked to Argon — never fallback to any other model
-                fallback_model=None,
+                fallback_model=turn_route.get("fallback_model") or user_config.get("fallback_providers"),
                 load_soul_identity=True,
             )
             agent.tool_progress_callback = _on_tool_progress

@@ -4,7 +4,7 @@ export const MODEL_ROUTING_POLICY_VERSION = "model-routing-v4";
 
 export const TIER_CANDIDATES: Record<ResolvedTier, readonly string[]> = {
   fast: ["gemini-4-argon-high", "gemini-3.8-flash-high", "claude-opus-4-6-thinking"],
-  reasoning: ["gemini-4-argon-high", "gemini-3.8-flash-high", "claude-opus-4-6-thinking"],
+  reasoning: ["gemini-4-argon-high", "claude-opus-4-6-thinking", "gemini-3.8-flash-high"],
   expert: ["gemini-4-argon-high", "claude-opus-4-6-thinking", "gemini-3.8-flash-high"],
 };
 
@@ -20,7 +20,7 @@ export interface ModelSelection {
 }
 
 export function isDisallowedGemini37Effort(model: string): boolean {
-  return /^gemini-3\.7-flash-(?:low|medium)$/i.test(model.trim());
+  return /^gemini-3\.[78]-flash-(?:low|medium)$/i.test(model.trim());
 }
 
 export function assertAllowedWorkerModel(model: string): void {

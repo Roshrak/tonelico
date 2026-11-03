@@ -6,7 +6,7 @@ import { validateTaskObject } from "../src/studyValidation.js";
 test("automatic tier policy uses Gemini 4 Argon High by default across tiers with controlled fallbacks", () => {
   assert.deepEqual(TIER_CANDIDATES, {
     fast: ["gemini-4-argon-high", "gemini-3.8-flash-high", "claude-opus-4-6-thinking"],
-    reasoning: ["gemini-4-argon-high", "gemini-3.8-flash-high", "claude-opus-4-6-thinking"],
+    reasoning: ["gemini-4-argon-high", "claude-opus-4-6-thinking", "gemini-3.8-flash-high"],
     expert: ["gemini-4-argon-high", "claude-opus-4-6-thinking", "gemini-3.8-flash-high"],
   });
   const available = new Set(AUTOMATIC_MODEL_IDS);
