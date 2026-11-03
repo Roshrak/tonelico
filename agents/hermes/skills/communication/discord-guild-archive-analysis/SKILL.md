@@ -22,10 +22,9 @@ metadata:
 ### 1. Authenticate Against the Target Guild
 1. Prefer `DISCORD_BOT_TOKEN` via `discord-bot-rest-operations` when the bot is a member of the target server.
 2. When the user requests analysis of a server where only their local Discord desktop client is a member:
-   - Scan `~/.config/discord/Local Storage/leveldb/*.ldb` and `*.log` for encrypted token strings matching `dQw4w9WgXcQ:([A-Za-z0-9+/=]+)`.
-   - Base64-decode the match, verify the 3-byte `v10` prefix, and split into `nonce = raw[3:15]`, `ciphertext = raw[15:-16]`, and `tag = raw[-16:]`.
-   - Derive the 16-byte AES-GCM key via `hashlib.pbkdf2_hmac("sha1", secret, b"saltysalt", 1, 16)`, trying both the system keyring secret (`secret-tool lookup application discord`) and the Linux Chromium fallback `b"peanuts"`.
-   - Verify the decrypted token against `GET https://discord.com/api/v10/users/@me` in memory.
+   - **Try plaintext extraction first** (faster, no crypto deps): scan all `~/.config/discord/Local Storage/leveldb/*.ldb` files for plaintext tokens via regex `r'["\']([A-Za-z0-9_-]{24,28}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,})["\']'`. Read files in binary mode and decode with `errors='ignore'`.
+   - If no plaintext match, fall back to encrypted extraction: scan for `dQw4w9WgXcQ:([A-Za-z0-9+/=]+)`, base64-decode, split `nonce = raw[3:15]`, `ciphertext = raw[15:-16]`, `tag = raw[-16:]`, derive AES-GCM key via `hashlib.pbkdf2_hmac("sha1", secret, b"saltysalt", 1, 16)` with system keyring or Linux Chromium fallback `b"peanuts"`.
+   - Verify any extracted token against `GET https://discord.com/api/v10/users/@me` in memory before proceeding.
 
 ### 2. Archive Standard Text Channels in Parallel
 1. List all guild channels (`GET /api/v10/guilds/<guild_id>/channels`) and filter to text/announcement channels (`type in (0, 5)`).
@@ -47,7 +46,20 @@ metadata:
    # GET /api/v10/channels/<channel_id>/messages?limit=100&before=<end_snowflake>
    ```
 
-### 4. Extract Empirical Speech Profiles
+### 4. Filter, Search, and Extract Conversation Windows
+1. **Filter noise channels first**: when scanning for a specific user's messages, skip automated/bot-heavy channels (hall-of-shame, hall-of-fame, thank-you, whats-new with bot posts) in your glob loop — these channels generate 60-80% of total message volume but almost never contain user-authored content.
+2. **Keyword + author filtering**: combine `author.username` match with keyword lists to find topical messages. Use lowercase `.lower()` comparisons since Discord usernames and content are case-mixed.
+3. **Conversation window extraction**: once a key message is located, dump ±15-20 surrounding messages from the same channel JSON to reconstruct full conversational context. This reveals responses, corrections, and follow-up clues that the isolated keyword match misses.
+4. **Thread message extraction**: Discord threads are paginated identically to channels — use the thread ID as the channel ID in `GET /api/v10/channels/<thread_id>/messages`. List active/archived threads via `GET /api/v10/guilds/<guild_id>/threads/active` and `GET /api/v10/channels/<channel_id>/threads/archived/public`.
+
+### 5. Download and Analyze Attachments
+1. Extract attachment URLs from `message.attachments[].url` and `message.attachments[].filename` fields.
+2. Download from Discord CDN (`cdn.discordapp.com`) using `urllib.request.urlopen` — CDN URLs include temporary auth query params (`ex`, `is`, `hm`) that expire; re-fetch from the API if downloads fail.
+3. For screenshots and images, use `vision_analyze` to transcribe all visible text, signs, coordinates, item tooltips, and book content.
+4. For batch analysis of many screenshots (10+), delegate to a subagent via `delegate_task` to run parallel `vision_analyze` calls — each image gets downloaded to a local directory then analyzed independently.
+5. Save transcription results to a report file alongside the downloaded images for cross-referencing.
+
+### 6. Extract Empirical Speech Profiles
 1. Separate messages by channel context (e.g., general Discord chat vs. in-game bridge messages, where mobile auto-capitalization differs from desktop keyboard input).
 2. Compute quantitative metrics before modifying any persona prompt:
    - Word and character length distributions (median, mean, and bucket percentages: `1-2`, `3-5`, `6-10`, `11-20`, `21+` words).
@@ -55,11 +67,12 @@ metadata:
    - Terminal punctuation rates (no ending period vs. `.`, `?`, `!`) and emoticon frequency.
    - Exact single-word/short-burst frequency rankings, recurring contractions/shortcuts, copula-drop patterns, and negative markers (slang terms the user never uses).
 
-### 5. Mandatory Cleanup
+### 7. Mandatory Cleanup
 1. Delete any temporary scripts in `$TMPDIR` / `~/.hermes/cache/scratch/` that read LevelDB or hold tokens immediately after the dump completes.
 2. Never write raw Discord tokens into saved JSON files, logs, or summaries.
 
 ## Pitfalls
-- Separate player jokes and bait theories from verified server/staff announcements when reconstructing server lore or puzzle hunts — players frequently invent plausible-sounding red herrings in public chat.
+- When reconstructing puzzle hunts or server lore, distinguish admin/staff messages from player speculation — players frequently test theories in public chat that are completely wrong (e.g. "santa is at falcon tower" turned out to be a joke). Filter by `author.username` matching the quest designer and treat player theories as unverified hypotheses, not clues.
+- Broonie-style quest architecture on this server follows a consistent pattern: an in-game build, lore books with rhyming riddles, interactive mechanics (custom NBT items, command blocks, locked chests), and always at least one decoy. The obvious structure is never the actual objective.
 - Write multi-line Python scripts to a file instead of passing nested f-strings inside `python3 -c "..."` — bash double-quote expansion strips inner quotes and triggers `SyntaxError: unexpected character after line continuation character`.
 - Check for read-only `/nix/store` symlinks before overwriting deployed scripts in `~/.local/bin/` or `~/.local/lib/` — unlink (`rm -f`) the symlink first, update the repository source of truth, and copy the updated file into place.

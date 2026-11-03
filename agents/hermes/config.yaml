@@ -1,6 +1,6 @@
 model:
-  provider: aistudio2api
-  default: gemini-4-argon-low
+  provider: antigravity-manager
+  default: gemini-4-argon-high
   max_tokens: 65536
   aliases:
     aistudio: aistudio2api/gemini-4-argon-high
@@ -218,7 +218,7 @@ known_builtin_toolsets:
   - x_search
   - yuanbao
 agent:
-  reasoning_effort: low
+  reasoning_effort: high
 web:
   backend: keenable
   extract_backend: keenable

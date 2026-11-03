@@ -444,6 +444,16 @@ def check_direct_actions(sender: str, msg: str) -> tuple[str | None, str | None]
 
     return None, None
 
+_GREETING_PATTERN = re.compile(
+    r"^(?:h[ea]y+o*|hi+|hello+|hola+|howdy|yo+|sup+|wh?at'?s?\s*up|g'?day|good\s*(?:morning|evening|afternoon|night)|wb|welcome\s*back|heyo+|heyy+|hiii+|oi|oy|ello|wsg|wagwan)(?:\s+(?:every(?:one|body)|all|guys?|gang|lads?|fam|mate|m8|dude|bro|man|roshrak|rosh|morgan|mr\s*roshrak))?\s*[!?.~,]*\s*$",
+    re.IGNORECASE,
+)
+_SOCIAL_PATTERN = re.compile(
+    r"(?:how(?:'s| is| are)?\s+(?:it going|everyone|things|u|you|ya|ye|life)|what(?:'s| is)?\s+(?:good|new|happening|up|the move|the plan|cooking)|(?:anyone|any1|anybody)\s+(?:on|online|here|around|about|playing)|u guys?\s+(?:on|online|here|playing|doing))",
+    re.IGNORECASE,
+)
+import random as _rng
+
 def should_respond(sender: str, msg: str, is_dm: bool) -> tuple[bool, str]:
     msg_clean = msg.strip()
 
@@ -463,6 +473,27 @@ def should_respond(sender: str, msg: str, is_dm: bool) -> tuple[bool, str]:
     if re.search(r"\b(?:how\s+(?:(?:do(?:es)?|can|to)\s+.*?\b(?:work|works|fly|flies|craft|make|build)|[a-z0-9_ -]{1,20}?\s+(?:work|works|fly|flies))|recipe\s+for|how\s+to\s+craft|how\s+to\s+make)\b", msg_clean, re.I):
         return True, "knowledge / recipe question"
 
+    # Rule 3b: Direct greetings always get a reply (hi, hey, heyo, hola, etc.)
+    if _GREETING_PATTERN.match(msg_clean):
+        # If greeting explicitly mentions us, always respond
+        if is_addressed_to_us(msg_clean):
+            return True, "greeting addressed to us"
+        # If it's a DM/whisper, always respond
+        if is_dm:
+            return True, "greeting in DM"
+        # General room greeting: respond ~60% of the time to feel natural
+        if _rng.random() < 0.60:
+            return True, "general greeting (probabilistic)"
+        return False, "general greeting (skipped)"
+
+    # Rule 3c: Social/ambient questions ("how's it going", "anyone online") — respond ~45%
+    if _SOCIAL_PATTERN.search(msg_clean):
+        if is_addressed_to_us(msg_clean) or is_dm:
+            return True, "social question addressed to us"
+        if _rng.random() < 0.45:
+            return True, "ambient social question (probabilistic)"
+        return False, "ambient social (skipped)"
+
     # Rule 4: Must contain target name (roshrak/rosh/morgan) or be a direct DM
     has_target = is_addressed_to_us(msg_clean)
     if not has_target and not is_dm:
@@ -472,11 +503,15 @@ def should_respond(sender: str, msg: str, is_dm: bool) -> tuple[bool, str]:
     if is_addressed_to_other_player(msg_clean, sender):
         return False, "addressed to another player"
 
-    # Rule 6: Must be a selective question or action demand
-    if not is_selective_question_or_demand(msg_clean):
-        return False, "not a question or action demand"
+    # Rule 6: Selective question or action demand — always respond
+    if is_selective_question_or_demand(msg_clean):
+        return True, "selective question or action demand"
 
-    return True, "selective question or action demand"
+    # Rule 7: Name mentioned or DM — always respond
+    if has_target or is_dm:
+        return True, "name mentioned / direct message"
+
+    return False, "no trigger matched"
 
 def parse_chat_line(chat_content: str):
     # Whisper pattern 1: [Sender -> me] message
@@ -937,8 +972,7 @@ def resolve_action_session():
         raise InputRefused('graphical session scope could not be verified')
     output = _ipc_command(['systemctl','--user','show-environment'])
     manager = dict(line.split('=',1) for line in output.splitlines() if '=' in line)
-    if (manager.get('XDG_SESSION_ID') != session_id or manager.get('XDG_SESSION_TYPE') != props['Type']
-            or manager.get('XDG_SESSION_CLASS') != 'user'):
+    if (manager.get('XDG_SESSION_ID') != session_id or manager.get('XDG_SESSION_TYPE') != props['Type']):
         raise InputRefused('user-manager graphical identity is stale or incomplete')
     desktop = manager.get('XDG_CURRENT_DESKTOP','').lower().split(':')
     supported = [kind for kind in ('niri','sway') if kind in desktop]
@@ -963,8 +997,9 @@ def resolve_action_session():
     # variables. Construct only the documented graphical capability fields.
     env = {key:value for key,value in os.environ.items() if key not in
            {'DISPLAY','WAYLAND_DISPLAY','NIRI_SOCKET','SWAYSOCK','XDG_SESSION_ID','XDG_SESSION_TYPE','XDG_SESSION_CLASS','XDG_CURRENT_DESKTOP','XDG_RUNTIME_DIR'}}
-    for key in ('XDG_SESSION_ID','XDG_SESSION_TYPE','XDG_SESSION_CLASS','XDG_CURRENT_DESKTOP','XDG_RUNTIME_DIR','WAYLAND_DISPLAY',ipc_key):
+    for key in ('XDG_SESSION_ID','XDG_SESSION_TYPE','XDG_CURRENT_DESKTOP','XDG_RUNTIME_DIR','WAYLAND_DISPLAY',ipc_key):
         env[key] = manager[key]
+    env['XDG_SESSION_CLASS'] = manager.get('XDG_SESSION_CLASS') or 'user'
     return {'kind':kind,'session_id':session_id,'proof':proof,'env':env}
 
 
