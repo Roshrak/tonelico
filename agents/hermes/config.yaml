@@ -143,6 +143,11 @@ mcp_servers:
     args:
     - /home/aesc/.local/lib/fast_chat_mcp.py
     enabled: true
+  parallel-ops-mcp:
+    command: /run/current-system/sw/bin/python3
+    args:
+    - /home/aesc/.local/lib/parallel_ops_mcp.py
+    enabled: true
 platform_toolsets:
   cli:
   - browser
@@ -206,7 +211,7 @@ known_builtin_toolsets:
   - x_search
   - yuanbao
 agent:
-  reasoning_effort: high
+  reasoning_effort: low
 web:
   backend: keenable
   extract_backend: keenable
