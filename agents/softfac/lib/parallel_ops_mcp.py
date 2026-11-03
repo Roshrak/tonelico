@@ -237,7 +237,7 @@ class ParallelOpsMcpServer:
                 summary = []
                 ready_argon = 0
                 for idx, a in enumerate(accs, 1):
-                    models = [m.get("id") for m in (a.get("models") or [])]
+                    models = [m.get("id") if isinstance(m, dict) else str(m) for m in (a.get("models") or [])]
                     has_argon = "gemini-4-argon" in models
                     state = a.get("state", "unknown")
                     if state == "ready" and has_argon:
