@@ -42,11 +42,13 @@ metadata:
    - When configuring `PROXY_API_KEY` on `aistudio2api`, synchronize all calling clients (`~/.hermes/config.yaml`, `~/.local/bin/agy`, `~/.local/lib/fast_chat_mcp.py`) with matching tokens.
    - Apply live without restarting Camoufox workers by fetching the full config object from `GET http://127.0.0.1:2048/api/config` (using HTTP Basic Auth with `ADMIN_USERNAME` and `ADMIN_PASSWORD` from `/home/aesc/aistudio2api/.env`), setting `"routing_strategy": "fill-first"` and `"first_event_hedge": "auto"`, and sending the complete modified JSON object back via `PUT http://127.0.0.1:2048/api/config`.
 
-3. Lower Hermes reasoning effort for low-latency chat and enforce strict `gemini-4-argon` lock:
-   - Keep `fallback_providers: []` in `~/.hermes/config.yaml` and `fallback_model=None` in `~/.hermes/plugins/parallel-orders/__init__.py` — the user requires Hermes to run exclusively on `gemini-4-argon` and never fall back to another model; if all Argon accounts are cooling down, wait and retry on Argon rather than switching models.
-   - Set `agent.reasoning_effort: low` in `~/.hermes/config.yaml` so `gemini-4-argon` does not default to `"thinking": "high"` (which adds ~12–16s per call and consumes 3–5x daily Argon quota across the 9 Google AI Pro accounts).
+3. Enforce the No-Compromise Argon High/Low Quota Router & Antigravity Manager Fallback Policy:
+   - Run `/home/aesc/.local/bin/argon-quota-router.py` via `argon-quota-router.timer` (every 60s) to monitor remaining `gemini-4-argon` quota across all accounts in `aistudio2api` (`127.0.0.1:2048`):
+     - When `>20%` Argon pool quota remains, map `gemini-4-argon` to `gemini-4-argon(high)` (`agent.reasoning_effort: high`).
+     - When `<=20%` Argon pool quota remains, automatically switch `gemini-4-argon` to `gemini-4-argon(low)` (`agent.reasoning_effort: low`).
+     - When `0%` Argon quota remains or `aistudio2api` fails, fall back to `antigravity-manager` (`127.0.0.1:8045`) using `gemini-3.8-flash-high` and `claude-opus-4-6-thinking`.
+   - Enforce `gemini-3.8-flash-high` everywhere: whenever any tool, fallback, or client (`antigravity-manager`, `aistudio2api`, `agy`, `agy-control-mcp`, `mc_chat_responder.py`, `fast_chat_mcp.py`, `agy_bridge.py`) invokes `gemini-3.8-flash`, map and call `gemini-3.8-flash-high` (never `gemini-3.8-flash-low`).
    - Hot-reload gateway plugins in-place without restarting `hermes-gateway.service` or interrupting active turns by calling `from gateway.control_socket import reload_gateway_plugins; reload_gateway_plugins(get_hermes_home())`.
-   - In an already-running interactive CLI session, instruct the user to run `/reasoning low` (and `/compress` or `/new` if `input_tokens` exceeds 100k), because the CLI caches `self.reasoning_effort` in memory at startup.
 
 4. Orchestrate Concurrent Gateway Orders (`parallel-orders` & `parallel-ops-mcp`):
    - Route follow-up messages that reply directly to a running task's prompt/progress bubble, start with `+ ` / `steer:` / `add:`, or begin with continuation phrases (`"also ..."`, `"and ..."`, `"make sure ..."`, `"don't forget ..."`, `"instead ..."`) into the active agent via `agent.steer(...)` rather than spawning a duplicate parallel worker; prefix with `// ` or `parallel:` to force a separate parallel worker.
@@ -55,9 +57,9 @@ metadata:
 
 ### 2. Tune Sub-Second / Fast-Chat Responder Cascade (`fast-chat-mcp` & `mc-chat-responder`)
 1. Use a 3-tier response hierarchy for real-time chat bots:
-   - **Tier 1 (0ms Reflex)**: Match deterministic commands (`/tpaccept`, `/spawn`, `/home`, `/warp`, jump) and frequent status questions (`where u`, `where is roshrak`, `who are you`, greetings) in-process before any network call.
+   - **Tier 1 (0ms Reflex)**: Match deterministic commands (`/tpaccept`, `/spawn`, `/home`, `/warp`, jump), frequent status questions (`where u`, `where is roshrak`, `who are you`, greetings), and server-specific FAQs in-process before any network call. Exclude interrogative phrases (`what warp`, `which warp`) from `/warp` command regexes so questions about warps do not trigger teleport commands.
    - **Tier 2 (0ms LRU Cache)**: Cache normalized `(sender, message)` or `(persona, message)` replies in memory with TTL expiration.
-   - **Tier 3 (~1.2s–1.8s Fast LLM Cascade)**: Route to `http://127.0.0.1:8045/v1/chat/completions` (`antigravity-manager`) using `gemini-3.1-flash-lite` first and `gemini-3.8-flash-low` second, with `max_tokens: 256` and `Authorization: Bearer <AGY_ROTATOR_API_KEY>`.
+   - **Tier 3 (No-Compromise LLM Cascade)**: Route to `http://127.0.0.1:2048/v1/chat/completions` (`gemini-4-argon`) first, then `http://127.0.0.1:8045/v1/chat/completions` (`antigravity-manager`) using `gemini-3.8-flash-high` and `claude-opus-4-6-thinking`, with `max_tokens: 1024` and `timeout: 12`.
 2. When deploying updates to `/home/aesc/.local/bin/mc_chat_responder.py`:
    - Edit the source of truth at `/home/aesc/tonelico/nixos/home/files/bin/mc_chat_responder.py`.
    - Unlink `/home/aesc/.local/bin/mc_chat_responder.py` (`rm -f`) before copying the updated script over, then `chmod +x` and run `systemctl --user restart mc-chat-responder.service`.
@@ -74,7 +76,8 @@ metadata:
 ## Pitfalls
 - Send the full configuration object returned by `GET /api/config` when calling `PUT http://127.0.0.1:2048/api/config` — partial JSON payloads fail validation with HTTP 400.
 - Synchronize client API keys whenever configuring `PROXY_API_KEY` on `aistudio2api` — update `~/.hermes/config.yaml` (`api_key`), `~/.local/bin/agy` (`GEMINI_API_KEY`), and `~/.local/lib/fast_chat_mcp.py` to match, and clear any stale `"last_status": "exhausted"` / `401` entry under `credential_pool["custom:aistudio2api"]` in `~/.hermes/auth.json` so Hermes does not skip the primary provider for a transient 401 recorded during key rotation.
-- Use explicit `-low` model IDs (e.g., `gemini-3.8-flash-low`) rather than bare model names (`gemini-3.8-flash` with `"reasoning_effort": "low"`) in fast-chat cascades when `MODEL_MAPPING` in `aistudio2api` maps bare model names to `(high)` — an explicit `(high)` target in `MODEL_MAPPING` overrides the request body's `reasoning_effort` parameter and forces high thinking latency.
+- Route bare `gemini-3.8-flash` and `gemini-3.8-flash-low` aliases to `gemini-3.8-flash-high` in both `antigravity-manager` (`custom_mapping`) and `aistudio2api` (`MODEL_MAPPING`) so every `3.8-flash` invocation runs at `high` reasoning effort.
+- Set `max_tokens >= 1024` and `timeout >= 12` when calling High-thinking models (`gemini-4-argon` on High or `gemini-3.8-flash-high`) and `continue` to the next fallback endpoint when `message.content` is empty (`""`) — smaller `max_tokens` budgets (`<=256`) get consumed entirely by internal thinking tokens, returning an empty `content` string and causing premature fallback.
 - Avoid the deprecated `build` upstream channel in `aistudio2api`; set `UPSTREAM_CHANNELS=playground` to prevent timeouts and legacy schema deprecation errors.
 - Set `WAA_BACKEND=spidermonkey` in `aistudio2api` to avoid heavy Camoufox browser processes and reclaim ~400–600MB RAM per account.
 - Keep `aistudio2api-watchdog.timer` (every 30s) active and pin `Xvfb` at `~/.local/share/nix-roots/aistudio2api-xvfb` — if `aistudio2api` boots before DNS is ready or loses its internal generation worker (`Error 503: AIStudio2API 生成服务已停止`), the watchdog queries `GET http://127.0.0.1:2048/api/status` and triggers `POST http://127.0.0.1:2048/api/control/start` when `state == "STOPPED"`.

@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec /nix/store/kp6p38x6zb21n7gdlnp9nsm2aagq7sg2-python3-3.13.17/bin/python3 /home/aesc/.local/bin/mc_chat_responder.py --instance "asDFasfd" --user "Miracle_Involker" --persona alt "$@"

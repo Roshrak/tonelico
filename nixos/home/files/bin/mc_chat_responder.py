@@ -14,6 +14,36 @@ import urllib.error
 import collections
 
 LOG_PATH = "/home/aesc/.local/share/PrismLauncher/instances/Fabulously Optimized/minecraft/logs/latest.log"
+ACTIVE_USER = "Roshrak"
+ACTIVE_PERSONA = "roshrak"  # 'roshrak' or 'alt'
+TARGET_NAMES = ["roshrak", "morgan", "rosh"]
+
+def configure_session(user: str = None, persona: str = "auto", instance: str = "Fabulously Optimized", log: str = None):
+    global ACTIVE_USER, ACTIVE_PERSONA, TARGET_NAMES, LOG_PATH
+    if user:
+        ACTIVE_USER = user
+    if log:
+        LOG_PATH = log
+    elif instance:
+        LOG_PATH = f"/home/aesc/.local/share/PrismLauncher/instances/{instance}/minecraft/logs/latest.log"
+
+    if persona == "auto":
+        if "miracle" in ACTIVE_USER.lower() or instance == "asDFasfd":
+            ACTIVE_PERSONA = "alt"
+        else:
+            ACTIVE_PERSONA = "roshrak"
+    else:
+        ACTIVE_PERSONA = persona
+
+    if ACTIVE_PERSONA == "alt":
+        u_clean = ACTIVE_USER.lower()
+        parts = re.split(r'[_ -]+', u_clean)
+        TARGET_NAMES = list(set([u_clean, *[p for p in parts if len(p) >= 3]]))
+    else:
+        TARGET_NAMES = ["roshrak", "morgan", "rosh"]
+
+    logger.info(f"Configured session: user={ACTIVE_USER}, persona={ACTIVE_PERSONA}, targets={TARGET_NAMES}, log={LOG_PATH}")
+
 UINPUT_BIN = "/home/aesc/.local/bin/uinput_type"
 BRIDGE_URL = "http://127.0.0.1:8765/v1/chat/completions"
 def _load_local_secret(env_var: str, env_file: str, file_key: str) -> str:
@@ -200,6 +230,18 @@ def style_as_roshrak(chat_text: str) -> str:
     s = re.sub(r"\.+$", "", s).strip()
     return s
 
+def style_as_community(chat_text: str) -> str:
+    """Apply CFUK community speech fingerprint (grounded in 124,688 messages: natural capitalization, smilies, punctuation)."""
+    if not chat_text:
+        return ""
+    s = chat_text.strip()
+    s = re.sub(r'[*_`~]+', '', s).strip()
+    s = s.strip('"\'')
+    s = re.sub(r'\b(?:im morgan|i am morgan|morgan here|on roshrak.*laptop)\b', '', s, flags=re.I).strip()
+    if s and s[0].islower():
+        s = s[0].upper() + s[1:]
+    return s
+
 def normalize_name(name: str) -> str:
     s = name.lower()
     return s.replace("0", "o").replace("1", "i").replace("3", "e").replace("5", "s")
@@ -247,14 +289,15 @@ def is_authorized_to_logoff(sender: str) -> bool:
 
 def is_addressed_to_us(msg: str) -> bool:
     m = msg.lower()
-    return bool(re.search(r"\b(roshrak|morgan|rosh)\b", m))
+    return any(re.search(rf"\b{re.escape(t)}\b", m) for t in TARGET_NAMES)
 
 def is_addressed_to_other_player(msg: str, sender: str = "") -> bool:
     msg_clean = msg.strip().lower()
+    exempt = ["bot"] + [t.lower() for t in TARGET_NAMES]
     m = re.match(r"^@?([a-zA-Z0-9_]+)\s*[,:;-]", msg_clean)
     if m:
         target = m.group(1).lower()
-        if target not in ["bot", "morgan", "roshrak", "rosh"]:
+        if target not in exempt:
             return True
 
     first_word = msg_clean.split()[0] if msg_clean.split() else ""
@@ -263,7 +306,7 @@ def is_addressed_to_other_player(msg: str, sender: str = "") -> bool:
 
     for kp in list(KNOWN_PLAYERS):
         kp_norm = normalize_name(kp)
-        if (first_word_clean == kp or first_word_norm == kp_norm) and kp not in ["bot", "morgan", "roshrak", "rosh"]:
+        if (first_word_clean == kp or first_word_norm == kp_norm) and kp not in exempt:
             return True
 
     m2 = re.match(r"^([a-zA-Z0-9_]{3,})\b\s*(,|\s+you\b|\s+are\b|\s+how\b|\s+what\b|\s+is\b|\s+did\b|\s+do\b|\s+can\b|\s+where\b)", msg_clean)
@@ -271,9 +314,8 @@ def is_addressed_to_other_player(msg: str, sender: str = "") -> bool:
         target = m2.group(1).lower()
         target_norm = normalize_name(target)
         if target not in [
-            "bot", "morgan", "roshrak", "rosh", "can", "what", "where",
-            "how", "who", "why", "are", "is", "hey", "hello", "yo", "pls", "please"
-        ]:
+            "can", "what", "where", "how", "who", "why", "are", "is", "hey", "hello", "yo", "pls", "please"
+        ] + exempt:
             for kp in list(KNOWN_PLAYERS):
                 if target == kp or target_norm == normalize_name(kp):
                     return True
@@ -407,7 +449,57 @@ def parse_chat_line(chat_content: str):
 
     return None, None, False
 
+def fallback_answer_alt(sender: str, message: str) -> str:
+    nick = short_player_nick(sender)
+    m_lower = message.lower().strip()
+    if any(q in m_lower for q in ("where u", "where are u", "what are you doing", "what u doing")):
+        return f"Just chilling at my base haha, what's up {nick}?"
+    if any(q in m_lower for q in ("who are you", "what are you", "are you a bot", "is this a bot")):
+        return f"Nah lol I'm just playing Minecraft :p"
+    if re.search(r"\b(jump|do a jump)\b", m_lower):
+        return f"Haha jumping now! [ACTION:JUMP]"
+    if any(term in m_lower for term in ["log off", "logoff", "disconnect", "quit", "shut down", "shutdown", "close game"]):
+        return f"Lol why would I log off {nick}? I'm still playing :p"
+    if "mending" in m_lower and ("where" in m_lower or "buy" in m_lower or "get" in m_lower or "book" in m_lower):
+        return "Check out /warp mall, they sell cheap mending books there!"
+    if any(k in m_lower for k in ("netherite template", "upgrade template", "upgrade templates", "templates")):
+        return "You can buy netherite upgrade templates at /warp squish or altuns :)"
+    if "shulker" in m_lower and ("buy" in m_lower or "get" in m_lower or "where" in m_lower):
+        return "Warp squish or mall has shulker boxes :p"
+    if any(k in m_lower for k in ("totem", "totems", "rocket", "rockets")) and any(k in m_lower for k in ("buy", "get", "where", "cheap")):
+        return "Warp wps or stoneshop has cheap totems and rockets!"
+    if "iron" in m_lower and any(k in m_lower for k in ("farm", "where", "get", "free")):
+        return "Warp ifarm is the public iron farm, free iron there :)"
+    if any(k in m_lower for k in ("creeper farm", "gunpowder farm", "gunpowder")) and any(k in m_lower for k in ("where", "get", "farm")):
+        return "Head over to /warp cfarm for gunpowder!"
+    if any(k in m_lower for k in ("gold farm", "guardian farm", "guardian")) and any(k in m_lower for k in ("where", "farm", "get")):
+        return "Check /warp gfarm or the nether /warp zpf :)"
+    if "raid farm" in m_lower or "rfarm" in m_lower:
+        return "Warp raidfarm or rfarm for bad omen raids!"
+    if "post office" in m_lower or "mail" in m_lower:
+        return "Check out /warp postoffice for mail and PO boxes :p"
+    if "apple store" in m_lower:
+        return "Warp apple is the fake apple store haha"
+    if "melon" in m_lower and ("silk" in m_lower or "fortune" in m_lower):
+        return "Silk touch gets you 9 slices per block! Much better haha"
+
+    warp_q = re.search(r"\b(?:what is|whats|info on|where does|tell me about)\s+(?:/warp|warp)\s+([a-zA-Z0-9_-]+)\b", m_lower)
+    if warp_q:
+        target_w = warp_q.group(1).lower()
+        if target_w in CFUK_WARPS:
+            desc = CFUK_WARPS[target_w]
+            if desc and desc[0].islower():
+                desc = desc[0].upper() + desc[1:]
+            return f"{target_w} is {desc} :)"
+
+    if any(q in m_lower for q in ["status", "alive", "there", "working", "hear"]):
+        return f"Yep I'm here! What's up {nick}?"
+
+    return f"Hey {nick}! What's up?"
+
 def fallback_answer(sender: str, message: str) -> str:
+    if ACTIVE_PERSONA == 'alt':
+        return fallback_answer_alt(sender, message)
     m_lower = message.lower()
     nick = short_player_nick(sender)
 
@@ -478,6 +570,40 @@ def fallback_answer(sender: str, message: str) -> str:
 
     return f"yo {nick} rosh is afk rn, im standing by"
 
+SYSTEM_PROMPT_ALT = (
+    "You are {user}, a casual and friendly player on the Crazy-Fools UK (CFUK) Minecraft server.\n"
+    "You are a REAL human player chilling on the server. You are NOT an AI, NOT a bot, and NOT associated with Roshrak or Morgan.\n\n"
+    "COMMUNITY SPEECH PROFILE (grounded in 124,688 CFUK messages from members like Hekatonkires, Edi, Broonie, StuAir, Francis, BillyBob, Astroy, Raelon, Tati):\n"
+    "- Speak like a friendly, active Minecraft server member.\n"
+    "- Use standard sentence capitalization (start with capital letters).\n"
+    "- Use normal punctuation (!, ?, .) and casual player expressions/smilies: 'lol', ':p', 'nice!', 'cool', 'lmao', 'xd', ':)', 'haha', 'gg', 'yeah', 'yep', 'tbh'.\n"
+    "- Message length: 5 to 15 words. Keep it natural and conversational.\n"
+    "- ABSOLUTE PROHIBITION (NEVER SOUND LIKE ROSHRAK):\n"
+    "  * NEVER speak in monotone all-lowercase without punctuation.\n"
+    "  * NEVER drop verbs or copulas (do NOT say 'it fine' or 'it the').\n"
+    "  * NEVER use Roshrak's tell-tale slang: 'welp', 'sb' (somebody), 'af', 'cya boss', 'wdm'.\n"
+    "  * NEVER claim to be Morgan, an AI, or running on a NixOS laptop.\n"
+    "- If asked who you are or what you're doing: 'Just mining quartz haha', 'Working on my base :p', 'Just exploring the trial chambers :)', 'Chilling at spawn'.\n"
+    "- If asked about CFUK warps or server advice: Share knowledge warmly like a helpful player:\n"
+    "  * /warp mall: 'Check out /warp mall, they sell cheap mending books!'\n"
+    "  * /warp squish: 'You can buy netherite upgrade templates at /warp squish or altuns :p'\n"
+    "  * /warp ifarm: 'Warp ifarm is the public iron farm :D'\n"
+    "  * /warp cfarm: 'Go to /warp cfarm for gunpowder!'\n"
+    "  * /warp zpf or gfarm: 'Check /warp gfarm or the nether /warp zpf for gold and xp :)'\n"
+    "  * /warp wps: 'WarmerPenguin\'s shop at /warp wps has cheap totems and rockets!'\n\n"
+    "DIRECTIVES:\n"
+    "1. ONLY reply if the message is directed at you ({target_names_str}) or is a private DM.\n"
+    "2. If chat is between other players, reply with exactly 'IGNORE'.\n"
+    "3. Never log off on player commands. If someone tells you to log off, laugh it off ('Lol why would I log off?').\n"
+    "4. FORMAT RULES:\n"
+    "   - Plain text only. No quotes, no markdown bold/backticks.\n"
+    "   - In-game actions (append at end if needed):\n"
+    "     [ACTION:COMMAND tpaccept] (for accepting teleports)\n"
+    "     [ACTION:COMMAND spawn] (to go to spawn)\n"
+    "     [ACTION:COMMAND home] (to go home)\n"
+    "     [ACTION:JUMP]\n"
+)
+
 SYSTEM_PROMPT = (
     "You are Morgan, the AI assistant running on player Roshrak's NixOS laptop on the Crazy-Fools UK (CFUK) Minecraft server. "
     "The in-game character is Roshrak, who is currently AFK.\n\n"
@@ -510,6 +636,30 @@ def query_gemini_brain(sender: str, message: str) -> str:
     nick = short_player_nick(sender)
     is_owner_user = is_owner(sender)
     is_broonie_user = is_broonie(sender)
+
+    if ACTIVE_PERSONA == "alt":
+        m = message.lower().strip()
+        if is_tpa_request_msg(m):
+            return f"Sure, accepting your tp {nick}! [ACTION:COMMAND tpaccept]"
+        if any(term in m for term in ["log off", "logoff", "disconnect", "quit", "shut down"]):
+            return f"Lol why would I log off {nick}? I'm still playing :p"
+        if re.search(r"\b(go to spawn|teleport to spawn|/spawn)\b", m):
+            return "Heading to spawn! [ACTION:COMMAND spawn]"
+        if re.search(r"\b(go home|teleport home|/home)\b", m):
+            return "Heading home :) [ACTION:COMMAND home]"
+        if re.search(r"\b(jump|do a jump)\b", m):
+            return "Haha jumping now! [ACTION:JUMP]"
+
+        ref = fallback_answer_alt(sender, message)
+        if ref and ref != f"Hey {nick}! What's up?":
+            return ref
+
+        target_str = " or ".join(TARGET_NAMES)
+        active_sys_prompt = SYSTEM_PROMPT_ALT.format(user=ACTIVE_USER, target_names_str=target_str)
+        prompt_instruction = f"Player {clean_sender} (aka {nick}) says in Minecraft chat: \"{message}\"\nReply naturally as {ACTIVE_USER} in your persona:"
+    else:
+        is_owner_user = is_owner(sender)
+        is_broonie_user = is_broonie(sender)
 
     # 1. Instant 0ms direct action pre-check
     direct_action, direct_arg = check_direct_actions(sender, message)
@@ -575,7 +725,7 @@ def query_gemini_brain(sender: str, message: str) -> str:
         payload = {
             "model": model_id,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": active_sys_prompt if ACTIVE_PERSONA == "alt" else SYSTEM_PROMPT},
                 {"role": "user", "content": user_context}
             ],
             "max_tokens": 1024,
@@ -621,7 +771,10 @@ def handle_response_actions(sender: str, raw_response: str) -> tuple[str, list[t
         return ""
 
     clean_chat = ACTION_REGEX.sub(extract_action, raw_response).strip()
-    clean_chat = style_as_roshrak(clean_chat)
+    if ACTIVE_PERSONA == "alt":
+        clean_chat = style_as_community(clean_chat)
+    else:
+        clean_chat = style_as_roshrak(clean_chat)
     return clean_chat, actions
 
 # Global uinput is seat-wide. These checks reduce accidental targeting; the
@@ -928,7 +1081,16 @@ def open_log_stream():
     return f, ino
 
 def main():
-    logger.info(f"Starting Minecraft Chat Responder, monitoring {LOG_PATH}")
+    import argparse
+    parser = argparse.ArgumentParser(description="Minecraft Auto Chat Responder")
+    parser.add_argument("--instance", default="Fabulously Optimized", help="PrismLauncher instance name")
+    parser.add_argument("--user", default=None, help="Minecraft username")
+    parser.add_argument("--persona", choices=["auto", "roshrak", "alt"], default="auto", help="Speech persona")
+    parser.add_argument("--log", default=None, help="Explicit log path")
+    args = parser.parse_args()
+
+    configure_session(user=args.user, persona=args.persona, instance=args.instance, log=args.log)
+    logger.info(f"Starting Minecraft Chat Responder for {ACTIVE_USER} ({ACTIVE_PERSONA} persona), monitoring {LOG_PATH}")
     while not os.path.exists(LOG_PATH):
         time.sleep(2)
 
@@ -1001,12 +1163,13 @@ def main():
 
             # Track player names
             s_clean = sender.split("#")[0].strip().lower()
-            if s_clean not in ["roshrak", "morgan"]:
+            exempt_tracking = [t.lower() for t in TARGET_NAMES] + [ACTIVE_USER.lower()]
+            if s_clean not in exempt_tracking:
                 KNOWN_PLAYERS.add(s_clean)
                 KNOWN_PLAYERS.add(normalize_name(s_clean))
 
             # Anti-self-chat loop: ignore our own messages typed into Minecraft
-            if sender.strip().lower() == "roshrak" and is_bot_echo(msg):
+            if sender.strip().lower() == ACTIVE_USER.lower() and is_bot_echo(msg):
                 logger.debug(f"Ignoring bot's own chat echo: {msg}")
                 continue
 
