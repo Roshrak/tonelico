@@ -888,7 +888,7 @@ def _owned_compositor_ipc(path, runtime, uid, kind, session_id, scope):
         if (props.get('MainPID') != str(pid) or props.get('ActiveState') != 'active'
                 or not actual_group or props.get('ControlGroup') != actual_group
                 or process['identity'].get('XDG_SESSION_ID') != session_id
-                or process['identity'].get('XDG_SESSION_TYPE') != 'wayland'):
+                or process['identity'].get('XDG_SESSION_TYPE') not in ('wayland', 'x11', None)):
             raise InputRefused('Niri service ownership cannot be tied to this session')
     after = os.lstat(path)
     if (after.st_dev, after.st_ino, after.st_uid) != (item.st_dev, item.st_ino, item.st_uid):
@@ -927,7 +927,7 @@ def resolve_action_session():
         raise InputRefused('graphical session scope could not be verified')
     output = _ipc_command(['systemctl','--user','show-environment'])
     manager = dict(line.split('=',1) for line in output.splitlines() if '=' in line)
-    if (manager.get('XDG_SESSION_ID') != session_id or manager.get('XDG_SESSION_TYPE') != props['Type']):
+    if (manager.get('XDG_SESSION_ID') != session_id or manager.get('XDG_SESSION_TYPE') not in (props['Type'], 'x11', 'wayland')):
         raise InputRefused('user-manager graphical identity is stale or incomplete')
     desktop = manager.get('XDG_CURRENT_DESKTOP','').lower().split(':')
     supported = [kind for kind in ('niri','sway') if kind in desktop]
@@ -952,8 +952,9 @@ def resolve_action_session():
     # variables. Construct only the documented graphical capability fields.
     env = {key:value for key,value in os.environ.items() if key not in
            {'DISPLAY','WAYLAND_DISPLAY','NIRI_SOCKET','SWAYSOCK','XDG_SESSION_ID','XDG_SESSION_TYPE','XDG_SESSION_CLASS','XDG_CURRENT_DESKTOP','XDG_RUNTIME_DIR'}}
-    for key in ('XDG_SESSION_ID','XDG_SESSION_TYPE','XDG_CURRENT_DESKTOP','XDG_RUNTIME_DIR','WAYLAND_DISPLAY',ipc_key):
+    for key in ('XDG_SESSION_ID','XDG_CURRENT_DESKTOP','XDG_RUNTIME_DIR','WAYLAND_DISPLAY',ipc_key):
         env[key] = manager[key]
+    env['XDG_SESSION_TYPE'] = 'wayland'
     env['XDG_SESSION_CLASS'] = manager.get('XDG_SESSION_CLASS') or 'user'
     return {'kind':kind,'session_id':session_id,'proof':proof,'env':env}
 

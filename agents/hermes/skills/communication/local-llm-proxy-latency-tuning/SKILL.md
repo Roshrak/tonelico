@@ -1,6 +1,6 @@
 ---
 name: local-llm-proxy-latency-tuning
-description: "Use when chat or local LLM proxy responses are slow."
+description: "Use when local LLM proxies lag or accounts hit 429 limits."
 version: 1.0.0
 author: Trong (aesc), Hermes Agent
 license: MIT
@@ -14,6 +14,7 @@ metadata:
 
 ## When to Use
 - Interactive Hermes CLI or Gateway chat turns take >5–10 seconds to respond.
+- Auditing `aistudio2api` (`127.0.0.1:2048`) or `antigravity-manager` (`127.0.0.1:8045`) accounts to see which accounts hit quota/rate limits (HTTP 429) and which still have quota.
 - Background chat responders (`mc-chat-responder.service`, `fast-chat-mcp`, Telegram/Discord bridges) exhibit multi-second lag or empty responses.
 - Routing or benchmarking across the local inference proxy stack:
   - `127.0.0.1:2048` (`aistudio2api.service` — Camoufox/SpiderMonkey adapter for Google AI Studio).
@@ -32,7 +33,14 @@ metadata:
    - `parameters.thinking`: Thinking budget applied (`low`, `medium`, `high`, `xhigh`).
    - `first_event_ms`: Time to first streamed token.
 
-2. Switch `aistudio2api` to sticky `fill-first` routing, `auto` first-event hedging, and SpiderMonkey WAA backend (both persistently in `/home/aesc/aistudio2api/.env` and live via `PUT /api/config`):
+2. Audit per-account quota and HTTP 429 cooldown state across `aistudio2api`:
+   - Query `GET http://127.0.0.1:2048/api/accounts` (for `id`, `benefit_tier`, `state`, and `models`) and `GET http://127.0.0.1:2048/api/cooldowns` (or `/home/aesc/aistudio2api/auth/<email>/runtime-state.json`) for active cooldown entries.
+   - Parse `/home/aesc/aistudio2api/runtime/logs/aistudio2api.log` by `source` (`<email>`) for `429` / `账号冷却` / `Account cooldown` (`resume=`) and `request.finished` events since the last daily quota reset (`15:00 +07:00` / `08:00 UTC`) to classify each account into:
+     1. Actively serving or clean (no 429 since last 15:00 +07:00 reset).
+     2. Actively in `/api/cooldowns`.
+     3. Rate-limited upstream (`HTTP 429` logged with `resume=` still in the future) whose local cooldown tag was wiped by a service restart, auth backup restore, or manual clear.
+
+3. Switch `aistudio2api` to sticky `fill-first` routing, `auto` first-event hedging, and SpiderMonkey WAA backend (both persistently in `/home/aesc/aistudio2api/.env` and live via `PUT /api/config`):
    - Update `/home/aesc/aistudio2api/.env`:
      - `ROUTING_STRATEGY=fill-first`
      - `FIRST_EVENT_HEDGE=auto`
@@ -42,7 +50,7 @@ metadata:
    - When configuring `PROXY_API_KEY` on `aistudio2api`, synchronize all calling clients (`~/.hermes/config.yaml`, `~/.local/bin/agy`, `~/.local/lib/fast_chat_mcp.py`) with matching tokens.
    - Apply live without restarting Camoufox workers by fetching the full config object from `GET http://127.0.0.1:2048/api/config` (using HTTP Basic Auth with `ADMIN_USERNAME` and `ADMIN_PASSWORD` from `/home/aesc/aistudio2api/.env`), setting `"routing_strategy": "fill-first"` and `"first_event_hedge": "auto"`, and sending the complete modified JSON object back via `PUT http://127.0.0.1:2048/api/config`.
 
-3. Enforce the No-Compromise Argon High/Low Quota Router & Antigravity Manager Fallback Policy:
+4. Enforce the No-Compromise Argon High/Low Quota Router & Antigravity Manager Fallback Policy:
    - Run `/home/aesc/.local/bin/argon-quota-router.py` via `argon-quota-router.timer` (every 60s) to monitor remaining `gemini-4-argon` quota across all accounts in `aistudio2api` (`127.0.0.1:2048`):
      - When `>20%` Argon pool quota remains, map `gemini-4-argon` to `gemini-4-argon(high)` (`agent.reasoning_effort: high`).
      - When `<=20%` Argon pool quota remains, automatically switch `gemini-4-argon` to `gemini-4-argon(low)` (`agent.reasoning_effort: low`).
@@ -50,7 +58,7 @@ metadata:
    - Enforce `gemini-3.8-flash-high` everywhere: whenever any tool, fallback, or client (`antigravity-manager`, `aistudio2api`, `agy`, `agy-control-mcp`, `mc_chat_responder.py`, `fast_chat_mcp.py`, `agy_bridge.py`) invokes `gemini-3.8-flash`, map and call `gemini-3.8-flash-high` (never `gemini-3.8-flash-low`).
    - Hot-reload gateway plugins in-place without restarting `hermes-gateway.service` or interrupting active turns by calling `from gateway.control_socket import reload_gateway_plugins; reload_gateway_plugins(get_hermes_home())`.
 
-4. Orchestrate Concurrent Gateway Orders (`parallel-orders` & `parallel-ops-mcp`):
+5. Orchestrate Concurrent Gateway Orders (`parallel-orders` & `parallel-ops-mcp`):
    - Route follow-up messages that reply directly to a running task's prompt/progress bubble, start with `+ ` / `steer:` / `add:`, or begin with continuation phrases (`"also ..."`, `"and ..."`, `"make sure ..."`, `"don't forget ..."`, `"instead ..."`) into the active agent via `agent.steer(...)` rather than spawning a duplicate parallel worker; prefix with `// ` or `parallel:` to force a separate parallel worker.
    - Cap parallel worker history snapshots (`<=10` recent messages / `16k` chars) and assign an isolated `session_id` (`par_<HHMMSS>_<hex>`) per worker so concurrent tasks neither trigger context compaction locks nor collide on the shared persistent bash session.
    - Use `parallel-ops-mcp` (`~/.local/lib/parallel_ops_mcp.py`) tools (`parallel_list_active_orders`, `parallel_steer_order`, `parallel_cancel_order`, `parallel_batch_shell`, `parallel_argon_pool_status`) to inspect/steer active orders or run up to 16 isolated shell commands in parallel.
@@ -85,6 +93,7 @@ metadata:
 - Route desktop launcher (`-open-ui`) and no-argument interactive calls in `/home/aesc/aistudio2api/aistudio2api` and `~/.local/share/applications/aistudio2api.desktop` to `/home/aesc/.local/bin/aistudio2api-ui` (`chromium --app=http://127.0.0.1:2048/`) instead of invoking `aistudio2api-core -open-ui` — when `aistudio2api.service` already holds `127.0.0.1:2048`, `aistudio2api-core -open-ui` exits immediately with `bind: address already in use` before opening the dashboard.
 - Use `low` (not `minimal` or `high`) as `agent.reasoning_effort` when the active model is `gemini-4-argon` on `aistudio2api` — `gemini-4-argon` only declares `thinking_levels: ["LOW", "MEDIUM", "HIGH"]` in `/api/models`, and `high` adds ~16s of thinking delay while burning daily account quota.
 - Handle both string and dict entries when inspecting `account["models"]` from `GET http://127.0.0.1:2048/api/accounts` (`m.get("id") if isinstance(m, dict) else str(m)`) — `aistudio2api` serializes `models` as plain string IDs in `/api/accounts`.
+- Cross-check `/home/aesc/aistudio2api/runtime/logs/aistudio2api.log` for per-account `HTTP 429` (`resume=`) events when auditing account limits on `aistudio2api` instead of relying on `GET /api/cooldowns` or `runtime-state.json` alone — service restarts, auth directory restores, and manual cooldown clears wipe local cooldown entries while upstream Google AI Studio daily limits remain in effect until `15:00 +07:00` (`08:00 UTC`), and `fill-first` routing does not probe later alphabetical accounts until earlier ones fail over.
 - Avoid combining `@dataclasses.dataclass` with `from __future__ import annotations` inside Hermes Gateway plugins (`~/.hermes/plugins/*/__init__.py`) — `importlib.util.module_from_spec` executes the module before registering it in `sys.modules`, causing Python's `dataclasses._is_type` to fail on `sys.modules.get(cls.__module__).__dict__`.
 - Store original mixin methods on the class once (e.g., `GatewayBusySessionMixin._orig_busy_handler_before_parallel`) and always re-bind the wrapper in `register(ctx)` instead of returning early on a boolean guard — returning early prevents `reload_gateway_plugins(get_hermes_home())` from hot-swapping updated plugin handlers into the running gateway process.
 - Mark ephemeral progress bubble sends with a `contextvars.ContextVar` guard (`_IS_PROGRESS_SEND`) when wrapping `TelegramAdapter.send*` to sink active progress bubbles to the bottom of the chat — otherwise two concurrent progress bubbles treat each other's re-anchors as permanent messages and leapfrog indefinitely.

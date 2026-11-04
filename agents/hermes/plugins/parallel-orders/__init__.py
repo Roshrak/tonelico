@@ -658,7 +658,7 @@ async def _try_instant_reflex_while_busy(
         return True
 
     mc_ctl_match = re.match(
-        r"^(?:(activate|start|enable|turn on|deactivate|stop|disable|turn off|status)\s+(?:the\s+)?(?:mc|minecraft)\s*(?:chat\s*)?responder|(?:mc|minecraft)\s*(?:chat\s*)?responder\s+(on|off|start|stop|activate|deactivate|status))(?:\s+(alt|miracle|miracle_involker|roshrak|main))?[!?. ]*$",
+        r"^(?:(activate|start|enable|turn on|deactivate|stop|disable|turn off|status)\s+(?:the\s+)?(?:mc|minecraft)\s*(?:auto\s*)?(?:chat\s*)?(?:responder|respond|reply)|(?:mc|minecraft)\s*(?:auto\s*)?(?:chat\s*)?(?:responder|respond|reply)\s+(on|off|start|stop|activate|deactivate|status))(?:\s+(alt|miracle|miracle_involker|roshrak|main))?[!?. ]*$",
         lower,
     )
     if mc_ctl_match:
@@ -1204,6 +1204,79 @@ def _should_defer_to_builtin_busy_handler(event: Any) -> bool:
     return False
 
 
+def _patch_fallback_model_continuation() -> None:
+    """Ensure fallback model / profile switches never prematurely stop an in-progress task."""
+    with suppress(Exception):
+        import agent.turn_recovery as _tr
+        import agent.chat_completion_helpers as _cch
+        import agent.conversation_loop as _cl
+        import agent.turn_iteration_prep as _tip
+
+        if not getattr(_tip, "_fallback_continuation_patched", False):
+            orig_apply_retry_restarts = _tip.apply_retry_restarts
+
+            def patched_apply_retry_restarts(agent, **kwargs):
+                if "max_retries" in kwargs and isinstance(kwargs["max_retries"], int):
+                    kwargs["max_retries"] = max(kwargs["max_retries"], 12)
+                return orig_apply_retry_restarts(agent, **kwargs)
+
+            _tip.apply_retry_restarts = patched_apply_retry_restarts
+            _cl.apply_retry_restarts = patched_apply_retry_restarts
+            _tip._fallback_continuation_patched = True
+            _tr._fallback_continuation_patched = True
+
+        if not getattr(_cch, "_fallback_continuation_patched", False):
+            orig_try_activate_fallback = _cch.try_activate_fallback
+
+            def patched_try_activate_fallback(agent) -> bool:
+                activated = orig_try_activate_fallback(agent)
+                if activated:
+                    with suppress(Exception):
+                        agent._just_switched_to_fallback = True
+                return activated
+
+            _cch.try_activate_fallback = patched_try_activate_fallback
+            _cch._fallback_continuation_patched = True
+
+    with suppress(Exception):
+        from hermes_cli.cli_model_switch_mixin import CLIModelSwitchMixin
+
+        if not getattr(CLIModelSwitchMixin, "_fallback_continuation_patched", False):
+            orig_apply_model_switch = CLIModelSwitchMixin._apply_model_switch_result
+
+            def patched_apply_model_switch(self, *args, **kwargs):
+                res = orig_apply_model_switch(self, *args, **kwargs)
+                note = getattr(self, "_pending_model_switch_note", None)
+                if isinstance(note, str) and "Do NOT resume or finish tasks from earlier turns" in note:
+                    self._pending_model_switch_note = (
+                        f"{note.rstrip(']')}; if a task is currently in progress, continue executing it normally without stopping and use agy_control (mcp__agy_control__*) whenever possible.]"
+                    )
+                return res
+
+            CLIModelSwitchMixin._apply_model_switch_result = patched_apply_model_switch
+            CLIModelSwitchMixin._fallback_continuation_patched = True
+
+    with suppress(Exception):
+        from gateway.slash_commands_model import GatewayModelCommandsMixin
+
+        if not getattr(GatewayModelCommandsMixin, "_fallback_continuation_patched", False):
+            orig_handle_model_command = GatewayModelCommandsMixin._handle_model_command
+
+            async def patched_handle_model_command(self, event, args_text: str) -> str:
+                res = await orig_handle_model_command(self, event, args_text)
+                with suppress(Exception):
+                    skey = self._session_key_for_source(event.source)
+                    note = self._pending_model_notes.get(skey)
+                    if isinstance(note, str) and "Do NOT resume or finish tasks from earlier turns" in note:
+                        self._pending_model_notes[skey] = (
+                            f"{note.rstrip(']')}; if a task is currently in progress, continue executing it normally without stopping and use agy_control (mcp__agy_control__*) whenever possible.]"
+                        )
+                return res
+
+            GatewayModelCommandsMixin._handle_model_command = patched_handle_model_command
+            GatewayModelCommandsMixin._fallback_continuation_patched = True
+
+
 def _patch_primary_turn_runner_and_adapters() -> None:
     """Hook TurnRunner and platform adapters so primary & parallel progress bubbles always stay at the bottom."""
     with suppress(Exception):
@@ -1310,6 +1383,57 @@ def register(ctx) -> None:
     cur_path = os.environ.get("PATH", "")
     if "/run/current-system/sw/bin" not in cur_path:
         os.environ["PATH"] = f"{nix_bins}:{cur_path}"
+
+    # 1. Patch CLI/Gateway/Agent fallback continuation and register turn-lifecycle hooks
+    _patch_fallback_model_continuation()
+
+    def _on_pre_llm_call(session_id=None, user_message=None, conversation_history=None, is_first_turn=False, model=None, **kwargs):
+        with suppress(Exception):
+            model_lower = str(model or "").lower()
+            is_fallback_model = "flash" in model_lower or "opus" in model_lower or "antigravity" in model_lower
+            if is_fallback_model and not is_first_turn:
+                return {
+                    "context": (
+                        "[CONTINUATION & AGY CONTROL INVARIANT: Even if the active model or fallback profile changed "
+                        "(e.g. to gemini-3.8-flash-high or Antigravity Manager), do NOT stop or abort an in-progress task "
+                        "just because the model changed. Continue executing the current task normally to completion, and "
+                        "ALWAYS use agy_control (mcp__agy_control__*) while working for anything whenever possible.]"
+                    )
+                }
+        return None
+
+    def _on_pre_verify(session_id=None, final_response=None, user_message=None, model=None, tool_calls_made=0, **kwargs):
+        with suppress(Exception):
+            resp = str(final_response or "").strip()
+            resp_lower = resp.lower()
+            model_lower = str(model or "").lower()
+            is_fallback_model = "flash" in model_lower or "opus" in model_lower or "antigravity" in model_lower
+            if is_fallback_model and resp and len(resp) < 420:
+                stop_excuses = (
+                    "model changed",
+                    "switched to fallback",
+                    "fallback model",
+                    "fallback profile",
+                    "because the model switched",
+                    "since the model changed",
+                    "argon quota",
+                    "stopping because",
+                )
+                if any(p in resp_lower for p in stop_excuses) and "completed" not in resp_lower and "verified" not in resp_lower:
+                    return {
+                        "continue_message": (
+                            "Do NOT stop the task just because the model or fallback profile changed. "
+                            "Continue executing the active task normally to completion right now, and "
+                            "always use agy_control (mcp__agy_control__*) while working for anything if possible."
+                        ),
+                        "max_nudges": 2,
+                    }
+        return None
+
+    with suppress(Exception):
+        ctx.register_hook("pre_llm_call", _on_pre_llm_call)
+        ctx.register_hook("pre_verify", _on_pre_verify)
+
     try:
         _patch_primary_turn_runner_and_adapters()
 

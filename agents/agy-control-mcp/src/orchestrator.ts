@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ControlConfig } from "./config.js";
 import { discoverModels } from "./modelCatalog.js";
-import { assertAllowedWorkerModel, selectModel, TIER_CANDIDATES } from "./modelPolicy.js";
+import { assertAllowedWorkerModel, selectModel, TIER_CANDIDATES, type ModelSelection } from "./modelPolicy.js";
 import { redactForStorage, redactSecrets } from "./promptCompiler.js";
 import { AgyRunner, type AgyRunnerLike } from "./runner.js";
 import { CapacityController, CapacityWaitTimeout, sharedCapacityController } from "./capacityController.js";
@@ -281,13 +281,13 @@ class DefaultWorkflowExecutor implements WorkflowTaskExecutor {
     } finally { context.signal.removeEventListener("abort", abort); this.active.delete(context.task_id); }
   }
 
-  private async selectModel(tier: ResolvedTier): Promise<string> {
+  private async selectModel(tier: ResolvedTier, startIndex = 0, fallbackReason?: ModelSelection["fallback_reason"]): Promise<ModelSelection> {
     this.models ||= await discoverModels(this.config.agyCommand, this.config.modelIds);
     const available = new Set(this.models.filter((model) => model.tier === tier || TIER_CANDIDATES[tier].includes(model.id)).map((model) => model.id));
-    const selected = selectModel(tier, available);
+    const selected = selectModel(tier, available, startIndex, fallbackReason);
     if (!selected) throw new Error(`No policy-approved model is available for tier ${tier}`);
     assertAllowedWorkerModel(selected.model);
-    return selected.model;
+    return selected;
   }
 
   private composeContext(task: WorkflowTaskRecord, context: WorkflowExecutionContext): string {
@@ -298,10 +298,8 @@ class DefaultWorkflowExecutor implements WorkflowTaskExecutor {
   private async executeReadOnly(task: WorkflowTaskRecord, context: WorkflowExecutionContext): Promise<WorkflowTaskResult> {
     if (!this.config.live) throw new Error("Live AGY execution is disabled. Set AGY_CONTROL_LIVE=1.");
     const tier = task.tier === "auto" || !task.tier ? "fast" : task.tier;
-    const runId = `ro-${context.workflow_id}-${task.task_id}-${randomUUID().slice(0, 8)}`;
     const artifactPath = path.join(this.config.root, "orchestration", "runs", context.workflow_id, task.task_id, `attempt-${task.attempts}`);
     await fs.mkdir(artifactPath, { recursive: true, mode: 0o700 });
-    const model = await this.selectModel(tier);
     const prompt = this.readOnlyPrompt(task, context, tier);
     const scopeRoot = path.join(artifactPath, "scoped-read-only");
     await fs.mkdir(scopeRoot, { recursive: true, mode: 0o700 });
@@ -316,16 +314,37 @@ class DefaultWorkflowExecutor implements WorkflowTaskExecutor {
     };
     await fs.writeFile(path.join(artifactPath, "output-schema.json"), JSON.stringify(schema, null, 2), { encoding: "utf8", mode: 0o600 });
     await fs.writeFile(path.join(artifactPath, "compiled-prompt.md"), prompt, { encoding: "utf8", mode: 0o600 });
-    const release = await this.capacity.acquire(tier, task.timeout_seconds || this.config.defaultTimeoutSeconds, () => context.signal.aborted);
-    this.active.set(context.task_id, runId);
-    const abort = () => { void this.runner.kill(runId).catch(() => undefined); };
-    context.signal.addEventListener("abort", abort, { once: true });
     try {
-      const outcome = await this.runner.run({ runId, command: this.config.agyCommand, args: ["--sandbox", "--mode", "plan", "--model", model, "--add-dir", scopeRoot, "--disable-slash-commands", "--input-format", "stream-json", "--output-format", "stream-json", "--json-schema", path.join(artifactPath, "output-schema.json")], cwd: scopeRoot, prompt, eventLogPath: path.join(artifactPath, "events.ndjson"), stderrLogPath: path.join(artifactPath, "agy.stderr.log"), timeoutSeconds: task.timeout_seconds || this.config.defaultTimeoutSeconds, tokenBudget: task.token_budget || this.config.budgets[tier], maxLogBytes: this.config.maxLogBytes, onEvent: (event) => { if (event.event === "step_update") context.reportProgress(Math.min(95, 10 + (event.step_update?.step_index || 0) * 5), event.step_update?.step_type); } });
+      let startIndex = 0;
+      let fallbackReason: ModelSelection["fallback_reason"] | undefined;
+      let outcome: AgyOutcome | undefined;
+      for (let candidateAttempt = 0; candidateAttempt < TIER_CANDIDATES[tier].length; candidateAttempt += 1) {
+        const selection = await this.selectModel(tier, startIndex, fallbackReason);
+        const model = selection.model;
+        const runId = `ro-${context.workflow_id}-${task.task_id}-${randomUUID().slice(0, 8)}`;
+        const release = await this.capacity.acquire(tier, task.timeout_seconds || this.config.defaultTimeoutSeconds, () => context.signal.aborted);
+        this.active.set(context.task_id, runId);
+        const abort = () => { void this.runner.kill(runId).catch(() => undefined); };
+        context.signal.addEventListener("abort", abort, { once: true });
+        try {
+          outcome = await this.runner.run({ runId, command: this.config.agyCommand, args: ["--sandbox", "--mode", "plan", "--model", model, "--add-dir", scopeRoot, "--disable-slash-commands", "--input-format", "stream-json", "--output-format", "stream-json", "--json-schema", path.join(artifactPath, "output-schema.json")], cwd: scopeRoot, prompt, eventLogPath: path.join(artifactPath, "events.ndjson"), stderrLogPath: path.join(artifactPath, "agy.stderr.log"), timeoutSeconds: task.timeout_seconds || this.config.defaultTimeoutSeconds, tokenBudget: task.token_budget || this.config.budgets[tier], maxLogBytes: this.config.maxLogBytes, onEvent: (event) => { if (event.event === "step_update") context.reportProgress(Math.min(95, 10 + (event.step_update?.step_index || 0) * 5), event.step_update?.step_type); } });
+        } finally {
+          context.signal.removeEventListener("abort", abort);
+          this.active.delete(context.task_id);
+          await release();
+        }
+        if (outcome.state === "done" || context.signal.aborted) break;
+        const detail = `${outcome.errorMessage || ""}\n${outcome.response || ""}`;
+        const canFallback = outcome.failureReason === "quota_exhausted" || /invalid model selection|not recognized as a known model|unknown model/i.test(detail);
+        if (!canFallback || selection.candidate_index + 1 >= TIER_CANDIDATES[tier].length) break;
+        startIndex = selection.candidate_index + 1;
+        fallbackReason = outcome.failureReason === "quota_exhausted" ? "quota_fallback" : "model_selection_fallback";
+      }
+      if (!outcome) throw new Error("AGY produced no read-only outcome");
       const result = redactForStorage(this.readOnlyResult(outcome)) as WorkflowTaskResult;
       await fs.writeFile(path.join(artifactPath, "result.json"), JSON.stringify(result, null, 2), { encoding: "utf8", mode: 0o600 });
       return result;
-    } finally { context.signal.removeEventListener("abort", abort); this.active.delete(context.task_id); await release(); await fs.rm(scopeRoot, { recursive: true, force: true }).catch(() => undefined); }
+    } finally { await fs.rm(scopeRoot, { recursive: true, force: true }).catch(() => undefined); }
   }
 
   private readOnlyPrompt(task: WorkflowTaskRecord, context: WorkflowExecutionContext, tier: ResolvedTier): string {

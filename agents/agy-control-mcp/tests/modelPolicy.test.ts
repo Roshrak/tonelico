@@ -3,14 +3,14 @@ import test from "node:test";
 import { AUTOMATIC_MODEL_IDS, classifyImplementation, documentAutoTier, isDisallowedGemini37Effort, MODEL_ROUTING_POLICY_VERSION, selectModel, TIER_CANDIDATES } from "../src/modelPolicy.js";
 import { validateTaskObject } from "../src/studyValidation.js";
 
-test("automatic tier policy uses Gemini 4 Argon High by default across tiers with controlled fallbacks", () => {
+test("automatic tier policy uses Gemini 3.8 Flash High by default for fast, and Claude Opus High for reasoning/expert", () => {
   assert.deepEqual(TIER_CANDIDATES, {
-    fast: ["gemini-4-argon-high", "gemini-3.8-flash-high", "claude-opus-4-6-thinking"],
-    reasoning: ["gemini-4-argon-high", "claude-opus-4-6-thinking", "gemini-3.8-flash-high"],
-    expert: ["gemini-4-argon-high", "claude-opus-4-6-thinking", "gemini-3.8-flash-high"],
+    fast: ["gemini-3.8-flash-high", "claude-opus-5-5-high", "claude-opus-4-6-thinking"],
+    reasoning: ["claude-opus-5-5-high", "claude-opus-4-6-thinking", "gemini-3.8-flash-high"],
+    expert: ["claude-opus-5-5-high", "claude-opus-4-6-thinking", "gemini-3.8-flash-high"],
   });
   const available = new Set(AUTOMATIC_MODEL_IDS);
-  assert.deepEqual(["fast", "reasoning", "expert"].map((tier) => selectModel(tier as "fast" | "reasoning" | "expert", available)?.model), ["gemini-4-argon-high", "gemini-4-argon-high", "gemini-4-argon-high"]);
+  assert.deepEqual(["fast", "reasoning", "expert"].map((tier) => selectModel(tier as "fast" | "reasoning" | "expert", available)?.model), ["gemini-3.8-flash-high", "claude-opus-5-5-high", "claude-opus-5-5-high"]);
   assert.ok(AUTOMATIC_MODEL_IDS.every((model) => !isDisallowedGemini37Effort(model)));
   assert.equal(MODEL_ROUTING_POLICY_VERSION, "model-routing-v4");
 });

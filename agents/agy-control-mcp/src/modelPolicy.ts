@@ -3,9 +3,9 @@ import type { ModelTier, ResolvedTier, RoutingDecision, RoutingProfile } from ".
 export const MODEL_ROUTING_POLICY_VERSION = "model-routing-v4";
 
 export const TIER_CANDIDATES: Record<ResolvedTier, readonly string[]> = {
-  fast: ["gemini-4-argon-high", "gemini-3.8-flash-high", "claude-opus-4-6-thinking"],
-  reasoning: ["gemini-4-argon-high", "claude-opus-4-6-thinking", "gemini-3.8-flash-high"],
-  expert: ["gemini-4-argon-high", "claude-opus-4-6-thinking", "gemini-3.8-flash-high"],
+  fast: ["gemini-3.8-flash-high", "claude-opus-5-5-high", "claude-opus-4-6-thinking"],
+  reasoning: ["claude-opus-5-5-high", "claude-opus-4-6-thinking", "gemini-3.8-flash-high"],
+  expert: ["claude-opus-5-5-high", "claude-opus-4-6-thinking", "gemini-3.8-flash-high"],
 };
 
 export const AUTOMATIC_MODEL_IDS = [...new Set(Object.values(TIER_CANDIDATES).flat())];

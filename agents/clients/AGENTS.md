@@ -1,10 +1,12 @@
 # User task-orchestration preference
 
-- Codex remains the commander: keep architecture, important judgment, risky or
-  destructive changes, integration, and final decisions with Codex.
-- Proactively use AGY Control for eligible bounded supporting work whenever it
-  is useful, including research, repository inspection, routine implementation,
-  validation, and parallel or dependent subtasks.
+- Codex / Commander remains the commander: keep architecture, important judgment, risky or
+  destructive changes, integration, and final decisions with the commander.
+- Proactively use AGY Control MCP on EVERY SINGLE CHANCE for bounded work:
+  research, repository inspection, routine implementation, validation, and parallel or dependent subtasks.
+- AGY Control is linked to Antigravity Manager accounts:
+  * Default tier / routine workhorse: Gemini 3.8 Flash High (gemini-3.8-flash-high).
+  * Reasoning & Expert tiers / architecture / deep reasoning: best current Claude Opus on High (claude-opus-5-5-high / claude-opus-4-6-thinking).
 - Give AGY tightly scoped objectives, allowed paths, forbidden paths, and clear
   success criteria.
 - Review AGY reports and diffs, verify the base state, and independently test

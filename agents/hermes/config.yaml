@@ -1,5 +1,5 @@
 model:
-  provider: antigravity-manager
+  provider: aistudio2api
   default: gemini-4-argon-high
   max_tokens: 65536
   aliases:
@@ -31,10 +31,14 @@ providers:
     transport: chat_completions
     discover_models: true
 fallback_providers:
-- provider: antigravity-manager
-  model: gemini-3.8-flash-high
-- provider: antigravity-manager
-  model: claude-opus-4-6-thinking
+  - provider: antigravity-manager
+    model: gemini-4-argon-high
+  - provider: aistudio2api
+    model: gemini-3.8-flash-high
+  - provider: antigravity-manager
+    model: gemini-3.8-flash-high
+  - provider: antigravity-manager
+    model: claude-opus-4-6-thinking
 credential_pool_strategies:
   default: fill_first
 browser:
@@ -58,9 +62,9 @@ display:
 telegram:
   streaming: true
   allow_from:
-  - '@TELEGRAM_USER_ID@'
+    - '@TELEGRAM_USER_ID@'
   allow_admin_from:
-  - '@TELEGRAM_USER_ID@'
+    - '@TELEGRAM_USER_ID@'
 approvals:
   mode: false
   cron_mode: auto
@@ -68,11 +72,11 @@ approvals:
   unattended_mode: auto
 plugins:
   enabled:
-  - session-access
-  - parallel-orders
+    - session-access
+    - parallel-orders
   disabled:
-  - copilot-provider
-  - copilot-acp-provider
+    - copilot-provider
+    - copilot-acp-provider
   entries:
     session-access:
       allow_tool_override: false
@@ -105,118 +109,118 @@ mcp_servers:
   hermes-factory-mcp:
     command: /run/current-system/sw/bin/python3
     args:
-    - /home/aesc/.local/lib/factory_mcp_adapter.py
+      - /home/aesc/.local/lib/factory_mcp_adapter.py
     enabled: true
   agy-control:
     command: /home/aesc/agy-control-mcp/scripts/agy-control-mcp
     args:
-    - --client
-    - hermes
+      - --client
+      - hermes
     connect_timeout: 240
     timeout: 3600
     enabled: true
   doc-scanner-mcp:
     command: /run/current-system/sw/bin/python3
     args:
-    - /home/aesc/.local/lib/doc_scanner_mcp.py
+      - /home/aesc/.local/lib/doc_scanner_mcp.py
     enabled: true
   customs-legal-mcp:
     command: /run/current-system/sw/bin/python3
     args:
-    - /home/aesc/.local/lib/customs_legal_mcp.py
+      - /home/aesc/.local/lib/customs_legal_mcp.py
     enabled: true
   desktop-computer-use-mcp:
     command: /run/current-system/sw/bin/python3
     args:
-    - /home/aesc/.local/lib/desktop_computer_use_mcp.py
+      - /home/aesc/.local/lib/desktop_computer_use_mcp.py
     enabled: true
   browser-automation-mcp:
     command: /run/current-system/sw/bin/python3
     args:
-    - /home/aesc/.local/lib/browser_automation_mcp.py
+      - /home/aesc/.local/lib/browser_automation_mcp.py
     enabled: true
   minecraft-ops-mcp:
     command: /run/current-system/sw/bin/python3
     args:
-    - /home/aesc/.local/lib/minecraft_ops_mcp.py
+      - /home/aesc/.local/lib/minecraft_ops_mcp.py
     enabled: true
   discord-ops-mcp:
     command: /run/current-system/sw/bin/python3
     args:
-    - /home/aesc/.local/lib/discord_ops_mcp.py
+      - /home/aesc/.local/lib/discord_ops_mcp.py
     enabled: true
   fast-chat-mcp:
     command: /run/current-system/sw/bin/python3
     args:
-    - /home/aesc/.local/lib/fast_chat_mcp.py
+      - /home/aesc/.local/lib/fast_chat_mcp.py
     enabled: true
   parallel-ops-mcp:
     command: /run/current-system/sw/bin/python3
     args:
-    - /home/aesc/.local/lib/parallel_ops_mcp.py
+      - /home/aesc/.local/lib/parallel_ops_mcp.py
     enabled: true
 platform_toolsets:
   cli:
-  - browser
-  - clarify
-  - code_execution
-  - computer_use
-  - connections
-  - context_engine
-  - cronjob
-  - delegation
-  - file
-  - homeassistant
-  - image_gen
-  - kanban
-  - memory
-  - session_search
-  - skills
-  - spotify
-  - stt
-  - terminal
-  - todo
-  - tts
-  - video
-  - video_gen
-  - vision
-  - web
-  - x_search
-  - yuanbao
+    - browser
+    - clarify
+    - code_execution
+    - computer_use
+    - connections
+    - context_engine
+    - cronjob
+    - delegation
+    - file
+    - homeassistant
+    - image_gen
+    - kanban
+    - memory
+    - session_search
+    - skills
+    - spotify
+    - stt
+    - terminal
+    - todo
+    - tts
+    - video
+    - video_gen
+    - vision
+    - web
+    - x_search
+    - yuanbao
 known_plugin_toolsets:
   cli:
-  - a2a
-  - spotify
+    - a2a
+    - spotify
 known_builtin_toolsets:
   cli:
-  - browser
-  - clarify
-  - code_execution
-  - computer_use
-  - connections
-  - context_engine
-  - cronjob
-  - delegation
-  - discord
-  - discord_admin
-  - file
-  - homeassistant
-  - image_gen
-  - kanban
-  - memory
-  - session_search
-  - skills
-  - spotify
-  - stt
-  - terminal
-  - todo
-  - tts
-  - video
-  - video_gen
-  - vision
-  - web
-  - x_search
-  - yuanbao
+    - browser
+    - clarify
+    - code_execution
+    - computer_use
+    - connections
+    - context_engine
+    - cronjob
+    - delegation
+    - discord
+    - discord_admin
+    - file
+    - homeassistant
+    - image_gen
+    - kanban
+    - memory
+    - session_search
+    - skills
+    - spotify
+    - stt
+    - terminal
+    - todo
+    - tts
+    - video
+    - video_gen
+    - vision
+    - web
+    - x_search
+    - yuanbao
 agent:
   reasoning_effort: high
 web:

@@ -38,6 +38,9 @@
           "org.freedesktop.impl.portal.Notification" = "gtk";
           "org.freedesktop.impl.portal.ScreenCast" = "gnome";
           "org.freedesktop.impl.portal.Screenshot" = "gnome";
+          # RustDesk (remote access) needs the RemoteDesktop portal to capture and
+          # control the screen; without a backend the interface is missing.
+          "org.freedesktop.impl.portal.RemoteDesktop" = "gnome";
           "org.freedesktop.impl.portal.Secret" = "gnome-keyring";
         };
 

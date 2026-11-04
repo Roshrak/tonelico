@@ -56,7 +56,7 @@ metadata:
 1. Extract attachment URLs from `message.attachments[].url` and `message.attachments[].filename` fields.
 2. Download from Discord CDN (`cdn.discordapp.com`) using `urllib.request.urlopen` — CDN URLs include temporary auth query params (`ex`, `is`, `hm`) that expire; re-fetch from the API if downloads fail.
 3. For screenshots and images, use `vision_analyze` to transcribe all visible text, signs, coordinates, item tooltips, and book content.
-4. For batch analysis of many screenshots (10+), delegate to a subagent via `delegate_task` to run parallel `vision_analyze` calls — each image gets downloaded to a local directory then analyzed independently.
+4. For batch analysis of many screenshots (10+), run parallel `vision_analyze` or fast multimodal requests (e.g. `gemini-3.8-flash-high`) via `ThreadPoolExecutor` or `delegate_task` — each image gets analyzed independently with high token limits (`max_tokens=8192`) to prevent truncation of lengthy signs and item tooltips.
 5. Save transcription results to a report file alongside the downloaded images for cross-referencing.
 
 ### 6. Extract Empirical Speech Profiles
@@ -72,6 +72,10 @@ metadata:
 2. Never write raw Discord tokens into saved JSON files, logs, or summaries.
 
 ## Pitfalls
+- Invert coordinate sign conventions when riddle hints mention mirrored poles or opposite axes — Minecraft coordinate axes place True North at negative Z (`-Z`) and South at positive Z (`+Z`). When admin riddles or player hints mention 'mirrored south pole' or 'opposite of north pole', do not search solely along negative Z tundra biomes; inspect the positive Z axis where decoy or seasonal villages are often mirrored.
+- Cross-reference client screenshot timestamps against client execution logs — players taking screenshots in F1 mode strip debug coordinates, HUD, and chat from the image itself. Correlate the screenshot filename (`YYYY-MM-DD_HH.MM.SS.png`) with `logs/YYYY-MM-DD-N.log.gz` to retrieve the exact warp command (`Warping to <name>`) or movement sequence executed in the minutes immediately preceding the screenshot.
+- Distinguish intermediate clue delivery chambers from final target objectives — puzzle designers frequently place lore notes, letters, and present heads in private player bases or bunkers (e.g. behind beds or hidden rooms), while the actual physical corpse, tomb, or reward rests in an entirely separate public or wilderness location. Do not conflate the clue delivery container with the final destination.
+- Correlate chat logs with client death events and local map files — player death messages (`experienced kinetic energy`, `fell from a high place`) and casual remarks like `I died at the bottom of ...` in bridge channels give away exact vertical shafts, crypt depths, and coordinates when players explore unfinished or hazardous event structures.
 - When reconstructing puzzle hunts or server lore, distinguish admin/staff messages from player speculation — players frequently test theories in public chat that are completely wrong (e.g. "santa is at falcon tower" turned out to be a joke). Filter by `author.username` matching the quest designer and treat player theories as unverified hypotheses, not clues.
 - Broonie-style quest architecture on this server follows a consistent pattern: an in-game build, lore books with rhyming riddles, interactive mechanics (custom NBT items, command blocks, locked chests), and always at least one decoy. The obvious structure is never the actual objective.
 - Write multi-line Python scripts to a file instead of passing nested f-strings inside `python3 -c "..."` — bash double-quote expansion strips inner quotes and triggers `SyntaxError: unexpected character after line continuation character`.
