@@ -523,25 +523,11 @@ import random as _rng
 def should_respond(sender: str, msg: str, is_dm: bool) -> tuple[bool, str]:
     msg_clean = msg.strip()
 
-    # Rule 0: Anti-echo (don't reply to what we just typed)
-    if is_bot_echo(msg_clean):
+    # Rule 0: Anti-echo (don't reply to what we just typed or our own in-game character)
+    if is_bot_echo(msg_clean) or sender.strip().lower() == ACTIVE_USER.lower():
         return False, "bot echo"
 
-    # Rule 1: Don't reply to our own username or Discord bridge (e.g. roshrak#0000)
-    s_low = sender.split("#")[0].strip().lower()
-    if s_low in (ACTIVE_USER.lower(), "roshrak", "morgan", "miracle_involker"):
-        return False, "own message"
-
-    # Rule 2: Ignore single-character accidental typos in public chat
-    if not is_dm and len(re.sub(r"[^a-zA-Z0-9]", "", msg_clean)) <= 1:
-        return False, "single char noise"
-
-    # Rule 3: Don't butt in when a player explicitly addresses another player by name
-    if not is_dm and not is_addressed_to_us(msg_clean) and is_addressed_to_other_player(msg_clean, sender):
-        return False, "addressed to another player"
-
-    # Free natural chat with full context
-    return True, "free chat"
+    return True, "free chat (no filter)"
 
 def parse_chat_line(chat_content: str):
     # Whisper pattern 1: [Sender -> me] message
