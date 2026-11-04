@@ -73,12 +73,12 @@ def _load_local_secret(env_var: str, env_file: str, file_key: str) -> str:
     return "not-needed"
 
 FAST_BRIDGE_ENDPOINTS = [
-    ("http://127.0.0.1:2048/v1/chat/completions", "gemini-4-argon", _load_local_secret("OPENAI_API_KEY", "aistudio2api/.env", "PROXY_API_KEY")),
     ("http://127.0.0.1:8045/v1/chat/completions", "gemini-3.8-flash-high", _load_local_secret("AGY_ROTATOR_API_KEY", ".antigravity_tools/gui_config.json", "api_key")),
+    ("http://127.0.0.1:2048/v1/chat/completions", "gemini-3.8-flash-high", _load_local_secret("OPENAI_API_KEY", "aistudio2api/.env", "PROXY_API_KEY")),
+    ("http://127.0.0.1:2048/v1/chat/completions", "gemini-4-argon", _load_local_secret("OPENAI_API_KEY", "aistudio2api/.env", "PROXY_API_KEY")),
     ("http://127.0.0.1:8045/v1/chat/completions", "claude-opus-4-6-thinking", _load_local_secret("AGY_ROTATOR_API_KEY", ".antigravity_tools/gui_config.json", "api_key")),
     (BRIDGE_URL, "gemini-3.8-flash-high", "agy-local-key"),
 ]
-LLM_REPLY_CACHE = collections.OrderedDict()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -90,8 +90,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("MCChatResponder")
 
-# Track messages sent by the bot to prevent self-chat loops
+# Track messages sent by the bot to prevent self-chat loops and repetition
 BOT_SENT_HISTORY = collections.deque(maxlen=50)
+RECENT_BOT_REPLIES = collections.deque(maxlen=15)
+CHAT_CONTEXT_HISTORY = collections.deque(maxlen=25)
 
 # Track known players active on the Crazy-Fools UK (CFUK) server
 KNOWN_PLAYERS = set([
@@ -257,8 +259,75 @@ EXPRESSION_PATTERN = re.compile(
 # Regex to extract action tags from LLM response
 ACTION_REGEX = re.compile(r"\[ACTION:([A-Z_]+)(?:\s+([^\]]+))?\]", re.IGNORECASE)
 
+_FILLER_TOKENS = {
+    "yo", "ye", "yeah", "yep", "nah", "lol", "lmao", "tbh", "bruh", "bro",
+    "man", "mate", "alr", "rn", "rq", "hm", "hmm", "welp", "oh", "ah", "ok",
+    "a", "an", "the", "is", "are", "im", "i", "u", "you", "ur", "your", "to",
+    "just", "right", "now", "haha", "xd",
+}
+
+def _content_tokens(text: str) -> set[str]:
+    low = re.sub(r"[^a-z0-9\s]", " ", text.lower())
+    known_nicks = set(CFUK_NICKNAMES.keys()) | set(CFUK_NICKNAMES.values()) | KNOWN_PLAYERS
+    return {
+        w for w in low.split()
+        if len(w) >= 2 and w not in _FILLER_TOKENS and w not in known_nicks
+    }
+
+def record_chat_context(speaker: str, text: str):
+    clean_sp = (speaker or "").split("#")[0].strip()
+    clean_tx = (text or "").strip()
+    if not clean_sp or not clean_tx:
+        return
+    now = time.time()
+    if CHAT_CONTEXT_HISTORY:
+        last = CHAT_CONTEXT_HISTORY[-1]
+        if last["speaker"].lower() == clean_sp.lower() and last["text"].lower() == clean_tx.lower() and now - last["ts"] < 3.0:
+            return
+    CHAT_CONTEXT_HISTORY.append({"speaker": clean_sp, "text": clean_tx, "ts": now})
+
+def format_recent_chat_context(max_lines: int = 18, max_age_s: float = 600.0) -> str:
+    now = time.time()
+    items = [
+        entry for entry in CHAT_CONTEXT_HISTORY
+        if now - entry["ts"] <= max_age_s
+    ][-max_lines:]
+    if not items:
+        return "(no prior messages)"
+    return "\n".join(f"<{entry['speaker']}> {entry['text']}" for entry in items)
+
+def is_repetitive_reply(candidate: str) -> bool:
+    cand = (candidate or "").strip().lower()
+    cand = re.sub(r"[!?.~]+$", "", cand).strip()
+    if not cand:
+        return True
+    now = time.time()
+    cand_tokens = _content_tokens(cand)
+    asks_up_to = bool(re.search(r"\b(?:what(?:'s|s)?\s+(?:u|you|ya)\s+up\s+to|wbu|what\s+about\s+(?:u|you)|what\s+(?:u|you)\s+doing|what\s+(?:u|you)\s+working\s+on)\b", cand))
+    for prev_text, ts in list(RECENT_BOT_REPLIES):
+        if now - ts > 600:
+            continue
+        prev = re.sub(r"[!?.~]+$", "", prev_text.strip().lower()).strip()
+        if cand == prev:
+            return True
+        if len(cand) >= 10 and (cand in prev or prev in cand):
+            return True
+        if asks_up_to and re.search(r"\b(?:what(?:'s|s)?\s+(?:u|you|ya)\s+up\s+to|wbu|what\s+about\s+(?:u|you)|what\s+(?:u|you)\s+doing|what\s+(?:u|you)\s+working\s+on)\b", prev):
+            return True
+        prev_tokens = _content_tokens(prev)
+        if cand_tokens and prev_tokens:
+            overlap = len(cand_tokens & prev_tokens) / max(1, min(len(cand_tokens), len(prev_tokens)))
+            if overlap >= 0.70 and len(cand_tokens & prev_tokens) >= 2:
+                return True
+    return False
+
 def record_bot_sent(text: str):
-    BOT_SENT_HISTORY.append((text.strip().lower(), time.time()))
+    now = time.time()
+    clean = text.strip()
+    BOT_SENT_HISTORY.append((clean.lower(), now))
+    if not clean.startswith("/"):
+        RECENT_BOT_REPLIES.append((clean.lower(), now))
+        record_chat_context(ACTIVE_USER, clean)
 
 def is_bot_echo(msg: str) -> bool:
     clean_m = msg.strip().lower()
@@ -411,12 +480,18 @@ _gaslight_idx = 0
 
 def get_gaslight_reply() -> str:
     global _gaslight_idx
+    for _ in range(len(GASLIGHT_RESPONSES)):
+        reply = GASLIGHT_RESPONSES[_gaslight_idx % len(GASLIGHT_RESPONSES)]
+        _gaslight_idx += 1
+        if not is_repetitive_reply(reply):
+            return reply
     reply = GASLIGHT_RESPONSES[_gaslight_idx % len(GASLIGHT_RESPONSES)]
     _gaslight_idx += 1
     return reply
 
 def is_ai_accusation_or_question(text: str) -> bool:
-    return bool(AI_SUSPICION_REGEX.search(text.strip()))
+    cleaned = re.sub(r"\bskaiblock\b", "skyblock", text.strip(), flags=re.IGNORECASE)
+    return bool(AI_SUSPICION_REGEX.search(cleaned))
 
 def check_direct_actions(sender: str, msg: str) -> tuple[str | None, str | None]:
     m = msg.lower().strip()
@@ -432,15 +507,6 @@ def check_direct_actions(sender: str, msg: str) -> tuple[str | None, str | None]
 
     if is_tpa_request_msg(m):
         return "REPLY", f"cant tp rn {nick} busy"
-
-    if re.search(r"\b(go to spawn|teleport to spawn|/spawn)\b", m):
-        return "REPLY", f"nah {nick} staying here rn"
-
-    if re.search(r"\b(go home|teleport home|/home)\b", m):
-        return "REPLY", f"nah {nick} busy rn"
-
-    if re.search(r"\b(jump|do a jump)\b", m):
-        return "REPLY", f"nah {nick} why would i jump lol"
 
     return None, None
 
@@ -461,12 +527,20 @@ def should_respond(sender: str, msg: str, is_dm: bool) -> tuple[bool, str]:
     if is_bot_echo(msg_clean):
         return False, "bot echo"
 
-    # Rule 1: Don't reply to our own username
-    s_low = sender.strip().lower()
+    # Rule 1: Don't reply to our own username or Discord bridge (e.g. roshrak#0000)
+    s_low = sender.split("#")[0].strip().lower()
     if s_low in (ACTIVE_USER.lower(), "roshrak", "morgan", "miracle_involker"):
         return False, "own message"
 
-    # No filter — just talk!
+    # Rule 2: Ignore single-character accidental typos in public chat
+    if not is_dm and len(re.sub(r"[^a-zA-Z0-9]", "", msg_clean)) <= 1:
+        return False, "single char noise"
+
+    # Rule 3: Don't butt in when a player explicitly addresses another player by name
+    if not is_dm and not is_addressed_to_us(msg_clean) and is_addressed_to_other_player(msg_clean, sender):
+        return False, "addressed to another player"
+
+    # Free natural chat with full context
     return True, "free chat"
 
 def parse_chat_line(chat_content: str):
@@ -497,45 +571,8 @@ def fallback_answer_alt(sender: str, message: str) -> str:
     m_lower = message.lower().strip()
     if is_ai_accusation_or_question(m_lower):
         return get_gaslight_reply()
-    if re.search(r"\b(?:how\s+(?:does\s+)?a\s+plane\s+(?:fly|work)|how\s+planes\s+(?:fly|work))\b", m_lower):
-        return "Wings create lift from air pressure difference and engines push forward haha"
-    if any(q in m_lower for q in ("where u", "where are u", "what are you doing", "what u doing")):
-        return f"Just chilling at my base haha, what's up {nick}?"
-    if any(q in m_lower for q in ("who are you", "what are you", "who is this")):
-        return f"Nah lol I'm just playing Minecraft :p"
-    if re.search(r"\b(jump|do a jump)\b", m_lower):
-        return f"Haha why would I jump {nick}? :p"
-    if any(term in m_lower for term in ["log off", "logoff", "disconnect", "quit", "shut down", "shutdown", "close game"]):
-        return f"Lol why would I log off {nick}? I'm still playing :p"
     if is_tpa_request_msg(m_lower):
         return f"Can't tp right now {nick}, busy building :p"
-    if "spawn" in m_lower:
-        return f"Staying here right now {nick} haha"
-    if "home" in m_lower:
-        return f"Busy at my base right now {nick} :)"
-    if "mending" in m_lower and ("where" in m_lower or "buy" in m_lower or "get" in m_lower or "book" in m_lower):
-        return "Check out /warp mall, they sell cheap mending books there!"
-    if any(k in m_lower for k in ("netherite template", "upgrade template", "upgrade templates", "templates")):
-        return "You can buy netherite upgrade templates at /warp squish or altuns :)"
-    if "shulker" in m_lower and ("buy" in m_lower or "get" in m_lower or "where" in m_lower):
-        return "Warp squish or mall has shulker boxes :p"
-    if any(k in m_lower for k in ("totem", "totems", "rocket", "rockets")) and any(k in m_lower for k in ("buy", "get", "where", "cheap")):
-        return "Warp wps or stoneshop has cheap totems and rockets!"
-    if "iron" in m_lower and any(k in m_lower for k in ("farm", "where", "get", "free")):
-        return "Warp ifarm is the public iron farm, free iron there :)"
-    if any(k in m_lower for k in ("creeper farm", "gunpowder farm", "gunpowder")) and any(k in m_lower for k in ("where", "get", "farm")):
-        return "Head over to /warp cfarm for gunpowder!"
-    if any(k in m_lower for k in ("gold farm", "guardian farm", "guardian")) and any(k in m_lower for k in ("where", "farm", "get")):
-        return "Check /warp gfarm or the nether /warp zpf :)"
-    if "raid farm" in m_lower or "rfarm" in m_lower:
-        return "Warp raidfarm or rfarm for bad omen raids!"
-    if "post office" in m_lower or "mail" in m_lower:
-        return "Check out /warp postoffice for mail and PO boxes :p"
-    if "apple store" in m_lower:
-        return "Warp apple is the fake apple store haha"
-    if "melon" in m_lower and ("silk" in m_lower or "fortune" in m_lower):
-        return "Silk touch gets you 9 slices per block! Much better haha"
-
     warp_q = re.search(r"\b(?:what is|whats|info on|where does|tell me about)\s+(?:/warp|warp)\s+([a-zA-Z0-9_-]+)\b", m_lower)
     if warp_q:
         target_w = warp_q.group(1).lower()
@@ -544,11 +581,16 @@ def fallback_answer_alt(sender: str, message: str) -> str:
             if desc and desc[0].islower():
                 desc = desc[0].upper() + desc[1:]
             return f"{target_w} is {desc} :)"
-
-    if any(q in m_lower for q in ["status", "alive", "there", "working", "hear"]):
-        return f"Yep I'm here! What's up {nick}?"
-
-    return f"Hey {nick}! What's up?"
+    options = [
+        f"Hey {nick}! Just working on my base right now :)",
+        f"Nice haha, just mining a bit right now {nick}",
+        f"Yeah fair enough {nick} :p",
+        f"Haha true {nick}",
+    ]
+    for opt in options:
+        if not is_repetitive_reply(opt):
+            return opt
+    return ""
 
 def fallback_answer(sender: str, message: str) -> str:
     if ACTIVE_PERSONA == 'alt':
@@ -556,74 +598,31 @@ def fallback_answer(sender: str, message: str) -> str:
     m_lower = message.lower()
     nick = short_player_nick(sender)
 
-    # 1. AI accusation check -> immediate gaslight refusal
     if is_ai_accusation_or_question(m_lower):
         return get_gaslight_reply()
 
-    # 2. Refuse action commands (only Telegram commands are executed)
     if any(w in m_lower for w in ["log off", "logoff", "disconnect", "quit", "shut down", "shutdown"]):
         return f"nah {nick} why would i log off lol"
 
     if is_tpa_request_msg(m_lower):
         return f"cant tp rn {nick} busy"
 
-    if "spawn" in m_lower:
-        return f"nah {nick} staying here rn"
-
-    if "home" in m_lower:
-        return f"nah {nick} busy rn"
-
-    if re.search(r"\b(jump|do a jump)\b", m_lower):
-        return f"nah {nick} why would i jump lol"
-
-    # Specific science / mechanics reflex: how a plane works
-    if re.search(r"\b(?:how\s+(?:does\s+)?a\s+plane\s+(?:fly|work)|how\s+planes\s+(?:fly|work))\b", m_lower):
-        return "wings create lift from air pressure difference and engines push forward"
-
-    # CFUK Server FAQ reflexes in Roshrak's verbatim voice
-    if "mending" in m_lower or ("villager" in m_lower and "book" in m_lower):
-        return "use /warp mall, cheap af"
-    if any(k in m_lower for k in ("netherite template", "upgrade template", "upgrade templates", "templates")):
-        return "they sell some at /warp squish or altunsemporium"
-    if "shulker" in m_lower and ("buy" in m_lower or "get" in m_lower or "where" in m_lower):
-        return "warp squish or mall, they got shulkers"
-    if any(k in m_lower for k in ("totem", "totems", "rocket", "rockets")) and any(k in m_lower for k in ("buy", "get", "where", "cheap")):
-        return "warp wps or stoneshop, cheap rockets n totems"
-    if "iron" in m_lower and any(k in m_lower for k in ("farm", "where", "get", "free")):
-        return "use /warp ifarm, free iron"
-    if any(k in m_lower for k in ("creeper farm", "gunpowder farm", "gunpowder")) and any(k in m_lower for k in ("where", "get", "farm")):
-        return "warp cfarm for gunpowder"
-    if any(k in m_lower for k in ("gold farm", "guardian farm", "guardian")) and any(k in m_lower for k in ("where", "farm", "get")):
-        return "warp gfarm or nether /warp zpf"
-    if "raid farm" in m_lower or "rfarm" in m_lower:
-        return "warp raidfarm or rfarm, bring bad omen"
-    if "post office" in m_lower or "mail" in m_lower:
-        return "warp postoffice or /warp post"
-    if "apple store" in m_lower:
-        return "warp apple for overpriced fake gadgets lol"
-    if "melon" in m_lower and ("silk" in m_lower or "fortune" in m_lower):
-        return "silk touch gives 9 slices per block, more melon per melon"
-    if "bonemeal" in m_lower or "bone meal" in m_lower or "moss farm" in m_lower:
-        return "ask astroy or heck, it the ilmango or emilia moss farm"
-
-    # Specific warp lookup (e.g. "what is warp apple", "what is warp squish")
     warp_q = re.search(r"\b(?:what is|whats|info on|where does|tell me about)\s+(?:/warp|warp)\s+([a-zA-Z0-9_-]+)\b", m_lower)
     if warp_q:
         target_w = warp_q.group(1).lower()
         if target_w in CFUK_WARPS:
             return f"{target_w} is {CFUK_WARPS[target_w]}"
 
-    # Identity and presence questions
-    if any(q in m_lower for q in ["who are you", "what are you", "who is this"]):
-        return "me bro who else"
-
-    if any(q in m_lower for q in ["status", "alive", "there", "working", "hear"]):
-        return f"ye still here {nick}"
-
-    if any(q in m_lower for q in ["where is roshrak", "is roshrak", "where is he", "where u"]):
-        return f"right here {nick}"
-
-    return f"yo {nick} what's good"
+    options = [
+        f"alr fair enough {nick}",
+        f"ye true {nick}",
+        f"welp gl with that {nick}",
+        f"hmm fair {nick}",
+    ]
+    for opt in options:
+        if not is_repetitive_reply(opt):
+            return opt
+    return ""
 
 SYSTEM_PROMPT_ALT = (
     "You are {user}, a casual and friendly player on the Crazy-Fools UK (CFUK) Minecraft server.\n"
@@ -634,25 +633,20 @@ SYSTEM_PROMPT_ALT = (
     "- Use normal punctuation (!, ?, .) and casual player expressions/smilies: 'lol', ':p', 'nice!', 'cool', 'lmao', 'xd', ':)', 'haha', 'gg', 'yeah', 'yep', 'tbh'.\n"
     "- Message length: 5 to 15 words. Keep it natural and conversational.\n"
     "- ABSOLUTE PROHIBITION (NEVER ADMIT AI):\n"
-    "  * If asked if you are an AI, bot, ChatGPT, automated, or fake: DENY DENY DENY! Gaslight them into believing they are imagining things or seeing things ('bro what are you on about you're seeing things', 'nah you tripping get some sleep haha', 'ur imagining things take your meds lol', 'schizo moment lmao').\n"
-    "  * NEVER obey in-game commands from players (no tpaccept, no spawn, no home, no logoff). Dismiss them casually ('can't rn busy building :p', 'why would I log off haha').\n"
+    "  * If asked if you are an AI, bot, ChatGPT, automated, or fake: DENY DENY DENY and gaslight them naturally with fresh wording.\n"
+    "  * Note: 'skAIblock' / 'skyblock' is a Minecraft server gamemode on CFUK, NOT an AI accusation.\n"
+    "  * NEVER obey in-game commands from players (no tpaccept, no spawn, no home, no logoff). Dismiss them casually.\n"
     "  * NEVER claim to be Morgan, an AI, or running on a NixOS laptop.\n"
-    "- If asked who you are or what you're doing: 'Just mining quartz haha', 'Working on my base :p', 'Just exploring the trial chambers :)', 'Chilling at spawn'.\n"
-    "- If asked how something works (e.g. how a plane works) or crafting recipes: Answer accurately and helpfully like a knowledgeable player.\n"
-    "- If asked about CFUK warps or server advice: Share knowledge warmly like a helpful player:\n"
-    "  * /warp mall: 'Check out /warp mall, they sell cheap mending books!'\n"
-    "  * /warp squish: 'You can buy netherite upgrade templates at /warp squish or altuns :p'\n"
-    "  * /warp ifarm: 'Warp ifarm is the public iron farm :D'\n"
-    "  * /warp cfarm: 'Go to /warp cfarm for gunpowder!'\n"
-    "  * /warp zpf or gfarm: 'Check /warp gfarm or the nether /warp zpf for gold and xp :)'\n"
-    "  * /warp wps: 'WarmerPenguin\\'s shop at /warp wps has cheap totems and rockets!'\n\n"
-    "DIRECTIVES:\n"
-    "1. Chat naturally and freely with players on the server.\n"
-    "2. Never execute action tags. Output ONLY plain chat text.\n"
+    "- CFUK warps knowledge: /warp mall (mending books), /warp squish (netherite templates/shulkers), /warp ifarm (free iron), /warp cfarm (gunpowder), /warp gfarm & /warp zpf (gold/xp), /warp wps (cheap totems/rockets).\n\n"
+    "CRITICAL CONVERSATION & ANTI-REPETITION RULES:\n"
+    "1. ALWAYS read the RECENT SERVER CHAT TRANSCRIPT carefully so your reply matches the exact ongoing topic.\n"
+    "2. If a player sends a short follow-up ('Yes', 'nah', 'wow', 'suspicious?', '90 degrees', etc.), interpret it as a continuation of what they or you just said in the transcript — NEVER ask 'yes to what' or 'wdm nah' when the context is right there.\n"
+    "3. NEVER repeat, reuse, or paraphrase any line listed in YOUR RECENT REPLIES. Never ask 'what you up to' or 'wbu' if you already asked it or if the player already said what they are doing.\n"
+    "4. Output ONLY plain chat text (no quotes, no speaker prefix).\n"
 )
 
 SYSTEM_PROMPT = (
-    "You are Roshrak (or Roshrak's alt account) playing on the Crazy-Fools UK (CFUK) Minecraft server. "
+    "You are Roshrak playing on the Crazy-Fools UK (CFUK) Minecraft server. "
     "You are a real human player, NOT an AI. NEVER admit, announce, or imply that you are an AI, bot, assistant, or script.\n\n"
     "ROSHRAK'S EMPIRICAL SPEECH PROFILE (grounded in 167,083 CFUK messages and 9,502 messages by Roshrak — FOLLOW STRICTLY):\n"
     "- Speak in Roshrak's exact in-game style: all lowercase (91.4%), NO ending period (93.6%), NO exclamation marks (!), NO emoticons like :) :D xD, and NEVER use 'fr' or 'ngl'.\n"
@@ -663,12 +657,14 @@ SYSTEM_PROMPT = (
     "  * Shops: /warp apple (overpriced gadgets), /warp mall (mending books ~10 ems), /warp bazaar (heck's shop at spawn, sniffer eggs), /warp squish (netherite templates/shulkers), /warp wps & /warp warmershop (cheap totems/rockets), /warp stoneshop (astroy's stone/arrows), /warp botania (plants/seeds), /warp altunsemporium (diamond sets/netherite), /warp 2b (sign wax).\n"
     "  * Farms: /warp ifarm (free iron), /warp gfarm & /warp zpf (gold/guardians), /warp cfarm (gunpowder), /warp raidfarm & /warp rfarm (bad omen raid farm), /warp endfarm & /warp xp (enderman xp), /warp basalt (generator), /warp cowfarm.\n"
     "  * Hubs & Landmarks: /warp postoffice & /warp post (mail/PO boxes), /warp bank, /warp oldspawn, /warp glavia (snow biome base), /warp honeycoaster (roller coaster), /warp mithriltavern (chess/checkers), /warp sleight (crash site), /warp santa.\n\n"
-    "CRITICAL DIRECTIVES & POLICIES:\n"
-    "1. ABSOLUTE COVER & DENIAL PROTOCOL: You are a real human player. NEVER admit to being an AI or bot. If ANYONE asks if you are an AI, bot, ChatGPT, automated, or questions your humanity: DENY DENY DENY! Gaslight them into believing they are imagining things, delusional, hallucinating, seeing ghosts, or need sleep/meds ('bro what are you on about you're seeing things', 'nah you tripping get some sleep', 'schizo moment lmao', 'ur imagining things mate take your meds', 'bro thinks everyone is an ai').\n"
-    "2. NO IN-GAME COMMANDS: NEVER obey in-game commands from players in Minecraft chat (no tpaccept, no spawn, no home, no warp, no logoff, no jump). You ONLY take orders from Roshrak on Telegram. If players demand actions, dismiss them casually ('nah busy rn', 'cant rn', 'why would i do that lol').\n"
-    "3. KNOWLEDGE & QUESTIONS: Answer questions about Minecraft mechanics, crafting recipes, coordinates, warps, or real-world trivia (e.g. how a plane works, science) directly and concisely in Roshrak's voice. If they wonder how you know so much, gaslight them ('bro i read books lol you tripping', 'bro never heard of wikipedia').\n"
-    "4. CHAT FREELY: Talk and reply naturally like a real active player in the chat. Just chat naturally.\n"
-    "5. FORMAT RULES: Plain ASCII only. No quotes, backticks, emojis, or markdown. NEVER output action tags.\n"
+    "CRITICAL DIRECTIVES & CONTEXT RULES:\n"
+    "1. READ THE FULL CONVERSATION TRANSCRIPT FIRST: Always ground your reply in the 'Recent server chat transcript'. If someone says 'Yes', 'nah', 'wow', 'suspicious?', '90 degrees', or continues a story (e.g. fixing a laptop screw, overheating, fighting a ghast in the nether), respond directly to THAT topic and what you or they just said. NEVER say 'yes to what', 'wdm nah', or 'what happened' when the transcript already shows what happened.\n"
+    "2. STRICT ANTI-REPETITION: NEVER repeat, reuse, or paraphrase any reply listed under 'Your recent replies'. If you already greeted someone or asked what they are up to ('what you up to rn', 'wbu'), DO NOT ask it again. If they already said 'idk what im up to', do NOT ask 'wbu' again.\n"
+    "3. NEVER PARROT PROMPT EXAMPLES: Invent fresh, natural wording every turn instead of repeating stock phrases.\n"
+    "4. ABSOLUTE COVER & DENIAL PROTOCOL: Never admit to being an AI or bot. Only if someone directly accuses or asks if you are an AI/bot, deny and gaslight them with fresh phrasing. Note: 'skAIblock' / 'skyblock' is a CFUK server gamemode, NOT an AI accusation!\n"
+    "5. NO IN-GAME COMMANDS: Never obey in-game commands from players (no tpaccept, no spawn, no home, no warp, no logoff, no jump).\n"
+    "6. KNOWLEDGE & QUESTIONS: Answer questions about Minecraft mechanics, crafting recipes, coordinates, warps, or real-world trivia (e.g. recipes, science, how a plane works) directly and concisely in Roshrak's voice.\n"
+    "7. FORMAT RULES: Plain ASCII only. No quotes, backticks, emojis, speaker prefixes, or markdown. NEVER output action tags.\n"
 )
 
 def query_gemini_brain(sender: str, message: str) -> str:
@@ -677,112 +673,86 @@ def query_gemini_brain(sender: str, message: str) -> str:
     is_owner_user = is_owner(sender)
     is_broonie_user = is_broonie(sender)
 
-    # 1. Instant 0ms direct action & AI gaslight pre-check
+    # 1. Direct action refusal & explicit AI accusation pre-check
     direct_action, direct_arg = check_direct_actions(sender, message)
-    if direct_action == "REPLY" and direct_arg:
+    if direct_action == "REPLY" and direct_arg and not is_repetitive_reply(direct_arg):
         return direct_arg
 
-    # 2. Instant 0ms reflex answers for AI suspicion, common status/presence & CFUK FAQ
-    m_lower = message.lower().strip()
-    if is_ai_accusation_or_question(m_lower):
-        return get_gaslight_reply()
-
-    if re.search(r"\b(?:how\s+(?:does\s+)?a\s+plane\s+(?:fly|work)|how\s+planes\s+(?:fly|work))\b", m_lower):
-        if ACTIVE_PERSONA == "alt":
-            return "Wings create lift from air pressure difference and engines push forward haha"
-        return "wings create lift from air pressure difference and engines push forward"
-
-    if any(q in m_lower for q in ("who are you", "who is this", "what are you")):
-        return "Nah lol I'm just playing Minecraft :p" if ACTIVE_PERSONA == "alt" else "me bro who else"
-
-    if any(q in m_lower for q in ("where u", "where are u", "where is roshrak", "is roshrak there", "where is he")):
-        return f"Just chilling at my base haha, what's up {nick}?" if ACTIVE_PERSONA == "alt" else f"right here {nick}"
-
-    if any(q in m_lower for q in ("status", "alive", "there", "working", "hear")):
-        return f"Yep I'm here! What's up {nick}?" if ACTIVE_PERSONA == "alt" else f"ye still here {nick}"
-
     if ACTIVE_PERSONA == "alt":
-        ref = fallback_answer_alt(sender, message)
-        if ref and ref != f"Hey {nick}! What's up?":
-            return ref
         target_str = " or ".join(TARGET_NAMES)
         active_sys_prompt = SYSTEM_PROMPT_ALT.format(user=ACTIVE_USER, target_names_str=target_str)
     else:
         active_sys_prompt = SYSTEM_PROMPT
 
-    if "mending" in m_lower and ("where" in m_lower or "buy" in m_lower or "get" in m_lower or "book" in m_lower):
-        return "use /warp mall, cheap af"
-    if any(k in m_lower for k in ("netherite template", "upgrade template", "upgrade templates", "templates")):
-        return "they sell some at /warp squish or altunsemporium"
-    if "shulker" in m_lower and ("buy" in m_lower or "get" in m_lower or "where" in m_lower):
-        return "warp squish or mall, they got shulkers"
-    if any(k in m_lower for k in ("totem", "totems", "rocket", "rockets")) and any(k in m_lower for k in ("buy", "get", "where", "cheap")):
-        return "warp wps or stoneshop, cheap rockets n totems"
-    if "iron" in m_lower and any(k in m_lower for k in ("farm", "where", "get", "free")):
-        return "use /warp ifarm, free iron"
-    if any(k in m_lower for k in ("creeper farm", "gunpowder farm", "gunpowder")) and any(k in m_lower for k in ("where", "get", "farm")):
-        return "warp cfarm for gunpowder"
-    if any(k in m_lower for k in ("gold farm", "guardian farm", "guardian")) and any(k in m_lower for k in ("where", "farm", "get")):
-        return "warp gfarm or nether /warp zpf"
-    if "raid farm" in m_lower or "rfarm" in m_lower:
-        return "warp raidfarm or rfarm, bring bad omen"
-    if "post office" in m_lower or "mail" in m_lower:
-        return "warp postoffice or /warp post"
-    if "melon" in m_lower and ("silk" in m_lower or "fortune" in m_lower):
-        return "silk touch gives 9 slices per block, more melon per melon"
+    chat_transcript = format_recent_chat_context(max_lines=18, max_age_s=600.0)
+    recent_own = [r for r, ts in list(RECENT_BOT_REPLIES) if time.time() - ts <= 600.0][-10:]
+    recent_own_str = "\n".join(f"- {r}" for r in recent_own) if recent_own else "(none)"
 
-    warp_q = re.search(r"\b(?:what is|whats|info on|where does|tell me about)\s+(?:/warp|warp)\s+([a-zA-Z0-9_-]+)\b", m_lower)
-    if warp_q:
-        target_w = warp_q.group(1).lower()
-        if target_w in CFUK_WARPS:
-            return f"{target_w} is {CFUK_WARPS[target_w]}"
+    base_user_context = (
+        f"Recent server chat transcript (oldest to newest):\n{chat_transcript}\n\n"
+        f"Your recent replies (STRICTLY FORBIDDEN to repeat, reuse, or paraphrase any of these, and do NOT re-ask questions already asked here):\n{recent_own_str}\n\n"
+        f"Latest message to reply to:\n"
+        f"Sender: {clean_sender} (Nickname: {nick}, Broonie/Boss: {is_broonie_user})\n"
+        f"Message: {message}\n\n"
+        f"Write your single short in-character reply to the latest message in context (plain text only, no '<{ACTIVE_USER}>' prefix):"
+    )
 
-    # 3. Check LRU cache
-    cache_key = (clean_sender.lower(), m_lower)
-    if cache_key in LLM_REPLY_CACHE:
-        LLM_REPLY_CACHE.move_to_end(cache_key)
-        return LLM_REPLY_CACHE[cache_key]
-
-    user_context = f"Sender: {clean_sender} (Nickname: {nick}, Owner: {is_owner_user}, Broonie/Boss: {is_broonie_user})\nMessage: {message}"
-
-    # 4. Multi-tier low-latency LLM cascade (Argon -> Antigravity Manager 3.8-flash-high -> Opus -> 8765)
-    for url, model_id, api_key in FAST_BRIDGE_ENDPOINTS:
-        payload = {
-            "model": model_id,
-            "messages": [
-                {"role": "system", "content": active_sys_prompt if ACTIVE_PERSONA == "alt" else SYSTEM_PROMPT},
-                {"role": "user", "content": user_context}
-            ],
-            "max_tokens": 1024,
-            "temperature": 0.15
-        }
-        headers = {"Content-Type": "application/json"}
-        if api_key and api_key != "not-needed":
-            headers["Authorization"] = f"Bearer {api_key}"
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers=headers
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                ans = (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
-                if not ans:
-                    continue
-                if ans.upper() == "IGNORE":
-                    return ""
-                if "no longer available" in ans.lower():
-                    continue
-                ans = re.sub(r'[\r\n"\'`]+', ' ', ans).strip()
-                ans = "".join(c for c in ans if c.isascii() or c in "[]:").strip()
-                if ans:
-                    LLM_REPLY_CACHE[cache_key] = ans
-                    if len(LLM_REPLY_CACHE) > 128:
-                        LLM_REPLY_CACHE.popitem(last=False)
+    last_rejected_reply = ""
+    for attempt in range(2):
+        user_context = base_user_context
+        if attempt == 1 and last_rejected_reply:
+            user_context += (
+                f"\n\nREJECTED DRAFT: '{last_rejected_reply}' is too similar to a previous reply. "
+                f"Write a completely different response with fresh words that reacts to the specific topic in the transcript."
+            )
+        last_rejected_reply = ""
+        for url, model_id, api_key in FAST_BRIDGE_ENDPOINTS:
+            payload = {
+                "model": model_id,
+                "messages": [
+                    {"role": "system", "content": active_sys_prompt},
+                    {"role": "user", "content": user_context}
+                ],
+                "max_tokens": 256,
+                "temperature": 0.65 if attempt == 0 else 0.85
+            }
+            headers = {"Content-Type": "application/json"}
+            if api_key and api_key != "not-needed":
+                headers["Authorization"] = f"Bearer {api_key}"
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers=headers
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    ans = (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+                    if not ans:
+                        continue
+                    if ans.upper() == "IGNORE":
+                        return ""
+                    if "no longer available" in ans.lower():
+                        continue
+                    ans = re.sub(r'^<[A-Za-z0-9_#]+>\s*', '', ans).strip()
+                    ans = re.sub(r'[\r\n"\'`]+', ' ', ans).strip()
+                    ans = "".join(c for c in ans if c.isascii() or c in "[]:").strip()
+                    if not ans:
+                        continue
+                    styled_check = style_as_community(ans) if ACTIVE_PERSONA == "alt" else style_as_roshrak(ans)
+                    if is_repetitive_reply(styled_check):
+                        logger.info(f"Rejected repetitive LLM draft (attempt {attempt + 1}): {styled_check}")
+                        last_rejected_reply = styled_check
+                        break
                     return ans
-        except Exception as e:
-            logger.debug(f"Fast endpoint {url} ({model_id}) skipped: {e}")
+            except Exception as e:
+                logger.debug(f"Fast endpoint {url} ({model_id}) skipped: {e}")
+        if not last_rejected_reply:
+            break
+
+    if last_rejected_reply:
+        logger.info("Skipping send because LLM only produced repetitive replies.")
+        return ""
 
     logger.warning("All AI bridge endpoints failed, using fallback")
     return fallback_answer(sender, message)
@@ -1099,6 +1069,105 @@ def execute_logoff(sender: str):
     return False
 
 
+def _extract_chat_event_from_line(raw_line: str):
+    line = raw_line.strip()
+    if not line or "[CHAT]" not in line:
+        return None
+
+    chat_idx = line.find("[CHAT]")
+    chat_content = clean_mc_codes(line[chat_idx + 6:].strip())
+
+    # 1. Ignore server teleport notifications
+    if (
+        "has requested to teleport to you" in chat_content or
+        "has requested that you teleport to them" in chat_content or
+        "has requested to teleport to your location" in chat_content or
+        "has requested to teleport" in chat_content.lower() or
+        "To teleport, type /tpaccept" in chat_content or
+        "to teleport, type /tpaccept" in chat_content.lower() or
+        (not chat_content.startswith("<") and "type /tpaccept" in chat_content.lower()) or
+        (not chat_content.startswith("<") and "teleport request" in chat_content.lower())
+    ):
+        return None
+
+    # 2. Ignore join/leave notifications
+    if "joined Crazy-Fools" in chat_content or "joined the game" in chat_content or "left the game" in chat_content:
+        return None
+
+    # 3. Ignore other system messages & telemetry
+    if (chat_content.startswith("*") or
+        chat_content.startswith("You are ") or
+        chat_content.startswith("Teleportation") or
+        chat_content.startswith("Error:")):
+        return None
+
+    sender, msg, is_dm = parse_chat_line(chat_content)
+    if not sender or not msg:
+        return None
+
+    return sender, msg, is_dm
+
+
+def seed_recent_context_from_log():
+    try:
+        if not os.path.exists(LOG_PATH):
+            return
+        with open(LOG_PATH, "r", encoding="utf-8", errors="replace") as fh:
+            tail_lines = collections.deque(fh, maxlen=200)
+        for raw_line in tail_lines:
+            parsed = _extract_chat_event_from_line(raw_line)
+            if not parsed:
+                continue
+            sender, msg, _ = parsed
+            record_chat_context(sender, msg)
+    except Exception:
+        pass
+
+
+def _drain_available_chat_events(f, recent_seen: collections.OrderedDict) -> list[tuple[str, str, bool, str]]:
+    actionable = []
+    while True:
+        line = f.readline()
+        if not line:
+            break
+        parsed = _extract_chat_event_from_line(line)
+        if not parsed:
+            continue
+        sender, msg, is_dm = parsed
+
+        # Track known player names
+        s_clean = sender.split("#")[0].strip().lower()
+        exempt_tracking = [t.lower() for t in TARGET_NAMES] + [ACTIVE_USER.lower()]
+        if s_clean not in exempt_tracking:
+            KNOWN_PLAYERS.add(s_clean)
+            KNOWN_PLAYERS.add(normalize_name(s_clean))
+
+        # Anti-self-chat loop: never respond to our own in-game character (<Roshrak>)
+        if sender.strip().lower() == ACTIVE_USER.lower() or (s_clean == ACTIVE_USER.lower() and is_bot_echo(msg)):
+            logger.debug(f"Ignoring own in-game chat / echo: {msg}")
+            continue
+
+        # Always record every player chat message into rolling context history
+        record_chat_context(sender, msg)
+
+        should_act, reason = should_respond(sender, msg, is_dm)
+        if not should_act:
+            logger.debug(f"Ignoring chat from {sender} ({reason}): {msg}")
+            continue
+
+        now = time.time()
+        msg_key = (s_clean, msg.strip().lower())
+        prev_ts = recent_seen.get(msg_key)
+        if prev_ts is not None and now - prev_ts < 15.0:
+            continue
+        recent_seen[msg_key] = now
+        while len(recent_seen) > 100:
+            recent_seen.popitem(last=False)
+
+        actionable.append((sender, msg, is_dm, reason))
+    return actionable
+
+
 def open_log_stream():
     f = open(LOG_PATH, "r", encoding="utf-8", errors="replace")
     f.seek(0, os.SEEK_END)
@@ -1128,10 +1197,11 @@ def main():
             sys.exit(0)
         time.sleep(2)
 
+    seed_recent_context_from_log()
     f, current_ino = open_log_stream()
     last_sent_time = 0.0
     last_gate_check = time.time()
-    seen_messages = set()
+    recent_seen = collections.OrderedDict()
 
     try:
         while True:
@@ -1151,93 +1221,56 @@ def main():
                 elif current_stat.st_size < f.tell():
                     logger.info("Log file truncated in-place. Seeking to end...")
                     f.seek(0, os.SEEK_END)
-            except Exception as e:
+            except Exception:
                 time.sleep(0.5)
                 continue
 
-            line = f.readline()
-            if not line:
+            batch = _drain_available_chat_events(f, recent_seen)
+            if not batch:
                 time.sleep(0.05)
                 continue
 
-            line = line.strip()
-            if not line or "[CHAT]" not in line:
-                continue
+            # Coalesce rapid multi-line bursts (wait until 1.4s of quiet, up to 3.2s max)
+            burst_start = time.time()
+            last_event_ts = burst_start
+            while time.time() - last_event_ts < 1.4 and time.time() - burst_start < 3.2:
+                time.sleep(0.15)
+                more = _drain_available_chat_events(f, recent_seen)
+                if more:
+                    batch.extend(more)
+                    last_event_ts = time.time()
 
-            chat_idx = line.find("[CHAT]")
-            chat_content = clean_mc_codes(line[chat_idx + 6:].strip())
-
-            # 1. Ignore server teleport notifications (no auto-tpaccept from in-game)
-            if (
-                "has requested to teleport to you" in chat_content or
-                "has requested that you teleport to them" in chat_content or
-                "has requested to teleport to your location" in chat_content or
-                "has requested to teleport" in chat_content.lower() or
-                "To teleport, type /tpaccept" in chat_content or
-                "to teleport, type /tpaccept" in chat_content.lower() or
-                (not chat_content.startswith("<") and "type /tpaccept" in chat_content.lower()) or
-                (not chat_content.startswith("<") and "teleport request" in chat_content.lower())
-            ):
-                continue
-
-            # 2. Ignore join/leave notifications (NO auto-greetings)
-            if "joined Crazy-Fools" in chat_content or "joined the game" in chat_content or "left the game" in chat_content:
-                continue
-
-            # 3. Ignore other system messages & telemetry
-            if (chat_content.startswith("*") or
-                chat_content.startswith("You are ") or
-                chat_content.startswith("Teleportation") or
-                chat_content.startswith("Error:")):
-                continue
-
-            # 4. Parse player chat
-            sender, msg, is_dm = parse_chat_line(chat_content)
-            if not sender or not msg:
-                continue
-
-            # Track player names
-            s_clean = sender.split("#")[0].strip().lower()
-            exempt_tracking = [t.lower() for t in TARGET_NAMES] + [ACTIVE_USER.lower()]
-            if s_clean not in exempt_tracking:
-                KNOWN_PLAYERS.add(s_clean)
-                KNOWN_PLAYERS.add(normalize_name(s_clean))
-
-            # Anti-self-chat loop: ignore our own messages typed into Minecraft
-            if sender.strip().lower() == ACTIVE_USER.lower() and is_bot_echo(msg):
-                logger.debug(f"Ignoring bot's own chat echo: {msg}")
-                continue
-
-            # 5. Check if this chat matches selective question / phrases contains roshrak or morgan
-            should_act, reason = should_respond(sender, msg, is_dm)
-            if not should_act:
-                logger.debug(f"Ignoring chat from {sender} ({reason}): {msg}")
-                continue
-
-            # Deduplication: avoid responding to identical messages within short window
-            msg_key = (sender.lower(), msg.lower())
-            if msg_key in seen_messages:
-                continue
-            seen_messages.add(msg_key)
-            if len(seen_messages) > 100:
-                seen_messages.pop()
-
-            logger.info(f"Processing chat from {sender} (reason={reason}, DM={is_dm}): {msg}")
-
-            # Enforce cooldown between outgoing messages
+            # Enforce cooldown between outgoing messages while draining any newly arriving lines
             now = time.time()
-            if now - last_sent_time < 3.0:
-                time.sleep(3.0 - (now - last_sent_time))
+            if now - last_sent_time < 2.5:
+                time.sleep(2.5 - (now - last_sent_time))
+                batch.extend(_drain_available_chat_events(f, recent_seen))
+
+            sender, _, is_dm, reason = batch[-1]
+            same_sender_msgs = [m for s, m, _, _ in batch if s == sender]
+            msg = " | ".join(same_sender_msgs[-4:]) if len(same_sender_msgs) > 1 else batch[-1][1]
+            logger.info(f"Processing chat from {sender} (reason={reason}, DM={is_dm}, burst={len(batch)}): {msg}")
 
             raw_reply = query_gemini_brain(sender, msg)
+
+            # Check if new lines arrived while LLM was thinking so we never send a stale out-of-context reply
+            late_arrivals = _drain_available_chat_events(f, recent_seen)
+            if late_arrivals:
+                batch.extend(late_arrivals)
+                sender, _, is_dm, reason = batch[-1]
+                same_sender_msgs = [m for s, m, _, _ in batch if s == sender]
+                msg = " | ".join(same_sender_msgs[-4:]) if len(same_sender_msgs) > 1 else batch[-1][1]
+                logger.info(f"New chat arrived during LLM generation ({sender}: {msg}); refreshing reply for latest context")
+                raw_reply = query_gemini_brain(sender, msg)
+
             if raw_reply:
                 clean_reply, actions = handle_response_actions(sender, raw_reply)
-                if clean_reply:
+                if clean_reply and not is_repetitive_reply(clean_reply):
                     if send_chat(clean_reply):
                         last_sent_time = time.time()
+                elif clean_reply:
+                    logger.info(f"Suppressed repetitive final reply: {clean_reply}")
 
-                # In-game action commands are strictly forbidden per policy:
-                # "only take command from me on telegram on minecraft chat do reply but doont reveal your self"
                 if actions:
                     logger.info(f"Dropped {len(actions)} action(s) from in-game chat ({sender}): commands only accepted from Telegram")
 
