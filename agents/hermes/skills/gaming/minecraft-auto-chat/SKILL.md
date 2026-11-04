@@ -29,11 +29,12 @@ metadata:
 3. **Persona Isolation (Main vs. Alt)**:
    - **Main Account (`Roshrak`)**: Follows Roshrak's empirical speech (all lowercase, no trailing period, no `!`, deadpan slang: `yo`, `wb`, `ty`, `cya`, `alr`, `ye`, `nah`, `welp`, `bruh`, `af`, verb-drop).
    - **Alt Account (`Miracle_Involker`)**: Follows CFUK community speech (proper sentence capitalization, normal punctuation `!`, `?`, `.`, friendly smilies `:p`, `:D`, `:)`, `haha`, `gg`, cheerful tone). Never sound like Roshrak or mention AI/Morgan.
-4. **Niri / Wayland Session Verification**:
-   - `systemctl --user show-environment` leaves `XDG_SESSION_CLASS` empty, and XWayland (`xwayland-satellite`) or X11 apps can overwrite `XDG_SESSION_TYPE=x11` in the user manager even while `loginctl show-session` reports `Type=wayland`.
-   - Never assert `manager.get('XDG_SESSION_CLASS') == 'user'` or `manager.get('XDG_SESSION_TYPE') == props['Type']` against `systemctl --user show-environment`; accept `XDG_SESSION_TYPE in ('wayland', 'x11', None)` once `WAYLAND_DISPLAY` and `NIRI_SOCKET` are verified as UID-owned sockets, and force `env['XDG_SESSION_TYPE'] = 'wayland'`.
+4. **Niri / Wayland Session Verification (Pure Wayland Only)**:
+   - This laptop runs pure Wayland (`niri` on `wayland-1`) with no X11 session. Never add `'x11'` to `mc_chat_responder.py` session checks or `--ozone-platform=x11` to app wrappers.
+   - If `systemctl --user show-environment` reports `XDG_SESSION_TYPE=x11`, a background service (such as `rustdesk.service` running `sudo -E -u aesc` with `XDG_SESSION_TYPE="x11"`) polluted the user manager environment — fix the offending service to `XDG_SESSION_TYPE="wayland"`.
+   - Under Niri, `XDG_SESSION_CLASS` in `systemctl --user show-environment` is empty while `loginctl show-session <id>` verifies `Class=user` and `Type=wayland`; do not require `manager.get('XDG_SESSION_CLASS') == 'user'`, and always sync edits across `/home/aesc/.local/bin/mc_chat_responder.py`, `/etc/nixos/home/files/bin/mc_chat_responder.py`, and `/home/aesc/tonelico/nixos/home/files/bin/mc_chat_responder.py`.
 5. **Tier-0 Telegram Fast-Path Matching**:
-   - Match `(?:mc|minecraft)\s*(?:auto\s*)?(?:chat\s*)?(?:responder|respond|reply)` in `parallel-orders` Tier-0 fast-path so phrases like `"Mc auto respond on"` execute `mc_responder_ctl` in `<0.1s` without spawning a background LLM worker during context compaction.
+   - Match both `(?:mc|minecraft)\s*(?:auto\s*)?(?:chat\s*)?(?:responder|respond|reply)` and bare `auto\s*(?:respond|reply|responder)` in `parallel-orders` Tier-0 fast-path (on both idle and busy gateway paths) so phrases like `"Mc auto respond on"` or `"auto reply on"` execute `mc_responder_ctl` in `<0.1s` without spawning an LLM turn.
 
 ## Commands & Tools
 - **Start Main**: `/home/aesc/.local/bin/mc_responder_ctl start roshrak`

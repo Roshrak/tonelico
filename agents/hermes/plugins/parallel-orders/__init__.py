@@ -401,12 +401,12 @@ async def _sink_primary_progress_bubble(turn_runner: Any, st: Any, chat_id: str)
         st.progress_msg_id = None
         with suppress(Exception):
             await st.adapter.delete_message(chat_id, old_id)
-        if st.progress_lines:
-            text = "\n".join(str(x) for x in st.progress_lines)
-            with suppress(Exception):
-                res = await _send_as_progress(turn_runner._send_progress_text(st, text))
-                if getattr(res, "success", False) and getattr(res, "message_id", None):
-                    st.progress_msg_id = res.message_id
+        lines = list(st.progress_lines) if st.progress_lines else [getattr(st, "_header_line", "⚡ **Task**\n⏳ Working...")]
+        text = "\n".join(str(x) for x in lines[-10:])
+        with suppress(Exception):
+            res = await _send_as_progress(turn_runner._send_progress_text(st, text))
+            if getattr(res, "success", False) and getattr(res, "message_id", None):
+                st.progress_msg_id = res.message_id
 
 
 async def _sink_all_progress_bubbles_below(chat_id: str) -> None:
@@ -717,8 +717,8 @@ def _argon_ready_account_count() -> int:
 
 def _sanitize_history_snapshot(
     raw_history: Optional[List[Dict[str, Any]]],
-    max_messages: int = 10,
-    max_total_chars: int = 16000,
+    max_messages: int = 6,
+    max_total_chars: int = 6000,
 ) -> List[Dict[str, Any]]:
     """Return a lightweight recent transcript window so parallel workers never trigger context compaction."""
     if not raw_history or not isinstance(raw_history, list):
@@ -736,8 +736,8 @@ def _sanitize_history_snapshot(
         if not isinstance(content, str) or not content.strip():
             continue
         text = content.strip()
-        if len(text) > 2500:
-            text = text[:2500] + "\n...[truncated for fast parallel context]..."
+        if len(text) > 1200:
+            text = text[:1200] + "\n...[truncated for fast parallel context]..."
         clean_turns.append({"role": role, "content": text})
 
     while clean_turns and clean_turns[-1].get("role") != "assistant":
@@ -944,7 +944,7 @@ async def _run_parallel_order_inner(
             user_config, source, platform_key
         )
         pr = runner._provider_routing
-        max_iterations = _current_max_iterations()
+        max_iterations = min(_current_max_iterations(), 30)
         reasoning_config = runner._resolve_session_reasoning_config(
             source=source, session_key=session_key, model=model
         )
@@ -1317,28 +1317,63 @@ def _patch_primary_turn_runner_and_adapters() -> None:
 
             async def patched_send_progress_messages(self):
                 ctx = self._ctx
+                adapter = ctx.adapter
+                if not adapter:
+                    return
                 chat_id_str = str(getattr(ctx.source, "chat_id", "") or "")
-                orig_factory = self._progress_edit_state
-                captured_pair: List[tuple[Any, Any]] = []
-
-                def capturing_factory(adapter):
-                    st = orig_factory(adapter)
-                    pair = (self, st)
-                    captured_pair.append(pair)
-                    if chat_id_str:
-                        _ACTIVE_PRIMARY_STATES.setdefault(chat_id_str, set()).add(pair)
-                    return st
-
-                self._progress_edit_state = capturing_factory
+                st = self._progress_edit_state(adapter)
+                raw_prompt = str(getattr(ctx, "message", "") or "").strip().replace("\n", " ")
+                short_label = (raw_prompt[:42] + "...") if len(raw_prompt) > 42 else (raw_prompt or "Task")
+                header_line = f"⚡ **Task: {short_label}**"
+                st._header_line = f"{header_line}\n⏳ Working..."
+                pair = (self, st)
+                if chat_id_str:
+                    _ACTIVE_PRIMARY_STATES.setdefault(chat_id_str, set()).add(pair)
                 try:
-                    return await orig_send_progress_messages(self)
+                    # Immediately post the bottom-anchored progress bubble at turn start
+                    if not st.progress_lines:
+                        st.progress_lines.append(header_line)
+                        st.progress_lines.append("⏳ Working...")
+                    with suppress(Exception):
+                        await self._progress_send_or_edit(st, "\n".join(str(x) for x in st.progress_lines))
+                    last_edit_ts = time.monotonic()
+                    dirty = False
+                    EDIT_INTERVAL = 1.2
+                    while True:
+                        drained_any = False
+                        while True:
+                            try:
+                                raw = ctx.progress_queue.get_nowait()
+                            except Exception:
+                                break
+                            drained_any = True
+                            if isinstance(raw, tuple) and raw[0] == "__reset__":
+                                await self._reset_progress_bubble(st)
+                                st.progress_lines.append(header_line)
+                                dirty = False
+                            else:
+                                if st.progress_lines == [header_line, "⏳ Working..."]:
+                                    st.progress_lines = [header_line]
+                                self._progress_absorb(st, raw)
+                                dirty = True
+                        if drained_any:
+                            await self._roll_progress_overflow_if_needed(st)
+                        now = time.monotonic()
+                        if dirty and st.progress_lines and (now - last_edit_ts >= EDIT_INTERVAL or st.progress_msg_id is None):
+                            msg_text = "\n".join(str(x) for x in st.progress_lines)
+                            if await self._progress_send_or_edit(st, msg_text):
+                                last_edit_ts = time.monotonic()
+                                dirty = False
+                        await asyncio.sleep(0.25)
+                except asyncio.CancelledError:
+                    await self._flush_progress_on_cancel(st)
+                except Exception as e:
+                    logger.debug("Progress message error: %s", e)
                 finally:
-                    self._progress_edit_state = orig_factory
                     if chat_id_str:
                         active_set = _ACTIVE_PRIMARY_STATES.get(chat_id_str)
                         if active_set:
-                            for pair in captured_pair:
-                                active_set.discard(pair)
+                            active_set.discard(pair)
 
             TurnRunner._progress_edit_state = patched_progress_edit_state
             TurnRunner._send_progress_text = patched_send_progress_text
