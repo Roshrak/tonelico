@@ -23,7 +23,7 @@
             meta.priority = 1;
           }
           ''
-            mkdir -p "$out/share/wayland-sessions" "$out/share/xsessions"
+            mkdir -p "$out/share/wayland-sessions"
 
             for name in mango niri sway plasma hyprland; do
               source=""
@@ -68,7 +68,6 @@
               name="$2"
               case "$kind" in
                 wayland) directory="$out/share/wayland-sessions" ;;
-                x11) directory="$out/share/xsessions" ;;
                 *) exit 2 ;;
               esac
               cat > "$directory/$name.desktop" <<EOF

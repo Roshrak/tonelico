@@ -888,7 +888,7 @@ def _owned_compositor_ipc(path, runtime, uid, kind, session_id, scope):
         if (props.get('MainPID') != str(pid) or props.get('ActiveState') != 'active'
                 or not actual_group or props.get('ControlGroup') != actual_group
                 or process['identity'].get('XDG_SESSION_ID') != session_id
-                or process['identity'].get('XDG_SESSION_TYPE') not in ('wayland', 'x11', None)):
+                or process['identity'].get('XDG_SESSION_TYPE') not in ('wayland', None)):
             raise InputRefused('Niri service ownership cannot be tied to this session')
     after = os.lstat(path)
     if (after.st_dev, after.st_ino, after.st_uid) != (item.st_dev, item.st_ino, item.st_uid):
@@ -913,7 +913,7 @@ def resolve_action_session():
         props = _session_properties(session_id)
         if props.get('User') != str(uid) or not props.get('Type') or not props.get('Class'):
             raise InputRefused('logind session ownership query is incomplete')
-        if props['Type'] in {'x11','wayland'} and props['Class'] == 'user':
+        if props['Type'] == 'wayland' and props['Class'] == 'user':
             graphical.append((session_id, props))
     # Concurrent graphical sessions can share a uinput seat. Refuse rather
     # than selecting an arbitrary active/socket match.
@@ -927,7 +927,7 @@ def resolve_action_session():
         raise InputRefused('graphical session scope could not be verified')
     output = _ipc_command(['systemctl','--user','show-environment'])
     manager = dict(line.split('=',1) for line in output.splitlines() if '=' in line)
-    if (manager.get('XDG_SESSION_ID') != session_id or manager.get('XDG_SESSION_TYPE') not in (props['Type'], 'x11', 'wayland')):
+    if (manager.get('XDG_SESSION_ID') != session_id or manager.get('XDG_SESSION_TYPE') != 'wayland'):
         raise InputRefused('user-manager graphical identity is stale or incomplete')
     desktop = manager.get('XDG_CURRENT_DESKTOP','').lower().split(':')
     supported = [kind for kind in ('niri','sway') if kind in desktop]

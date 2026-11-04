@@ -70,7 +70,7 @@
           candidate_class="$("$LOGINCTL" show-session "$candidate_id" --property=Class --value --no-pager)" || \
             refuse "could not inspect same-UID session class $candidate_id"
           case "$candidate_type" in
-            x11|wayland|mir)
+            wayland)
               if [ "$candidate_id" = "$session_id" ]; then
                 current_seen=1
                 current_type="$candidate_type"
@@ -91,7 +91,7 @@
         done <<< "$sessions"
 
         [ "$current_seen" -eq 1 ] || refuse 'current graphical session is absent from logind'
-        case "$current_type" in x11|wayland|mir) ;; *) refuse 'current logind session is not graphical' ;; esac
+        case "$current_type" in wayland) ;; *) refuse 'current logind session is not graphical' ;; esac
         [ "$current_scope" = "session-$session_id.scope" ] || refuse 'current session scope does not match its logind ID'
       '';
 

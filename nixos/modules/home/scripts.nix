@@ -6,14 +6,14 @@
       home = config.home.homeDirectory;
       portable = path: lib.replaceStrings [ "/home/aesc" ] [ home ] (builtins.readFile path);
       chromium = pkgs.chromium-latest.override { commandLineArgs = [ "--password-store=basic" ]; };
-      discord = pkgs.discord.override { commandLineArgs = "--ozone-platform=x11"; };
+      discord = pkgs.discord.override { commandLineArgs = "--ozone-platform=wayland"; };
       hermes = inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.messaging;
       chromiumLauncher = pkgs.writeShellScript "chromium-app" ''
         export WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-wayland-1}"
         export DISPLAY="''${DISPLAY:-:0}"
         export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
         export GTK_USE_PORTAL=1
-        exec ${chromium}/bin/chromium --ozone-platform=x11 --remote-debugging-port=9222 "$@"
+        exec ${chromium}/bin/chromium --ozone-platform=wayland --remote-debugging-port=9222 "$@"
       '';
       scripts = [
         "apply-theme-profile" "save-theme-profile" "sync-active-theme"
@@ -49,7 +49,7 @@
           text = ''
             #!${pkgs.runtimeShell}
             export GTK_USE_PORTAL=1
-            exec ${discord}/bin/Discord --ozone-platform=x11 "$@"
+            exec ${discord}/bin/Discord --ozone-platform=wayland "$@"
           '';
         };
         ".local/bin/hermes" = {

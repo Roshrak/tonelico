@@ -19,7 +19,7 @@
         environment = {
           DISPLAY = ":0";
           XDG_RUNTIME_DIR = "/run/user/1000";
-          XDG_SESSION_TYPE = "x11";
+          XDG_SESSION_TYPE = "wayland";
         };
         serviceConfig = {
           ExecStart = "${pkgs.rustdesk-flutter}/bin/rustdesk --service";

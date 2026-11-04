@@ -4,7 +4,7 @@
     { pkgs, ... }:
     {
       home.packages = with pkgs; [
-        (discord.override { commandLineArgs = "--ozone-platform=x11"; })
+        (discord.override { commandLineArgs = "--ozone-platform=wayland"; })
         telegram-desktop
       ];
     }

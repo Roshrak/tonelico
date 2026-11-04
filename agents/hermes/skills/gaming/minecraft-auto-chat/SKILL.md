@@ -30,7 +30,10 @@ metadata:
    - **Main Account (`Roshrak`)**: Follows Roshrak's empirical speech (all lowercase, no trailing period, no `!`, deadpan slang: `yo`, `wb`, `ty`, `cya`, `alr`, `ye`, `nah`, `welp`, `bruh`, `af`, verb-drop).
    - **Alt Account (`Miracle_Involker`)**: Follows CFUK community speech (proper sentence capitalization, normal punctuation `!`, `?`, `.`, friendly smilies `:p`, `:D`, `:)`, `haha`, `gg`, cheerful tone). Never sound like Roshrak or mention AI/Morgan.
 4. **Niri / Wayland Session Verification**:
-   - `systemctl --user show-environment` leaves `XDG_SESSION_CLASS` empty. Never assert `manager.get('XDG_SESSION_CLASS') == 'user'`; verify `Class=user` directly from logind `loginctl show-session`.
+   - `systemctl --user show-environment` leaves `XDG_SESSION_CLASS` empty, and XWayland (`xwayland-satellite`) or X11 apps can overwrite `XDG_SESSION_TYPE=x11` in the user manager even while `loginctl show-session` reports `Type=wayland`.
+   - Never assert `manager.get('XDG_SESSION_CLASS') == 'user'` or `manager.get('XDG_SESSION_TYPE') == props['Type']` against `systemctl --user show-environment`; accept `XDG_SESSION_TYPE in ('wayland', 'x11', None)` once `WAYLAND_DISPLAY` and `NIRI_SOCKET` are verified as UID-owned sockets, and force `env['XDG_SESSION_TYPE'] = 'wayland'`.
+5. **Tier-0 Telegram Fast-Path Matching**:
+   - Match `(?:mc|minecraft)\s*(?:auto\s*)?(?:chat\s*)?(?:responder|respond|reply)` in `parallel-orders` Tier-0 fast-path so phrases like `"Mc auto respond on"` execute `mc_responder_ctl` in `<0.1s` without spawning a background LLM worker during context compaction.
 
 ## Commands & Tools
 - **Start Main**: `/home/aesc/.local/bin/mc_responder_ctl start roshrak`
