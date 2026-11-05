@@ -40,20 +40,28 @@
 1. **Enable GameMode & Pre-Touched 4 GiB Heap**:
    - Set `EnableFeralGamemode=true`, `MinMemAlloc=4096`, and `MaxMemAlloc=4096` (both globally and in per-instance `instance.cfg`).
    - Avoid allocating >4 GiB heap on a 15 GiB shared-VRAM laptop — oversized heaps starve the Intel iGPU and Mesa shader cache of LPDDR5X RAM.
-2. **OpenJDK 25 Generational ZGC Flags**:
+2. **OpenJDK 25 Generational ZGC + Compact Object Headers Flags**:
+   - Note: `-XX:+ZGenerational` was removed in JDK 24/25 because Generational ZGC is now the default ZGC mode. Enable JEP 519 (`-XX:+UseCompactObjectHeaders`) and ensure `/sys/kernel/mm/transparent_hugepage/shmem_enabled` is set to `advise`.
    - Set `JvmArgs` to:
      ```text
-     -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -XX:+ZGenerational -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+ParallelRefProcEnabled -XX:+PerfDisableSharedMem -XX:+UseTransparentHugePages -Dfml.ignorePatchDiscrepancies=true -Dfml.ignoreInvalidMinecraftCertificates=true
+     -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -XX:+UseCompactObjectHeaders -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+ParallelRefProcEnabled -XX:+PerfDisableSharedMem -XX:+UseTransparentHugePages -Dfml.ignorePatchDiscrepancies=true -Dfml.ignoreInvalidMinecraftCertificates=true
      ```
 3. **Wayland & Mesa Threaded OpenGL Environment (Qt INI Comma Pitfall)**:
    - Close PrismLauncher before editing `prismlauncher.cfg` or `instance.cfg` so its in-memory `QSettings` state does not overwrite disk edits on launch or exit.
    - Never put unquoted comma-separated JSON inside `Env={...}` in `instance.cfg` — Qt's `QSettings::IniFormat` parser splits unquoted strings containing `,` into a `QStringList`, fails `QJsonDocument::fromJson`, and resets `Env={}` (causing SDL3 to fall back to XWayland and fail OpenGL context creation).
-   - Instead, keep `Env={\"SDL_VIDEO_DRIVER\":\"wayland\"}` as a single comma-free key and pass all driver environment variables via `WrapperCommand`:
+   - Instead, keep `Env={\"SDL_VIDEO_DRIVER\":\"wayland\"}` as a single comma-free key and pass all driver environment variables via `WrapperCommand` (including `MESA_NO_ERROR=1` to bypass GL error checking in `iris_dri.so` since Sodium disables `GL_KHR_no_error` on Linux via `[NO_ERROR_CONTEXT_UNSUPPORTED]`):
      ```ini
      Env={\"SDL_VIDEO_DRIVER\":\"wayland\"}
      OverrideCommands=true
-     WrapperCommand="/run/current-system/sw/bin/env SDL_VIDEO_DRIVER=wayland mesa_glthread=true MESA_SHADER_CACHE_MAX_SIZE=4G vblank_mode=0"
+     WrapperCommand="/run/current-system/sw/bin/env SDL_VIDEO_DRIVER=wayland mesa_glthread=true MESA_NO_ERROR=1 MESA_SHADER_CACHE_MAX_SIZE=4G vblank_mode=0 ANV_GPL=true MESA_VK_WSI_PRESENT_MODE=immediate"
      ```
+4. **Why Minecraft 26.3's Built-in Vulkan (`RenderPearl`) Backend Runs Worse Than OpenGL on Intel Meteor Lake-P (`8086:7d45`)**:
+   - **Keep `preferredGraphicsBackend:"opengl"` in `options.txt`**. Decompilation of `minecraft-26.3-client.jar` (`com.mojang.renderpearl`) and `sodium-fabric-0.9.2+mc26.3.jar` reveals 5 architectural bottlenecks in 26.3's Vulkan path on Linux Intel ANV:
+     1. **Sodium `DrawBackend.chooseBackend` selects CPU-bound `VK_EXT_multi_draw` (`VK_MULTIDRAW`) over `VK_INDIRECT`**: Because Mesa ANV exposes `VK_EXT_multi_draw`, Sodium checks `multiDrawDirectInterleaved()` before `multiDrawIndirect()` and uses `nvkCmdDrawMultiIndexedEXT` (a CPU-side command-buffer loop on the Render Thread) instead of indirect GPU draws (`vkCmdDrawIndexedIndirect`), whereas OpenGL offloads draws asynchronously via `mesa_glthread=true`.
+     2. **Per-draw `vkCreateBufferView` + `vkDestroyBufferView` in `VulkanRenderPass.pushDescriptors()`**: Every dirty texel-buffer descriptor in a draw call synchronously creates a new `VkBufferView` and queues its destruction at frame end; OpenGL binds persistent texture objects with zero per-draw allocation.
+     3. **Broken Unified Memory (UMA) check in `VulkanDevice.<init>` (`isIntegratedIntelMoltenVK`)**: Mojang checks `deviceType == INTEGRATED_GPU && vendorID == 0x8086 && driverID == 14 (VK_DRIVER_ID_MOLTENVK)` and misses Linux Mesa ANV (`driverID == 3`). As a result, `isIntegratedIntelMoltenVK` is `false` on Linux, forcing every buffer upload on the unified LPDDR5X bus through a staging buffer (`VulkanTransientMemory.uploadStaging`), a `vkCmdCopyBuffer`, and a global `vkCmdPipelineBarrier2KHR` (`VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT`).
+     4. **No persistent `VkPipelineCache` & 2-frame hard stall**: `VulkanRenderPipeline.compile()` passes `pipelineCache = 0L` (`VK_NULL_HANDLE`) and `VulkanCommandEncoder.submit()` stalls at `MAX_SUBMITS_IN_FLIGHT = 2`.
+     5. **Iris Shaders & ImmediatelyFast incompatibility**: `iris-fabric-1.11.7+mc26.3` (`ShaderPackScreenPlaceholder`) explicitly disables shader packs when Vulkan is active.
 4. **Keep `JavaPath` Synced Across NixOS Rebuilds**:
    - After a `nixos-rebuild switch` that updates OpenJDK, inspect `strings $(which prismlauncher) | grep openjdk-25` and update `JavaPath=` in `prismlauncher.cfg` and every `instances/*/instance.cfg` so subsequent Nix garbage collection does not invalidate a stale `/nix/store/...-openjdk-25.../bin/java` path.
 

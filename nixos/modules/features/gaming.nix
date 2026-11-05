@@ -24,6 +24,12 @@
         };
       };
 
+      systemd.tmpfiles.rules = [
+        "w /sys/class/drm/card1/gt_min_freq_mhz - - - - 800"
+        "w /sys/kernel/mm/transparent_hugepage/shmem_enabled - - - - advise"
+        "w /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise"
+      ];
+
       boot.kernel.sysctl = {
         "vm.page-cluster" = 0;
         "vm.swappiness" = 15;
