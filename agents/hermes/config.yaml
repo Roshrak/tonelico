@@ -31,8 +31,6 @@ providers:
     transport: chat_completions
     discover_models: true
 fallback_providers:
-  - provider: antigravity-manager
-    model: gemini-4-argon-high
   - provider: aistudio2api
     model: gemini-3.8-flash-high
   - provider: antigravity-manager
