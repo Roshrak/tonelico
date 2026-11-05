@@ -234,25 +234,60 @@ class ParallelOpsMcpServer:
                 with urllib.request.urlopen(req, timeout=5) as r:
                     data = json.loads(r.read().decode())
                 accs = data.get("accounts", [])
+                cds = []
+                try:
+                    cd_req = urllib.request.Request(
+                        "http://127.0.0.1:2048/api/cooldowns",
+                        headers={"Authorization": f"Basic {auth}"},
+                    )
+                    with urllib.request.urlopen(cd_req, timeout=5) as r:
+                        cds = json.loads(r.read().decode()).get("cooldowns", [])
+                except Exception:
+                    pass
+                cd_by_acc: dict[str, list[dict[str, Any]]] = {}
+                for c in cds:
+                    aid = str(c.get("account_id") or c.get("account_label") or "")
+                    if aid:
+                        cd_by_acc.setdefault(aid, []).append(c)
                 summary = []
                 ready_argon = 0
+                cooldown_argon = 0
                 for idx, a in enumerate(accs, 1):
                     models = [m.get("id") if isinstance(m, dict) else str(m) for m in (a.get("models") or [])]
                     has_argon = "gemini-4-argon" in models
-                    state = a.get("state", "unknown")
+                    aid = str(a.get("id") or a.get("label") or "")
+                    acds = cd_by_acc.get(aid, [])
+                    argon_cd = next(
+                        (
+                            c
+                            for c in acds
+                            if "argon" in str(c.get("model_id", ""))
+                            or "argon" in str(c.get("scope", ""))
+                        ),
+                        None,
+                    )
+                    state = "cooldown" if argon_cd else a.get("state", "unknown")
                     if state == "ready" and has_argon:
                         ready_argon += 1
-                    summary.append({
+                    elif argon_cd:
+                        cooldown_argon += 1
+                    entry: dict[str, Any] = {
                         "worker_slot": f"pro_account_{idx}",
+                        "label": a.get("label", ""),
                         "enabled": a.get("enabled", False),
                         "state": state,
                         "tier": a.get("benefit_tier", ""),
                         "has_gemini_4_argon": has_argon,
                         "message": a.get("message", ""),
-                    })
+                    }
+                    if argon_cd:
+                        entry["cooldown_until"] = argon_cd.get("until", "")
+                        entry["cooldown_reason"] = argon_cd.get("reason", "")
+                    summary.append(entry)
                 return _ok({
                     "total_accounts": len(accs),
                     "ready_argon_workers": ready_argon,
+                    "cooldown_argon_workers": cooldown_argon,
                     "strict_argon_lock": True,
                     "workers": summary,
                 })
