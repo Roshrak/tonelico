@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic Hermes Memory & Session DB Integrity Check
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target default.target

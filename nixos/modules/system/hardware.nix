@@ -13,6 +13,7 @@
       # Laptop services.
       zramSwap = {
         enable = true;
+        algorithm = "zstd";
         memoryPercent = 50;
       };
       services.fwupd.enable = true;

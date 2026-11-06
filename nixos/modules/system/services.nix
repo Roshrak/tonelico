@@ -7,7 +7,6 @@
       services.gvfs.enable = true;
       # GVFS spawns wsdd by name; give this package the missing discovery helper.
       # Keep the full GNOME integration and existing wrapper arguments.
-      programs.xwayland.package = pkgs.xwayland;
       services.gvfs.package = pkgs.gnome.gvfs;
       systemd.user.services.gvfs-daemon.path = [ pkgs.wsdd ];
       services.udisks2.enable = true;

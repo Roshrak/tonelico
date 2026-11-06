@@ -28,6 +28,11 @@
          };
        };
      };
+     systemd.tmpfiles.rules = [
+       "w /sys/class/drm/card1/gt_min_freq_mhz - - - - 800"
+       "w /sys/kernel/mm/transparent_hugepage/shmem_enabled - - - - advise"
+       "w /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise"
+     ];
      boot.kernel.sysctl = {
        "vm.page-cluster" = 0; # 1-page reads for RAM-backed ZRAM
        "vm.swappiness" = 15;
@@ -62,10 +67,10 @@
      3. **Broken Unified Memory (UMA) check in `VulkanDevice.<init>` (`isIntegratedIntelMoltenVK`)**: Mojang checks `deviceType == INTEGRATED_GPU && vendorID == 0x8086 && driverID == 14 (VK_DRIVER_ID_MOLTENVK)` and misses Linux Mesa ANV (`driverID == 3`). As a result, `isIntegratedIntelMoltenVK` is `false` on Linux, forcing every buffer upload on the unified LPDDR5X bus through a staging buffer (`VulkanTransientMemory.uploadStaging`), a `vkCmdCopyBuffer`, and a global `vkCmdPipelineBarrier2KHR` (`VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT`).
      4. **No persistent `VkPipelineCache` & 2-frame hard stall**: `VulkanRenderPipeline.compile()` passes `pipelineCache = 0L` (`VK_NULL_HANDLE`) and `VulkanCommandEncoder.submit()` stalls at `MAX_SUBMITS_IN_FLIGHT = 2`.
      5. **Iris Shaders & ImmediatelyFast incompatibility**: `iris-fabric-1.11.7+mc26.3` (`ShaderPackScreenPlaceholder`) explicitly disables shader packs when Vulkan is active.
-4. **Keep `JavaPath` Synced Across NixOS Rebuilds**:
+5. **Keep `JavaPath` Synced Across NixOS Rebuilds**:
    - After a `nixos-rebuild switch` that updates OpenJDK, inspect `strings $(which prismlauncher) | grep openjdk-25` and update `JavaPath=` in `prismlauncher.cfg` and every `instances/*/instance.cfg` so subsequent Nix garbage collection does not invalidate a stale `/nix/store/...-openjdk-25.../bin/java` path.
 
-## 3. Fabric Mods & In-Game Settings (`options.txt` & `sodium-options.json`)
+## 3. Fabric Mods & In-Game Settings (`options.txt` & `config/*`)
 1. **Core Performance Mods (Fabric 26.3)**:
    - Alongside Fabulously Optimized (`sodium`, `lithium`, `ferritecore`, `immediatelyfast`, `entityculling`, `modernfix`, `moreculling`), ensure these Modrinth performance mods and their required libraries are present in `minecraft/mods/` across **all** PrismLauncher instances:
      - `c2me-fabric` (multithreaded chunk I/O and generation with `AVX2VNNI` native acceleration)
@@ -75,7 +80,9 @@
      - `particle_core` + **`fzzy_config`** (`>= 0.7.6`; `particle_core` refuses to boot without `fzzy_config`)
    - **Do NOT install `krypton` alongside `e4mc` (`Fabulously Optimized`)**: `e4mc` and `krypton` both redirect `ServerLoginPacketListenerImpl.getCipher` at priority `1000`, causing a fatal Mixin `InjectionError` on game initialization.
    - **Audit `fabric.mod.json` dependencies after manual `.jar` installs**: Parse `fabric.mod.json` (and nested `META-INF/jars/*.jar`) across `minecraft/mods/*.jar` to verify every key in `"depends"` is satisfied before launching.
-2. **In-Game `options.txt` & `sodium-options.json`**:
-   - Keep `renderDistance:12` (or `<=16`) and `simulationDistance:8`, `mipmapLevels:1`, `clouds:"false"`, `entityShadows:false`, `enableVsync:false`.
-   - Set `"terrain_sorting_enabled": false` and `"chunk_build_defer_mode": "ALWAYS"` in `config/sodium-options.json`.
-   - Set `mode = "off"` in `config/lambdynamiclights.toml` so holding light sources does not trigger per-frame chunk lightmap rebuilds.
+2. **In-Game `options.txt` & Mod Configs**:
+   - In `options.txt`, set `preferredGraphicsBackend:"opengl"`, `enableVsync:false`, `maxFps:260`, `glDebugVerbosity:0` (disables `GL_KHR_debug` callback overhead), `maxAnisotropyBit:0` (saves 4x texture fetch bandwidth on shared LPDDR5X), `chunkSectionFadeInTime:0.0` (removes translucent chunk fade-in shader pass), `menuBackgroundBlurriness:0` (removes fullscreen Gaussian blur in menus/chat), `renderDistance:12`, `simulationDistance:8`, `mipmapLevels:1`, `renderClouds:"false"`, `entityShadows:false`, and `weatherRadius:5`.
+   - In `config/sodium-options.json`, set `"chunk_build_defer_mode": "ALWAYS"` under `"performance"`, `"cpu_render_ahead_limit": 3` under `"advanced"`, and `"terrain_sorting_enabled": false` under `"debug"`.
+   - In `config/dynamic_fps.json`, set `"frame_rate_target": -1` and `"run_garbage_collector": false` for `hovered`, `unfocused`, and `unplugged` so switching windows or running on battery never throttles FPS or triggers `System.gc()` pauses.
+   - In `config/immediatelyfast.json`, set `"experimental_sign_text_buffering": true`; in `config/moreculling.toml`, set `signTextCulling = true` and `entityModelCulling = true`; in `config/ixeris.toml`, set `aggressiveCaching = true`.
+   - In `config/lambdynlights.toml`, set `mode = "off"` and `self = false` so holding light sources does not trigger per-step chunk lightmap rebuilds.

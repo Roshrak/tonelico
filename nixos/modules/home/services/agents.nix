@@ -28,8 +28,8 @@
       systemd.user.services.mc-chat-responder = {
         Unit = {
           Description = "Minecraft Auto Chat Responder (Controlled strictly via Telegram / Hermes CLI)";
-          After = [ "network.target" "agy-bridge.service" ];
-          Wants = [ "agy-bridge.service" ];
+          After = [ "network.target" "aistudio2api.service" ];
+          Wants = [ "aistudio2api.service" ];
         };
         Service = {
           Type = "simple";

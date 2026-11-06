@@ -159,13 +159,21 @@ cp -p -- "$H/agm-docker/compose.yml" "$am/"
 step "agents/bin, agents/systemd, agents/clients"
 mkdir -p "$REPO/agents/bin" "$REPO/agents/systemd" "$REPO/agents/clients"
 rm -f "$REPO"/agents/bin/* "$REPO"/agents/systemd/* "$REPO"/agents/clients/*
-for f in agy_telegram_bot.py gpu_market_search.py ytmusic_control.py remote-mode slogout \
-         npu-python paddleocr-mcp-local xdg-open steam; do
+for f in agy_telegram_bot.py aistudio2api-ui aistudio2api-watchdog antigravity-manager \
+         argon-quota-router.py cua-driver gpu_market_search.py hermes-memory-guard \
+         import_pool_bundle.py mc_chat_responder_alt mc_responder_ctl npu-python \
+         paddleocr-mcp-local remote-mode scan_work_files.py slogout steam \
+         telegram_send.py tonelico-safe-update tonelico-safe-update.py \
+         uinput_type uinput_type.c xdg-open ytmusic_control.py; do
   if [ -f "$H/.local/bin/$f" ] && [ ! -L "$H/.local/bin/$f" ]; then
     cp -p -- "$H/.local/bin/$f" "$REPO/agents/bin/"
   fi
 done
-cp -p -- "$H/.config/systemd/user/agy-telegram.service" "$REPO/agents/systemd/"
+for u in agy-telegram.service aistudio2api.service aistudio2api-watchdog.service \
+         aistudio2api-watchdog.timer argon-quota-router.service argon-quota-router.timer \
+         hermes-memory-guard.path hermes-memory-guard.service hermes-memory-guard.timer; do
+  [ -f "$H/.config/systemd/user/$u" ] && cp -p -- "$H/.config/systemd/user/$u" "$REPO/agents/systemd/$u"
+done
 sed -E 's#/nix/store/[a-z0-9]{32}-hermes-agent-env#@HERMES_ENV@#g' \
   "$H/.config/systemd/user/hermes-gateway.service" > "$REPO/agents/systemd/hermes-gateway.service"
 [ -f "$H/.claude/CLAUDE.md" ] && cp -p -- "$H/.claude/CLAUDE.md" "$REPO/agents/clients/CLAUDE.md"

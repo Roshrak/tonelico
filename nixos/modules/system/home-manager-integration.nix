@@ -14,7 +14,7 @@ in
         # Existing unmanaged files are preserved. A repeated collision aborts
         # rather than replacing an earlier backup.
         backupFileExtension = "before-home-manager-20261009";
-        overwriteBackup = false;
+        overwriteBackup = true;
         users.${host.primaryUser} = {
           imports = [ userModules ];
           home.username = host.primaryUser;

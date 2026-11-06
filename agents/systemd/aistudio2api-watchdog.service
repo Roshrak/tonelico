@@ -1,0 +1,7 @@
+[Unit]
+Description=Ensure AIStudio2API daemon and generation service are running
+After=aistudio2api.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/aesc/.local/bin/aistudio2api-watchdog

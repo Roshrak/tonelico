@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export PATH="/run/current-system/sw/bin:/usr/bin:/bin:${PATH:-}"
+
+if ! systemctl --user is-active --quiet aistudio2api.service; then
+  systemctl --user start aistudio2api.service
+  exit 0
+fi
+
+status_json="$(curl -fsS --max-time 5 http://127.0.0.1:2048/api/status 2>/dev/null || true)"
+if [ -z "$status_json" ]; then
+  exit 0
+fi
+
+if printf '%s' "$status_json" | grep -q '"state":"STOPPED"'; then
+  echo "aistudio2api generation service is STOPPED; triggering /api/control/start..."
+  curl -fsS --max-time 10 -X POST http://127.0.0.1:2048/api/control/start >/dev/null || true
+fi

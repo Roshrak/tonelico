@@ -10,9 +10,8 @@
       programs.sway = {
         enable = true;
         wrapperFeatures.gtk = true;
-        extraPackages = with pkgs; [
-          xwayland-satellite
-        ];
+        xwayland.enable = false;
+        extraPackages = [ ];
       };
 
     }

@@ -242,6 +242,7 @@ install_hermes_files() {
   # Helper scripts and their units.
   mkdir -p "$HOME/.local/bin"
   install -m 755 "$REPO"/agents/bin/* "$HOME/.local/bin/"
+  [ -f "$HOME/.local/bin/uinput_type.c" ] && chmod 644 "$HOME/.local/bin/uinput_type.c"
   # Global instructions for the coding clients, only if the user has none yet.
   mkdir -p "$HOME/.claude"
   [ -f "$HOME/.claude/CLAUDE.md" ] || install -m 644 "$REPO/agents/clients/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
@@ -311,12 +312,22 @@ post_services() {
 
   step "systemd user services"
   mkdir -p "$HOME/.config/systemd/user"
+  local u
+  for u in aistudio2api.service aistudio2api-watchdog.service aistudio2api-watchdog.timer \
+           argon-quota-router.service argon-quota-router.timer \
+           hermes-memory-guard.path hermes-memory-guard.service hermes-memory-guard.timer \
+           agy-telegram.service; do
+    [ -f "$REPO/agents/systemd/$u" ] && install -m 644 "$REPO/agents/systemd/$u" "$HOME/.config/systemd/user/$u"
+  done
+  sed "s#@HERMES_ENV@#$env_path#g" "$REPO/agents/systemd/hermes-gateway.service" > "$HOME/.config/systemd/user/hermes-gateway.service"
+  if systemctl --user daemon-reload 2>/dev/null; then
+    systemctl --user enable --now hermes-memory-guard.path hermes-memory-guard.timer \
+      aistudio2api-watchdog.timer argon-quota-router.timer 2>&1 | sed 's/^/    /' >&2 || true
+  fi
   if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] && ! grep -q '^TELEGRAM_BOT_TOKEN=' "$HOME/.hermes/.env" 2>/dev/null; then
     record SKIP "Telegram services (no bot token configured)"
     return 0
   fi
-  install -m 644 "$REPO/agents/systemd/agy-telegram.service" "$HOME/.config/systemd/user/agy-telegram.service"
-  sed "s#@HERMES_ENV@#$env_path#g" "$REPO/agents/systemd/hermes-gateway.service" > "$HOME/.config/systemd/user/hermes-gateway.service"
   if systemctl --user daemon-reload 2>/dev/null; then
     systemctl --user enable --now hermes-gateway.service agy-telegram.service 2>&1 | sed 's/^/    /' >&2 || true
     sleep 3

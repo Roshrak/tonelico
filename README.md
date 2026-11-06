@@ -1,8 +1,8 @@
 # tonelico
 
-A 1-to-1 copy of my laptop: NixOS 26.05 with the newest kernel, six desktops (Mango, niri,
-KDE Plasma 6, Hyprland, Sway, GNOME) behind the Noctalia greeter, the theme and wallpapers,
-and the agent stack (AGY Control, Software Factory, Hermes, the Antigravity rotator).
+A 1-to-1 copy of my laptop: NixOS 26.05 with the newest kernel, five Wayland desktops (Mango, niri,
+KDE Plasma 6, Hyprland, Sway) behind the Noctalia greeter, the theme and wallpapers,
+and the agent stack (AGY Control, Software Factory, Hermes, AIStudio2API, the Antigravity rotator).
 
 It is built for a **fresh NixOS KDE Plasma install**. One script pulls this repo and turns
 that install into the full setup. The theme comes across by itself; nothing is set by hand.
@@ -48,7 +48,7 @@ touchpad fix, Intel NPU compiler). The installer refuses other hardware unless y
 
 ## Keybindings
 
-The same keys work in every session (Sway, Niri, MangoWC, Hyprland, KDE, GNOME, XFCE). See
+The same keys work in every session (Sway, Niri, MangoWC, Hyprland, KDE). See
 [docs/KEYBINDINGS.md](docs/KEYBINDINGS.md) for the table and what does not carry over.
 
 ## File picker

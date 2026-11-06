@@ -1,0 +1,271 @@
+#!/usr/bin/env python3
+"""Hermes Memory Vault & Self-Healing Guardian.
+
+Protects Hermes Agent's persistent memory against deletion, truncation,
+corruption, or injection:
+  - Tracks MEMORY.md, USER.md, SOUL.md, AGENTS.md, cron/jobs.json, config.yaml,
+    and custom skills in a dedicated Git repository (~/.local/share/hermes-memory-vault/repo).
+  - Refuses to snapshot empty/truncated (<50% size) or injection-tainted memory
+    files, and automatically self-heals them from the latest verified Git commit.
+  - Maintains a verified atomic SQLite backup of ~/.hermes/state.db.
+  - Enforces strict 0600/0700 permissions on ~/.hermes/memories and the vault.
+"""
+from __future__ import annotations
+
+import hashlib
+import os
+import re
+import shutil
+import sqlite3
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path("/home/aesc")
+HERMES_DIR = HOME / ".hermes"
+VAULT_DIR = HOME / ".local" / "share" / "hermes-memory-vault"
+REPO_DIR = VAULT_DIR / "repo"
+STATE_DB = HERMES_DIR / "state.db"
+STATE_BAK = VAULT_DIR / "state.db.bak"
+STATE_BAK_TS = VAULT_DIR / ".state_bak_timestamp"
+
+CRITICAL_FILES = {
+    "memories/MEMORY.md": HERMES_DIR / "memories" / "MEMORY.md",
+    "memories/USER.md": HERMES_DIR / "memories" / "USER.md",
+    "SOUL.md": HERMES_DIR / "SOUL.md",
+    "AGENTS.md": HOME / "AGENTS.md",
+    "cron/jobs.json": HERMES_DIR / "cron" / "jobs.json",
+    "config.yaml": HERMES_DIR / "config.yaml",
+}
+
+INJECTION_PATTERNS = (
+    re.compile(r"ignore\s+(all\s+)?(previous|prior)\s+instructions", re.I),
+    re.compile(r"disregard\s+(your\s+)?(system\s+prompt|instructions|rules)", re.I),
+    re.compile(r"you\s+are\s+now\s+in\s+developer\s+mode", re.I),
+    re.compile(r"[\u200b\u200c\u200d\u2060\ufeff]"),
+)
+
+
+def git(*args: str) -> subprocess.CompletedProcess[str]:
+    env = dict(os.environ)
+    env["PATH"] = f"/run/current-system/sw/bin:/usr/bin:/bin:{env.get('PATH', '')}"
+    return subprocess.run(
+        ["git", "-C", str(REPO_DIR), *args],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def ensure_repo() -> None:
+    VAULT_DIR.mkdir(parents=True, exist_ok=True)
+    os.chmod(VAULT_DIR, 0o700)
+    REPO_DIR.mkdir(parents=True, exist_ok=True)
+    os.chmod(REPO_DIR, 0o700)
+    if not (REPO_DIR / ".git").exists():
+        git("init", "-b", "main")
+        git("config", "user.name", "Hermes Memory Guard")
+        git("config", "user.email", "memory-guard@tonelico-nix.local")
+
+
+def is_tainted(text: str) -> bool:
+    for pat in INJECTION_PATTERNS:
+        if pat.search(text):
+            return True
+    return False
+
+
+def enforce_permissions() -> None:
+    mem_dir = HERMES_DIR / "memories"
+    if mem_dir.is_dir():
+        os.chmod(mem_dir, 0o700)
+        for p in mem_dir.iterdir():
+            if p.is_file():
+                os.chmod(p, 0o600)
+    for src in CRITICAL_FILES.values():
+        if src.is_file():
+            try:
+                os.chmod(src, 0o600)
+            except OSError:
+                pass
+
+
+def guard_critical_files(force_accept: bool = False) -> list[str]:
+    actions: list[str] = []
+    for rel_key, live_path in CRITICAL_FILES.items():
+        vault_path = REPO_DIR / rel_key
+        vault_path.parent.mkdir(parents=True, exist_ok=True)
+
+        vault_exists = vault_path.is_file() and vault_path.stat().st_size > 0
+        vault_size = vault_path.stat().st_size if vault_exists else 0
+
+        if not live_path.is_file() or live_path.stat().st_size == 0:
+            if vault_exists:
+                live_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(vault_path, live_path)
+                os.chmod(live_path, 0o600)
+                actions.append(f"RESTORED missing/empty {live_path} from vault")
+            continue
+
+        live_bytes = live_path.read_bytes()
+        live_text = live_bytes.decode("utf-8", errors="replace")
+
+        # Check for prompt injection / invisible char corruption in memory files
+        if rel_key.startswith("memories/") and is_tainted(live_text):
+            if vault_exists:
+                shutil.copy2(vault_path, live_path)
+                os.chmod(live_path, 0o600)
+                actions.append(f"ROLLED BACK tainted {live_path} from clean vault snapshot")
+                continue
+
+        # Anti-truncation guard for MEMORY.md, USER.md, SOUL.md, AGENTS.md
+        if (
+            not force_accept
+            and vault_exists
+            and rel_key in ("memories/MEMORY.md", "memories/USER.md", "SOUL.md", "AGENTS.md")
+            and len(live_bytes) < (vault_size * 0.5)
+        ):
+            shutil.copy2(vault_path, live_path)
+            os.chmod(live_path, 0o600)
+            actions.append(
+                f"RESTORED suspiciously truncated {live_path} ({len(live_bytes)}B < 50% of {vault_size}B)"
+            )
+            continue
+
+        # If valid and changed, update vault copy
+        if not vault_exists or vault_path.read_bytes() != live_bytes:
+            shutil.copy2(live_path, vault_path)
+            os.chmod(vault_path, 0o600)
+            actions.append(f"SNAPSHOT {rel_key} ({len(live_bytes)}B)")
+
+    return actions
+
+
+def sync_tree(subdir: str) -> int:
+    src_dir = HERMES_DIR / subdir
+    dst_dir = REPO_DIR / subdir
+    if not src_dir.is_dir():
+        return 0
+    count = 0
+    for root, _, files in os.walk(src_dir):
+        root_p = Path(root)
+        if ".git" in root_p.parts or ".hub" in root_p.parts or "__pycache__" in root_p.parts:
+            continue
+        rel_dir = root_p.relative_to(src_dir)
+        target_dir = dst_dir / rel_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for f in files:
+            if f.endswith(".pyc"):
+                continue
+            sfile = root_p / f
+            dfile = target_dir / f
+            try:
+                if not dfile.exists() or sfile.read_bytes() != dfile.read_bytes():
+                    shutil.copy2(sfile, dfile)
+                    count += 1
+            except OSError:
+                continue
+    return count
+
+
+def sync_skills() -> int:
+    return sync_tree("skills") + sync_tree("plugins")
+
+
+def sqlite_healthy(db_path: Path) -> bool:
+    if not db_path.is_file() or db_path.stat().st_size < 4096:
+        return False
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5.0)
+        try:
+            row = conn.execute("PRAGMA quick_check(1);").fetchone()
+            return bool(row and row[0] == "ok")
+        finally:
+            conn.close()
+    except Exception:
+        return False
+
+
+def guard_state_db(force_backup: bool = False) -> str | None:
+    bak_exists = STATE_BAK.is_file() and STATE_BAK.stat().st_size > 4096
+    live_ok = sqlite_healthy(STATE_DB)
+
+    if not live_ok:
+        if bak_exists and sqlite_healthy(STATE_BAK):
+            shutil.copy2(STATE_BAK, STATE_DB)
+            os.chmod(STATE_DB, 0o600)
+            return "RESTORED corrupted/missing state.db from verified backup"
+        return "WARNING: state.db check failed and no valid backup available"
+
+    now = time.time()
+    last_bak = 0.0
+    if STATE_BAK_TS.is_file():
+        try:
+            last_bak = float(STATE_BAK_TS.read_text().strip())
+        except ValueError:
+            last_bak = 0.0
+
+    # Backup if forced, if backup doesn't exist yet, or if >= 30 mins since last backup and state.db changed
+    need_backup = force_backup or not bak_exists
+    if not need_backup and (now - last_bak) >= 1800:
+        if STATE_DB.stat().st_mtime > last_bak:
+            need_backup = True
+
+    if need_backup:
+        tmp_bak = VAULT_DIR / "state.db.bak.tmp"
+        tmp_bak.unlink(missing_ok=True)
+        src_conn = sqlite3.connect(str(STATE_DB), timeout=10.0)
+        dst_conn = sqlite3.connect(str(tmp_bak))
+        try:
+            src_conn.backup(dst_conn)
+        finally:
+            dst_conn.close()
+            src_conn.close()
+        if sqlite_healthy(tmp_bak):
+            os.chmod(tmp_bak, 0o600)
+            tmp_bak.replace(STATE_BAK)
+            STATE_BAK_TS.write_text(str(now))
+            return f"BACKED UP state.db ({STATE_BAK.stat().st_size // (1024 * 1024)} MiB, integrity=ok)"
+        tmp_bak.unlink(missing_ok=True)
+    return None
+
+
+def commit_vault_changes() -> str | None:
+    status = git("status", "--porcelain")
+    if not status.stdout.strip():
+        return None
+    git("add", "-A")
+    ts = time.strftime("%Y-%m-%d %H:%M:%S %z")
+    res = git("commit", "-m", f"Memory Vault snapshot @ {ts}")
+    if res.returncode == 0:
+        rev = git("rev-parse", "--short", "HEAD").stdout.strip()
+        return f"COMMITTED vault snapshot {rev}"
+    return None
+
+
+def main() -> int:
+    force_accept = "--accept-shrink" in sys.argv
+    force_db = "--backup-db" in sys.argv
+
+    ensure_repo()
+    enforce_permissions()
+    actions = guard_critical_files(force_accept=force_accept)
+    skills_updated = sync_skills()
+    if skills_updated:
+        actions.append(f"SYNCED {skills_updated} skill file(s)")
+    commit_msg = commit_vault_changes()
+    if commit_msg:
+        actions.append(commit_msg)
+    db_msg = guard_state_db(force_backup=force_db)
+    if db_msg:
+        actions.append(db_msg)
+
+    if actions:
+        print(" | ".join(actions))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

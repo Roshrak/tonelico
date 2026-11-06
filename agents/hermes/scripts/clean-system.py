@@ -285,6 +285,21 @@ def main() -> int:
     hermes_removed += remove_tree_contents(hermes_dir / "cache" / "scratch", max_age_seconds=1 * DAY, now=now)
     hermes_removed += remove_tree_contents(hermes_dir / "cache" / "terminal-output", max_age_seconds=1 * DAY, now=now)
 
+    # 7. Antigravity Manager SQLite log compaction (prevent proxy_logs.db bloat)
+    agm_logs_db = home / ".antigravity_tools" / "proxy_logs.db"
+    if agm_logs_db.is_file() and agm_logs_db.stat().st_size > 10 * 1024 * 1024:
+        try:
+            import sqlite3
+            with sqlite3.connect(str(agm_logs_db), timeout=5.0) as conn:
+                conn.execute(
+                    "DELETE FROM request_logs WHERE rowid NOT IN ("
+                    "SELECT rowid FROM request_logs ORDER BY rowid DESC LIMIT 30)"
+                )
+                conn.commit()
+                conn.execute("VACUUM")
+        except Exception:
+            pass
+
     end_usage = shutil.disk_usage("/")
     end_free = end_usage.free
     freed_bytes = max(0, end_free - start_free)

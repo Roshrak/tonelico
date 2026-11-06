@@ -10,7 +10,6 @@
       hermes = inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.messaging;
       chromiumLauncher = pkgs.writeShellScript "chromium-app" ''
         export WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-wayland-1}"
-        export DISPLAY="''${DISPLAY:-:0}"
         export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
         export GTK_USE_PORTAL=1
         exec ${chromium}/bin/chromium --ozone-platform=wayland --remote-debugging-port=9222 "$@"
@@ -20,32 +19,45 @@
         "clean-stray-sessions" "hypr-active-window-screenshot"
         "hypr-noctalia-notification-owner" "hypr-session-ready"
         "mango-animation" "noctalia-greeter-sync-smart" "obs-fix-recording-paths"
-        "mc_chat_responder.py"
+        "mc_chat_responder.py" "mc_chat_responder_alt" "mc_responder_ctl"
       ];
     in
     {
       home.file = lib.listToAttrs (map (name: {
         name = ".local/bin/${name}";
-        value = { text = portable (../../home/files/bin + "/${name}"); executable = true; };
+        value = { text = portable (../../home/files/bin + "/${name}"); executable = true; force = true; };
       }) scripts) // {
-        ".hermes/agy_bridge.py".text = portable ../../home/files/bin/agy_bridge.py;
-        ".local/bin/chromium-app".source = chromiumLauncher;
-        ".local/bin/chromium".source = chromiumLauncher;
+        ".hermes/agy_bridge.py" = {
+          text = portable ../../home/files/bin/agy_bridge.py;
+          force = true;
+        };
+        ".local/bin/uinput_type" = {
+          source = ../../home/files/bin/uinput_type;
+          executable = true;
+          force = true;
+        };
+        ".local/bin/chromium-app" = {
+          source = chromiumLauncher;
+          force = true;
+        };
+        ".local/bin/chromium" = {
+          source = chromiumLauncher;
+          force = true;
+        };
         ".local/bin/obs-safe" = {
           executable = true;
+          force = true;
           text = ''
             #!${pkgs.runtimeShell}
             set -euo pipefail
             "${home}/.local/bin/obs-fix-recording-paths"
-            # OBS 32.1.2's Wayland hotkey backend crashes in libxkbcommon on keyboard
-            # keymap/modifier events (3 coredumps 2026-11-01). Under Xwayland libobs
-            # uses its X11 backend instead; screen capture still goes through the portal.
-            export QT_QPA_PLATFORM=xcb
+            export QT_QPA_PLATFORM=wayland
             exec ${pkgs.obs-studio}/bin/obs "$@"
           '';
         };
         ".local/bin/Discord" = {
           executable = true;
+          force = true;
           text = ''
             #!${pkgs.runtimeShell}
             export GTK_USE_PORTAL=1
@@ -54,6 +66,7 @@
         };
         ".local/bin/hermes" = {
           executable = true;
+          force = true;
           text = ''
             #!${pkgs.runtimeShell}
             exec ${hermes}/bin/hermes "$@"

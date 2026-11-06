@@ -1,0 +1,7 @@
+[Unit]
+Description=Argon Quota Tracker & Dynamic High/Low/Fallback Router
+After=network.target aistudio2api.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/aesc/.local/bin/argon-quota-router.py

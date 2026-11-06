@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import datetime
+import functools
 import json
 import logging
 import os
@@ -658,7 +659,7 @@ async def _try_instant_reflex_while_busy(
         return True
 
     mc_ctl_match = re.match(
-        r"^(?:(activate|start|enable|turn on|deactivate|stop|disable|turn off|status)\s+(?:the\s+)?(?:mc|minecraft)\s*(?:auto\s*)?(?:chat\s*)?(?:responder|respond|reply)|(?:mc|minecraft)\s*(?:auto\s*)?(?:chat\s*)?(?:responder|respond|reply)\s+(on|off|start|stop|activate|deactivate|status))(?:\s+(alt|miracle|miracle_involker|roshrak|main))?[!?. ]*$",
+        r"^(?:(activate|start|enable|turn on|deactivate|stop|disable|turn off|turn of|status)\s+(?:the\s+)?(?:mc|minecraft)\s*(?:auto\s*)?(?:chat\s*)?(?:responder|respond|reply)|(?:mc|minecraft)\s*(?:auto\s*)?(?:chat\s*)?(?:responder|respond|reply)\s+(on|off|of|start|stop|activate|deactivate|status))(?:\s+(alt|miracle|miracle_involker|roshrak|main))?[!?. ]*$",
         lower,
     )
     if mc_ctl_match:
@@ -666,7 +667,7 @@ async def _try_instant_reflex_while_busy(
         acct = (mc_ctl_match.group(3) or "roshrak").strip()
         if verb in ("activate", "start", "enable", "turn on", "on"):
             ctl_action = "start"
-        elif verb in ("deactivate", "stop", "disable", "turn off", "off"):
+        elif verb in ("deactivate", "stop", "disable", "turn off", "turn of", "off", "of"):
             ctl_action = "stop"
         else:
             ctl_action = "status"
@@ -1207,6 +1208,7 @@ def _should_defer_to_builtin_busy_handler(event: Any) -> bool:
 def _patch_fallback_model_continuation() -> None:
     """Ensure fallback model / profile switches never prematurely stop an in-progress task."""
     with suppress(Exception):
+        import inspect
         import agent.turn_recovery as _tr
         import agent.chat_completion_helpers as _cch
         import agent.conversation_loop as _cl
@@ -1215,6 +1217,7 @@ def _patch_fallback_model_continuation() -> None:
         if not getattr(_tip, "_fallback_continuation_patched", False):
             orig_apply_retry_restarts = _tip.apply_retry_restarts
 
+            @functools.wraps(orig_apply_retry_restarts)
             def patched_apply_retry_restarts(agent, **kwargs):
                 if "max_retries" in kwargs and isinstance(kwargs["max_retries"], int):
                     kwargs["max_retries"] = max(kwargs["max_retries"], 12)
@@ -1222,6 +1225,10 @@ def _patch_fallback_model_continuation() -> None:
 
             _tip.apply_retry_restarts = patched_apply_retry_restarts
             _cl.apply_retry_restarts = patched_apply_retry_restarts
+            if hasattr(_cl, "_PHASE_PARAMS"):
+                _cl._PHASE_PARAMS[patched_apply_retry_restarts] = tuple(
+                    p for p in inspect.signature(orig_apply_retry_restarts).parameters if p != "agent"
+                )
             _tip._fallback_continuation_patched = True
             _tr._fallback_continuation_patched = True
 

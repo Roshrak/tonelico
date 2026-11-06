@@ -25,7 +25,8 @@ metadata:
    - Do NOT restrict chat triggers to question marks (`?`) or commands ("just talk"). When active, it talks freely with players in the room.
    - The ONLY messages to drop are:
      * Bot's own echo (`is_bot_echo()`).
-     * Messages sent by the current active player username (`Roshrak` / `Miracle_Involker`).
+     * Messages sent by the exact in-game character (`sender.strip().lower() == ACTIVE_USER.lower()`); do NOT strip `#0000` in `should_respond()`, so Discord-bridged messages (`roshrak#0000`) can still talk to the in-game bot.
+   - Coalesce rapid multi-line player bursts (`1.4s` quiet debounce up to `3.2s` max, joining lines with `" | "`) and re-drain after LLM generation so the responder never lags behind real-time chat or sends duplicate out-of-order replies.
 3. **Persona Isolation (Main vs. Alt)**:
    - **Main Account (`Roshrak`)**: Follows Roshrak's empirical speech (all lowercase, no trailing period, no `!`, deadpan slang: `yo`, `wb`, `ty`, `cya`, `alr`, `ye`, `nah`, `welp`, `bruh`, `af`, verb-drop).
    - **Alt Account (`Miracle_Involker`)**: Follows CFUK community speech (proper sentence capitalization, normal punctuation `!`, `?`, `.`, friendly smilies `:p`, `:D`, `:)`, `haha`, `gg`, cheerful tone). Never sound like Roshrak or mention AI/Morgan.

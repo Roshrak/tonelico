@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+CUA_LIBS="/nix/store/aaay1yrfqyhkpgq97d11gw4i35992q83-libx11-1.8.14/lib:/nix/store/ncvfcirz3d4g2maj5dvzwjwrimwvnhl6-libxi-1.8.3/lib:/nix/store/n2wqk78za8grzs9088ya5qy6vw280p8x-libxkbcommon-1.13.2/lib:/run/current-system/sw/share/nix-ld/lib"
+export LD_LIBRARY_PATH="${CUA_LIBS}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR}/bus}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+export DISPLAY="${DISPLAY:-:0}"
+export CUA_DRIVER_RS_ENABLE_WAYLAND="${CUA_DRIVER_RS_ENABLE_WAYLAND:-1}"
+exec /home/aesc/.cua-driver/packages/current/cua-driver "$@"

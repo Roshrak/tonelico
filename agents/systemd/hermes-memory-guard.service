@@ -1,0 +1,6 @@
+[Unit]
+Description=Hermes Memory Vault & Self-Healing Guardian
+
+[Service]
+Type=oneshot
+ExecStart=/home/aesc/.local/bin/hermes-memory-guard

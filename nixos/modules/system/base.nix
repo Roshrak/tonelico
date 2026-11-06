@@ -34,6 +34,10 @@
         dates = "weekly";
         options = "--delete-older-than 14d";
       };
+      services.journald.extraConfig = ''
+        SystemMaxUse=200M
+        RuntimeMaxUse=64M
+      '';
       nixpkgs.config.allowUnfree = true;
       # ~/.local/bin (slogout and the other personal commands) on PATH in every session,
       # including sessions whose terminals do not source Home Manager's session variables.

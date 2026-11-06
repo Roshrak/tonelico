@@ -1,0 +1,12 @@
+[Unit]
+Description=Watch Hermes memory files for immediate snapshot & anti-tamper protection
+
+[Path]
+PathChanged=/home/aesc/.hermes/memories/MEMORY.md
+PathChanged=/home/aesc/.hermes/memories/USER.md
+PathChanged=/home/aesc/.hermes/SOUL.md
+PathChanged=/home/aesc/AGENTS.md
+Unit=hermes-memory-guard.service
+
+[Install]
+WantedBy=default.target

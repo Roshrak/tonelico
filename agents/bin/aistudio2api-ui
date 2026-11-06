@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PATH="/run/wrappers/bin:/run/current-system/sw/bin:/etc/profiles/per-user/aesc/bin:/home/aesc/.nix-profile/bin:/home/aesc/.local/bin:${PATH:-}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+
+URL="http://127.0.0.1:2048/"
+
+# Ensure the background service is running
+if ! curl -fsS --max-time 1 "${URL}api/status" >/dev/null 2>&1; then
+  systemctl --user start aistudio2api.service >/dev/null 2>&1 || true
+  for _ in $(seq 1 15); do
+    if curl -fsS --max-time 1 "${URL}api/status" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.3
+  done
+fi
+
+# Launch as a clean standalone app window in Chromium
+nohup chromium --app="$URL" >/dev/null 2>&1 &

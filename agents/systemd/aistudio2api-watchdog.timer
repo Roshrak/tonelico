@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic health check for AIStudio2API generation service
+
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target default.target
