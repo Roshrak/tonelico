@@ -23,8 +23,14 @@
       discord = pkgs.discord.override { commandLineArgs = "--ozone-platform=wayland"; };
       hermes = inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.messaging;
       chromiumLauncher = pkgs.writeShellScript "chromium-app" ''
-        export WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-wayland-1}"
         export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+        if [ -z "''${WAYLAND_DISPLAY:-}" ]; then
+          if [ -S "$XDG_RUNTIME_DIR/wayland-1" ]; then
+            export WAYLAND_DISPLAY="wayland-1"
+          else
+            export WAYLAND_DISPLAY="wayland-0"
+          fi
+        fi
         export GTK_USE_PORTAL=1
         exec ${chromium}/bin/chromium --ozone-platform=wayland --remote-debugging-port=9222 "$@"
       '';
