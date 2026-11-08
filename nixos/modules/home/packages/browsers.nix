@@ -70,6 +70,11 @@
             "layout.css.prefers-color-scheme.content-override" = { Value = 0; Status = "default"; };
             "browser.search.suggest.enabled" = { Value = true; Status = "default"; };
             "browser.urlbar.suggest.searches" = { Value = true; Status = "default"; };
+            "general.smoothScroll" = { Value = true; Status = "default"; };
+            "browser.tabs.unloadOnLowMemory" = { Value = true; Status = "default"; };
+            "browser.cache.disk.enable" = { Value = false; Status = "default"; };
+            "browser.cache.memory.enable" = { Value = true; Status = "default"; };
+            "browser.cache.memory.capacity" = { Value = 131072; Status = "default"; };
           };
           SearchEngines = {
             Default = "Google";
@@ -114,48 +119,6 @@
               default_area = "navbar";
             };
           };
-        };
-        settings = {
-          # Keep Gmail / Google sessions & cookies persistent across browser restarts.
-          "privacy.sanitize.sanitizeOnShutdown" = false;
-          "privacy.clearOnShutdown.cookies" = false;
-          "privacy.clearOnShutdown.offlineApps" = false;
-          "privacy.clearOnShutdown.sessions" = false;
-          "privacy.clearOnShutdown.history" = false;
-          "privacy.clearOnShutdown.Cache" = false;
-          "privacy.clearOnShutdown_v2.cookiesAndStorage" = false;
-          "privacy.clearOnShutdown_v2.historyFormDataAndDownloads" = false;
-          "privacy.clearOnShutdown_v2.cache" = false;
-          "network.cookie.lifetimePolicy" = 0;
-          "browser.startup.page" = 3;
-
-          # Use modern Fingerprinting Protection (FPP) instead of legacy RFP so dark mode,
-          # local +07:00 timezone, high-refresh-rate Wayland, and Google/Gmail work seamlessly.
-          "privacy.resistFingerprinting" = false;
-          "privacy.fingerprintingProtection" = true;
-          "privacy.fingerprintingProtection.overrides" = "+AllTargets,-CSSPrefersColorScheme,-JSDateTimeUTC,-FrameRate";
-          "webgl.disabled" = false;
-
-          # Wayland hardware acceleration, VA-API video decoding & smooth performance.
-          "gfx.webrender.all" = true;
-          "media.ffmpeg.vaapi.enabled" = true;
-          "media.hardware-video-decoding.force-enabled" = true;
-          "widget.dmabuf.force-enabled" = true;
-          "general.smoothScroll" = true;
-
-          # Low-RAM tuning & fast memory cache.
-          "browser.tabs.unloadOnLowMemory" = true;
-          "browser.cache.disk.enable" = false;
-          "browser.cache.memory.enable" = true;
-          "browser.cache.memory.capacity" = 131072;
-
-          # Enable Multi-Account Containers for extra Gmail accounts.
-          "privacy.userContext.enabled" = true;
-          "privacy.userContext.ui.enabled" = true;
-
-          # Dark theme preference.
-          "ui.systemUsesDarkTheme" = 1;
-          "layout.css.prefers-color-scheme.content-override" = 0;
         };
       };
     }
