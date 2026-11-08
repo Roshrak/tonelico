@@ -103,7 +103,15 @@
           "DefaultHidGuardSetting": 2,
           "DefaultWindowManagementSetting": 2,
           "DefaultGeolocationSetting": 2,
-          "DefaultNotificationsSetting": 2
+          "DefaultNotificationsSetting": 2,
+          "ExtensionDeveloperModeSettings": 0,
+          "ExtensionSettings": {
+            "ddkjiahejlhfcafbddmgiahcphecmpfh": { "installation_mode": "blocked" },
+            "ikclbgejgcbdlhjmckecmdljlpbhmbmf": { "installation_mode": "blocked" },
+            "inomeogfingihgjfjlpeplalcfajhgai": { "installation_mode": "blocked" },
+            "ldpochfccmkkmhdbclfhpagapcfdljkj": { "installation_mode": "blocked" },
+            "pkehgijcmpdhfbdbbnkijodmdjhbjlgp": { "installation_mode": "blocked" }
+          }
         }
       '';
     }
