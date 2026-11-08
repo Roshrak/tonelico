@@ -23,7 +23,7 @@ let
       host = readHost hostKey;
       codexPackage = inputs.codex-nixpkgs.legacyPackages.${host.system}.codex;
       # Only the browser uses this; replacing pkgs.chromium would also rebuild Electron.
-      chromiumPackage = inputs.chromium-nixpkgs.legacyPackages.${host.system}.ungoogled-chromium;
+      chromiumPackage = inputs.chromium-nixpkgs.legacyPackages.${host.system}.chromium;
     in
     lib.nameValuePair hostKey (
       inputs.nixpkgs.lib.nixosSystem {

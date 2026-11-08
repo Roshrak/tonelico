@@ -144,11 +144,11 @@ password_style = "random"
     transparency_mode = "glass"
 
 [theme]
-builtin = "Gruvbox"
+builtin = "Tokyo-Night"
 community_palette = "Oxocarbon"
 custom_palette = "konachan-com-362509-bikini-bow-braids-breasts-bunny-fang-flowers-gray-eyes-headdress-long-hair-navel-red-hair-ribbons-rose-signed-swimsuit-thighhighs-wristwear-vib"
 mode = "dark"
-source = "wallpaper"
+source = "builtin"
 wallpaper_scheme = "m3-fruit-salad"
 
     [theme.templates]
@@ -157,18 +157,19 @@ wallpaper_scheme = "m3-fruit-salad"
 
 [wallpaper]
 directory = "/home/aesc/Pictures/Wallpapers"
+fill_mode = "stretch"
 
     [wallpaper.default]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/miku.jpg"
 
     [wallpaper.last]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/miku.jpg"
 
     [wallpaper.monitors.HDMI-A-1]
     path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
 
     [wallpaper.monitors.eDP-1]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/miku.jpg"
 
     [[wallpaper.favorite]]
     palette_source = "wallpaper"

@@ -5,43 +5,20 @@
     let
       home = config.home.homeDirectory;
       portable = path: lib.replaceStrings [ "/home/aesc" ] [ home ] (builtins.readFile path);
-      ublockOrigin = pkgs.fetchzip {
-        url = "https://github.com/gorhill/uBlock/releases/download/1.75.4/uBlock0_1.75.4.chromium.zip";
-        hash = "sha256-W1JDkCRE/D1N8VhmitNyP6I2JT2X/C9L0GLEn3HH+EE=";
-      };
       chromiumFlags = [
         "--password-store=basic"
         "--ozone-platform=wayland"
         "--enable-gpu-rasterization"
         "--enable-zero-copy"
-        "--process-per-site"
-        "--renderer-process-limit=4"
-        "--aggressive-cache-discard"
-        "--disk-cache-size=104857600"
-        "--media-cache-size=52428800"
         "--disable-background-networking"
         "--disable-breakpad"
         "--disable-crash-reporter"
-        "--disable-component-update"
         "--disable-domain-reliability"
-        "--disable-sync"
         "--disable-pings"
         "--no-default-browser-check"
         "--no-first-run"
-        "--no-service-autorun"
-        "--disable-speech-api"
-        "--reduced-referrer-granularity"
-        "--disable-search-engine-collection"
-        "--disable-beforeunload"
-        "--enforce-webrtc-ip-permission-check"
-        "--force-webrtc-ip-handling-policy=default_public_interface_only"
-        "--fingerprinting-canvas-image-data-noise"
-        "--fingerprinting-canvas-measuretext-noise"
-        "--fingerprinting-client-rects-noise"
-        "--extension-mime-request-handling=always-prompt-for-install"
-        "--load-extension=${ublockOrigin}"
-        "--enable-features=VaapiVideoDecoder,VaapiIgnoreDriverChecks,HighEfficiencyModeAvailable,DestroyProfileOnBrowserClose,UnretainedPageCache,ReducedSystemInfo,PartitionConnectionsByNetworkIsolationKey,SplitCacheByNetworkIsolationKey,EnableTabMuting"
-        "--disable-features=OptimizationHints,OptimizationGuideModelDownloading,OptimizationTargetPrediction,OptimizationHintsFetching,MediaRouter,DialMediaRouteProvider,Translate,PrivacySandboxSettings4,AutofillServerCommunication,InterestFeedContentSuggestions,CertificateTransparencyComponentUpdater,BackForwardCache,Prerender2"
+        "--enable-features=VaapiVideoDecoder,VaapiIgnoreDriverChecks,HighEfficiencyModeAvailable,CanvasOopRasterization"
+        "--disable-features=OptimizationHints,OptimizationGuideModelDownloading,OptimizationTargetPrediction,OptimizationHintsFetching,MediaRouter,DialMediaRouteProvider,PrivacySandboxSettings4,AutofillServerCommunication,InterestFeedContentSuggestions"
       ];
       chromium = pkgs.chromium-latest.override { commandLineArgs = chromiumFlags; };
       discord = pkgs.discord.override { commandLineArgs = "--ozone-platform=wayland"; };
@@ -50,10 +27,6 @@
         export WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-wayland-1}"
         export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
         export GTK_USE_PORTAL=1
-        pref="${home}/.config/chromium/Default/Preferences"
-        if [ -f "$pref" ] && ! ${pkgs.gnugrep}/bin/grep -q '"developer_mode":true' "$pref" 2>/dev/null; then
-          ${pkgs.jq}/bin/jq -c '.extensions.ui.developer_mode = true | .extensions.ui.mv2_deprecation_notice_dismissed = true | del(.extensions.settings.nlmikpjakmmgggciakfjgoaeickbodhl.disable_reasons)' "$pref" > "$pref.tmp" && mv -f "$pref.tmp" "$pref" || rm -f "$pref.tmp"
-        fi
         exec ${chromium}/bin/chromium --ozone-platform=wayland --remote-debugging-port=9222 "$@"
       '';
       scripts = [
