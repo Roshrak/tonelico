@@ -68,6 +68,23 @@
             "privacy.userContext.ui.enabled" = { Value = true; Status = "locked"; };
             "ui.systemUsesDarkTheme" = { Value = 1; Status = "default"; };
             "layout.css.prefers-color-scheme.content-override" = { Value = 0; Status = "default"; };
+            "browser.search.suggest.enabled" = { Value = true; Status = "default"; };
+            "browser.urlbar.suggest.searches" = { Value = true; Status = "default"; };
+          };
+          SearchEngines = {
+            Default = "Google";
+            PreventInstalls = false;
+            Add = [
+              {
+                Name = "Google";
+                URLTemplate = "https://www.google.com/search?q={searchTerms}";
+                Method = "GET";
+                IconURL = "https://www.google.com/favicon.ico";
+                Alias = "@g";
+                Description = "Google Search";
+                SuggestURLTemplate = "https://www.google.com/complete/search?client=firefox&q={searchTerms}";
+              }
+            ];
           };
           ManagedBookmarks = [
             { toplevel_name = "Gmail Accounts"; }
@@ -89,9 +106,7 @@
               default_area = "navbar";
             };
             "{7be2ba16-0f1e-4d93-9ebc-5164397477a9}" = {
-              install_url = "https://addons.mozilla.org/firefox/downloads/latest/videospeed/latest.xpi";
-              installation_mode = "force_installed";
-              default_area = "navbar";
+              installation_mode = "blocked";
             };
             "@testpilot-containers" = {
               install_url = "https://addons.mozilla.org/firefox/downloads/latest/multi-account-containers/latest.xpi";

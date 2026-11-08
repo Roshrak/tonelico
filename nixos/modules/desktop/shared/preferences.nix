@@ -79,6 +79,12 @@
           "DnsOverHttpsMode": "automatic",
           "WebRtcIPHandling": "default_public_interface_only",
           "PaymentMethodQueryEnabled": false,
+          "DefaultSearchProviderEnabled": true,
+          "DefaultSearchProviderName": "Google",
+          "DefaultSearchProviderKeyword": "google.com",
+          "DefaultSearchProviderSearchURL": "https://www.google.com/search?q={searchTerms}",
+          "DefaultSearchProviderSuggestURL": "https://www.google.com/complete/search?output=chrome&q={searchTerms}",
+          "SearchSuggestEnabled": true,
           "ExtensionSettings": {
             "ddkjiahejlhfcafbddmgiahcphecmpfh": {
               "installation_mode": "normal_installed",
@@ -86,9 +92,7 @@
               "toolbar_pin": "force_pinned"
             },
             "hdannnflhlmdablckfkjpleikpphncik": {
-              "installation_mode": "normal_installed",
-              "update_url": "https://clients2.google.com/service/update2/crx",
-              "toolbar_pin": "force_pinned"
+              "installation_mode": "blocked"
             }
           }
         }

@@ -314,7 +314,24 @@ def main() -> int:
         except Exception:
             pass
 
-    # 8. Stop idle background memory-bloat user services (KDE portals/indexers, duplicate trays)
+    # 8. Ensure MCP schema cache entries never have ttl_ms=0 (which breaks lazy startup)
+    mcp_cache_file = hermes_dir / "cache" / "mcp_schema_cache.json"
+    if mcp_cache_file.is_file():
+        try:
+            import json
+            cache_obj = json.loads(mcp_cache_file.read_text(encoding="utf-8"))
+            changed_cache = False
+            for srv_entry in cache_obj.values():
+                if isinstance(srv_entry, dict) and srv_entry.get("ttl_ms") == 0:
+                    srv_entry["ttl_ms"] = 604800000
+                    srv_entry["written_at"] = now
+                    changed_cache = True
+            if changed_cache:
+                mcp_cache_file.write_text(json.dumps(cache_obj, indent=2) + "\n", encoding="utf-8")
+        except Exception:
+            pass
+
+    # 9. Stop idle background memory-bloat user services (KDE portals/indexers, duplicate trays)
     for idle_svc in (
         "localsearch-3.service",
         "kunifiedpush-distributor.service",
