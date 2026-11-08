@@ -64,7 +64,28 @@ Protocol for inspecting, diagnosing, and fixing browser DOM issues, visual artif
      ```
    - This provides instant gratification and preserves active form inputs, playback, or work in progress.
 
-## 5. Automating Embedded Router / Admin Web UIs over CDP
+## 5. Managing Extensions & Unpacked MV2 Extensions via `chrome://extensions` CDP
+- **Enabling Unpacked `--load-extension` (e.g., Full MV2 uBlock Origin)**:
+  - Chromium 138+ automatically disables unpacked `--load-extension` directories with `disable_reasons: [16777216]` (`DISABLE_UNSUPPORTED_DEVELOPER_EXTENSION`) unless Developer Mode is enabled in the profile (`"extensions": {"ui": {"developer_mode": true}}` in `Default/Preferences`) and allowed by policy (`"ExtensionDeveloperModeSettings": 0` in `/etc/chromium/policies/managed/default-browser.json`).
+  - To enable Developer Mode and activate an unpacked MV2 extension live without restarting Chromium:
+    1. Open a temporary `chrome://extensions` target via `PUT http://127.0.0.1:9222/json/new?chrome://extensions`.
+    2. Connect to its `webSocketDebuggerUrl` and evaluate via `Runtime.evaluate` (`awaitPromise: true`):
+       ```javascript
+       await chrome.developerPrivate.updateProfileConfiguration({
+         inDeveloperMode: true,
+         isMv2DeprecationNoticeDismissed: true
+       });
+       await chrome.management.setEnabled(extensionId, true);
+       await chrome.developerPrivate.updateExtensionConfiguration({
+         extensionId,
+         pinnedToToolbar: true
+       });
+       ```
+    3. Close the temporary `chrome://extensions` tab via `http://127.0.0.1:9222/json/close/<tab_id>`.
+- **Removing Installed Extensions Without Triggering `Error ⋮` or `ERR_FILE_NOT_FOUND`**:
+  - Never delete an extension folder from `~/.config/chromium/Default/Extensions/<id>` while Chromium is running without also disabling it via `chrome.management.setEnabled(id, false)` on `chrome://extensions` and blocking its ID in `/etc/chromium/policies/managed/default-browser.json` (`"ExtensionSettings": { "<id>": { "installation_mode": "blocked" } }`) — otherwise Chromium's in-memory `ExtensionRegistry` overwrites `Preferences`, flags the missing directory as corrupted (`Error ⋮` pill in the toolbar), and opens broken `ERR_FILE_NOT_FOUND` onboarding tabs.
+
+## 6. Automating Embedded Router / Admin Web UIs over CDP
 - **Server-side active-page state:** Embedded `.asp`/CGI web servers (e.g., Econet/ZTE/ISP ONTs) track the last-requested `.asp` page in server-side session state. Fetching other `.asp` pages via background `fetch()` shifts the server's active page context and causes subsequent form submissions to redirect or fail. Always navigate the tab back to the target page (`location.href = '/cgi-bin/...'`) and wait for `onload` initialization before calling `doSubmit()`.
 - **Custom dropdown (`custom-select`) synchronization:** When `<select>` elements are wrapped in `.custom-select` containers, call the page's native selector helper (e.g., `setSelect(id, val)` / `cs_chooseoption`) and invoke its visibility/change handler (e.g., `Show_DNS_mode()`, `RATypeClick()`, `typev6Click()`) rather than setting `.value` alone, ensuring both hidden form fields and visible UI controls serialize accurately.
 - **Upstream IPv6 verification before enabling LAN SLAAC/DHCPv6:** ISP ONTs often display a delegated WAN `/64` prefix (`wan_ipv6_stt: up`) even when the upstream OLT drops outbound IPv6 packets (`ping6_ret: 1`). After enabling LAN SLAAC/DHCPv6, immediately verify end-to-end routing with `ping -6 -c 3 -W 2 2606:4700:4700::1111`; if packet loss is 100%, disable LAN SLAAC and DHCPv6 so clients do not suffer Happy Eyeballs connection timeouts.

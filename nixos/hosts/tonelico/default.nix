@@ -50,6 +50,9 @@ in
   boot.extraModulePackages = [ acerWmiBattery ];
   boot.extraModprobeConfig = ''
     options acer-wmi-battery enable_health_mode=1
+    options snd_hda_intel power_save=0 power_save_controller=N
+    options iwlwifi power_save=0
+    options iwlmvm power_scheme=1
   '';
   systemd.services.acer-wmi-battery = {
     description = "Enable and verify Acer 80% battery charge limit";
