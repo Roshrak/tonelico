@@ -50,6 +50,10 @@
         export WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-wayland-1}"
         export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
         export GTK_USE_PORTAL=1
+        pref="${home}/.config/chromium/Default/Preferences"
+        if [ -f "$pref" ] && ! ${pkgs.gnugrep}/bin/grep -q '"developer_mode":true' "$pref" 2>/dev/null; then
+          ${pkgs.jq}/bin/jq -c '.extensions.ui.developer_mode = true | .extensions.ui.mv2_deprecation_notice_dismissed = true | del(.extensions.settings.nlmikpjakmmgggciakfjgoaeickbodhl.disable_reasons)' "$pref" > "$pref.tmp" && mv -f "$pref.tmp" "$pref" || rm -f "$pref.tmp"
+        fi
         exec ${chromium}/bin/chromium --ozone-platform=wayland --remote-debugging-port=9222 "$@"
       '';
       scripts = [
