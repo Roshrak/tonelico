@@ -93,7 +93,17 @@
           "TranslateEnabled": false,
           "CloudReportingEnabled": false,
           "PaymentMethodQueryEnabled": false,
-          "NetworkPredictionOptions": 2
+          "NetworkPredictionOptions": 2,
+          "WebRtcIPHandling": "default_public_interface_only",
+          "DefaultSensorsSetting": 2,
+          "DefaultLocalFontsSetting": 2,
+          "DefaultWebUsbGuardSetting": 2,
+          "DefaultWebBluetoothGuardSetting": 2,
+          "DefaultSerialGuardSetting": 2,
+          "DefaultHidGuardSetting": 2,
+          "DefaultWindowManagementSetting": 2,
+          "DefaultGeolocationSetting": 2,
+          "DefaultNotificationsSetting": 2
         }
       '';
     }
