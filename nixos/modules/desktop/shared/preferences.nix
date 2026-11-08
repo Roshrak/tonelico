@@ -52,11 +52,48 @@
         VisibleBell=false
       '';
 
-      # Chromium policy: never nag about being the default browser.
+      # Chromium policy: Ungoogled maximum privacy, zero AI/telemetry bloat, and aggressive RAM saver.
       # Declarative (was a manual /etc/chromium/... copy) so reinstalls keep it.
       environment.etc."chromium/policies/managed/default-browser.json".text = ''
         {
-          "DefaultBrowserSettingEnabled": false
+          "DefaultBrowserSettingEnabled": false,
+          "BackgroundModeEnabled": false,
+          "HighEfficiencyModeEnabled": true,
+          "MemorySaverModeSavings": 1,
+          "BatterySaverModeAvailability": 0,
+          "HardwareAccelerationModeEnabled": true,
+          "MetricsReportingEnabled": false,
+          "UrlKeyedAnonymizedDataCollectionEnabled": false,
+          "FeedbackSurveysEnabled": false,
+          "SpellCheckServiceEnabled": false,
+          "SearchSuggestEnabled": false,
+          "AlternateErrorPagesEnabled": false,
+          "AutofillAddressEnabled": false,
+          "AutofillCreditCardEnabled": false,
+          "PasswordManagerEnabled": false,
+          "ShoppingListEnabled": false,
+          "PromotionsEnabled": false,
+          "BuiltInAiAPIsEnabled": false,
+          "GenAiDefaultSettings": 2,
+          "HelpMeWriteSettings": 2,
+          "TabCompareSettings": 2,
+          "HistorySearchSettings": 2,
+          "CreateThemesSettings": 2,
+          "PrivacySandboxPromptEnabled": false,
+          "PrivacySandboxAdMeasurementEnabled": false,
+          "PrivacySandboxAdTopicsEnabled": false,
+          "PrivacySandboxSiteEnabledAdsEnabled": false,
+          "BlockThirdPartyCookies": true,
+          "DnsOverHttpsMode": "automatic",
+          "HttpsOnlyMode": "force_enabled",
+          "SafeBrowsingProtectionLevel": 0,
+          "SafeBrowsingExtendedReportingEnabled": false,
+          "SigninAllowed": false,
+          "SyncDisabled": true,
+          "TranslateEnabled": false,
+          "CloudReportingEnabled": false,
+          "PaymentMethodQueryEnabled": false,
+          "NetworkPredictionOptions": 2
         }
       '';
     }

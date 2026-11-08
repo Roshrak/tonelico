@@ -29,6 +29,7 @@
 
       environment.etc."kanshi/mango.conf".source = mkKanshiConfig "mango";
       environment.etc."kanshi/niri.conf".source = mkKanshiConfig "niri";
+      environment.etc."kanshi/umbriel.conf".source = mkKanshiConfig "umbriel";
       environment.etc."kanshi/sway.conf".source = mkKanshiConfig "sway";
       environment.etc."kanshi/hyprland.conf".source = mkKanshiConfig "hyprland";
     }

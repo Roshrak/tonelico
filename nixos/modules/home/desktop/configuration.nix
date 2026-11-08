@@ -15,6 +15,8 @@
           [ ''include "colors.kdl"'' ]
           [ ''include "${config.xdg.configHome}/niri/colors.kdl"'' ]
           (portable ../../../home/files/config/niri/config.kdl);
+      xdg.configFile."umbriel/config.toml".text =
+        portable ../../../home/files/config/umbriel/config.toml;
       xdg.configFile."sway/config".text = portable ../../../home/files/config/sway/config;
       xdg.configFile."sway/noctalia".text = portable ../../../home/files/config/sway/noctalia;
       xdg.configFile."hypr/hyprland.lua".text =
@@ -36,6 +38,7 @@
         seed ${pkgs.writeText "mango-noctalia.conf" (portable ../../../home/files/config/mango/noctalia.conf)} "$HOME/.config/mango/noctalia.conf"
         seed ${pkgs.writeText "mango-monitor-layout.conf" (portable ../../../home/files/config/mango/monitor-layout.conf)} "$HOME/.config/mango/monitor-layout.conf"
         seed ${../../../home/files/config/niri/colors.kdl} "$HOME/.config/niri/colors.kdl"
+        seed ${../../../home/files/config/umbriel/noctalia.toml} "$HOME/.config/umbriel/noctalia.toml"
         seed ${../../../home/files/config/sway/colors} "$HOME/.config/sway/colors"
         seed ${../../../home/files/config/kitty/default-theme.conf} "$HOME/.config/kitty/themes/default.conf"
       '';

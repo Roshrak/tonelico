@@ -26,9 +26,12 @@ metadata:
    - If no plaintext match, fall back to encrypted extraction: scan for `dQw4w9WgXcQ:([A-Za-z0-9+/=]+)`, base64-decode, split `nonce = raw[3:15]`, `ciphertext = raw[15:-16]`, `tag = raw[-16:]`, derive AES-GCM key via `hashlib.pbkdf2_hmac("sha1", secret, b"saltysalt", 1, 16)` with system keyring or Linux Chromium fallback `b"peanuts"`.
    - Verify any extracted token against `GET https://discord.com/api/v10/users/@me` in memory before proceeding.
 
-### 2. Archive Standard Text Channels in Parallel
-1. List all guild channels (`GET /api/v10/guilds/<guild_id>/channels`) and filter to text/announcement channels (`type in (0, 5)`).
-2. Paginate each standard channel from newest to oldest using `GET /api/v10/channels/<channel_id>/messages?limit=100&before=<last_id>` across 3–4 worker threads:
+### 2. Archive Standard, Voice-Text, and Forum Channels in Parallel
+1. List all guild channels (`GET /api/v10/guilds/<guild_id>/channels`):
+   - Include standard text, voice-text, and announcement channels (`type in (0, 2, 5)`). Probe accessibility with `limit=5` first and skip `403 Forbidden` channels.
+   - Include Forum channels (`type == 15`), whose posts are threads rather than direct channel messages: enumerate `GET /api/v10/guilds/<guild_id>/threads/active` and paginate `GET /api/v10/channels/<channel_id>/threads/archived/public?limit=100&before=<iso_archive_timestamp>` (using `threads[-1]["thread_metadata"]["archive_timestamp"]` while `has_more` is true), then fetch messages for each thread ID via `GET /api/v10/channels/<thread_id>/messages`.
+2. For existing local archives (`<archive_dir>/channel_<name>_<id>.json`), compare the channel's live `last_message_id` against `max(int(m["id"]) for m in local_msgs)`. When newer messages exist, top up incrementally via `GET /api/v10/channels/<channel_id>/messages?limit=100&after=<max_id>` (Discord still returns newest-first on `after=` queries, so advance `after` to `max(int(m["id"]) for m in batch)` each page).
+3. For unarchived channels, paginate from newest to oldest using `GET /api/v10/channels/<channel_id>/messages?limit=100&before=<last_id>` across 3–4 worker threads:
    - Sleep `0.25s` between page requests per worker.
    - On HTTP 429, read `retry_after` from the JSON body and sleep `retry_after + 0.5` seconds before retrying.
    - Save each channel to `<archive_dir>/channel_<name>_<id>.json`.
@@ -59,13 +62,17 @@ metadata:
 4. For batch analysis of many screenshots (10+), run parallel `vision_analyze` or fast multimodal requests (e.g. `gemini-3.8-flash-high`) via `ThreadPoolExecutor` or `delegate_task` — each image gets analyzed independently with high token limits (`max_tokens=8192`) to prevent truncation of lengthy signs and item tooltips.
 5. Save transcription results to a report file alongside the downloaded images for cross-referencing.
 
-### 6. Extract Empirical Speech Profiles
-1. Separate messages by channel context (e.g., general Discord chat vs. in-game bridge messages, where mobile auto-capitalization differs from desktop keyboard input).
-2. Compute quantitative metrics before modifying any persona prompt:
+### 6. Extract Empirical Speech Profiles & Unify Identities
+1. Unify Discord accounts with in-game bridge webhooks before aggregating speaker stats:
+   - Bridge webhooks set `message.webhook_id` and `author.bot = true`, placing the player's in-game name in `author.username` (often escaping underscores as `\_`). Strip `\_` to `_` and link known in-game names to their primary Discord `author.id` while tracking Discord vs. in-game counts separately.
+   - Filter automated bridge status lines (`^(:arrow_left:|:arrow_right:|:person_standing:|:person_walking:|:medal:|:chart_with_upwards_trend:|:skull:|:dragon_face:|:trophy:)`) out of human speech metrics so login/logout/AFK/advancement notices do not skew word frequencies or length distributions.
+   - Do not treat `author.id == "456226577798135808"` (`Deleted User`) as a single speaker — Discord assigns that constant dummy snowflake to every deleted account across the guild. Segment messages under `456226577798135808` by date range, channel, and surrounding reply context when attributing historical quotes.
+2. Separate messages by channel context (e.g., general Discord chat vs. in-game bridge messages, where mobile auto-capitalization differs from desktop keyboard input).
+3. Compute quantitative metrics before modifying any persona prompt:
    - Word and character length distributions (median, mean, and bucket percentages: `1-2`, `3-5`, `6-10`, `11-20`, `21+` words).
    - Casing ratios (strictly all-lowercase vs. sentence-case vs. all-caps).
-   - Terminal punctuation rates (no ending period vs. `.`, `?`, `!`) and emoticon frequency.
-   - Exact single-word/short-burst frequency rankings, recurring contractions/shortcuts, copula-drop patterns, and negative markers (slang terms the user never uses).
+   - Terminal punctuation rates (no ending period vs. `.`, `?`, `!`), ellipsis rates (`...`), and emoticon/emoji frequency.
+   - Exact single-word/short-burst frequency rankings, recurring bigrams, sentence starters, contractions/shortcuts, copula-drop patterns, and negative markers (slang terms the user never uses).
 
 ### 7. Mandatory Cleanup
 1. Delete any temporary scripts in `$TMPDIR` / `~/.hermes/cache/scratch/` that read LevelDB or hold tokens immediately after the dump completes.

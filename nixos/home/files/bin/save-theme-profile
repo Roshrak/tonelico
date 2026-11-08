@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# save-theme-profile <mango|kde|niri|sway>
+# save-theme-profile <mango|kde|niri|umbriel|sway|hyprland>
 # Persists the active session's Kitty, GTK, Qt, and Noctalia settings into the
 # named session profile so they survive reboot and remain completely isolated.
 set -euo pipefail
 
 PROFILE_ROOT="$HOME/.config/theme-profiles"
-PROFILES=(mango kde niri sway)
+PROFILES=(mango kde niri umbriel sway hyprland)
 
 usage() {
-    echo "Usage: save-theme-profile <mango|kde|niri|sway>" >&2
+    echo "Usage: save-theme-profile <mango|kde|niri|umbriel|sway|hyprland>" >&2
     exit 2
 }
 
@@ -90,6 +90,11 @@ case "$profile" in
     niri)
         if [ -f "$HOME/.config/niri/colors.kdl" ]; then
             atomic_copy "$HOME/.config/niri/colors.kdl" "$dest/colors.kdl"
+        fi
+        ;;
+    umbriel)
+        if [ -f "$HOME/.config/umbriel/noctalia.toml" ]; then
+            atomic_copy "$HOME/.config/umbriel/noctalia.toml" "$dest/noctalia.toml"
         fi
         ;;
     sway)

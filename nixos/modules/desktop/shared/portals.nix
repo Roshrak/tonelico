@@ -1,4 +1,4 @@
-{ ... }:
+{ inputs, ... }:
 {
   nixos.portals =
     { lib, pkgs, ... }:
@@ -12,6 +12,7 @@
         pkgs.xdg-desktop-portal-wlr
         pkgs.xdg-desktop-portal-gnome
         pkgs.xdg-desktop-portal-hyprland
+        inputs.umbriel.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-umbriel
         pkgs.kdePackages.xdg-desktop-portal-kde
         pkgs.kdePackages.kwallet
         pkgs.gnome-keyring
@@ -38,6 +39,18 @@
           "org.freedesktop.impl.portal.Notification" = "gtk";
           "org.freedesktop.impl.portal.ScreenCast" = "gnome";
           "org.freedesktop.impl.portal.Screenshot" = "gnome";
+          "org.freedesktop.impl.portal.Secret" = "gnome-keyring";
+        };
+
+        umbriel = {
+          default = lib.mkForce [
+            "umbriel"
+            "gtk"
+          ];
+          "org.freedesktop.impl.portal.FileChooser" = lib.mkForce "kde";
+          "org.freedesktop.impl.portal.InputCapture" = "umbriel";
+          "org.freedesktop.impl.portal.ScreenCast" = "umbriel";
+          "org.freedesktop.impl.portal.Screenshot" = "umbriel";
           "org.freedesktop.impl.portal.Secret" = "gnome-keyring";
         };
 

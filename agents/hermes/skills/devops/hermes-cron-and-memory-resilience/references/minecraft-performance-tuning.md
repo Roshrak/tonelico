@@ -4,8 +4,21 @@
 1. **Intel Meteor Lake iGPU Shared Memory**:
    - Linux (`i915`/`xe` + Mesa Iris/ANV) dynamically allocates up to 50% of system LPDDR5X RAM (~7.6 GiB) to the integrated GPU regardless of the InsydeH2O BIOS UMA setting; BIOS NVRAM edits are unnecessary for VRAM capacity.
 2. **Power Profile & iGPU Minimum Clock**:
-   - Ensure `powerprofilesctl set performance` is active when gaming (`energy_performance_preference = performance` rather than `power`).
-   - Raise the Intel iGPU minimum floor to RP1 (`echo 800 | sudo tee /sys/class/drm/card1/gt_min_freq_mhz`) to prevent 100 MHz downclock micro-stutters between frames.
+   - Keep `powerprofilesctl set performance` active at all times (`energy_performance_preference = performance`; never switch to `power-saver`, even when clearing RAM/processes for idle cooling, because the laptop stays on charger full-time).
+   - Keep the Intel iGPU minimum floor at hardware RPn/RP1 (`800 MHz` on Meteor Lake-P `8086:7d45`, `/sys/class/drm/card1/gt_min_freq_mhz`) to prevent frame-time micro-stutters.
+   - To launch `Fabulously Optimized` on CFUK with a specific PrismLauncher account profile (`Roshrak` or `Miracle_Involker`) from a background daemon, export the active Niri session environment and pass `--profile`:
+     ```bash
+     export XDG_RUNTIME_DIR=/run/user/1000
+     export WAYLAND_DISPLAY=wayland-1
+     export NIRI_SOCKET=$(ls -t /run/user/1000/niri.*.sock | head -n1)
+     export XDG_CURRENT_DESKTOP=niri
+     export XDG_SESSION_ID=$(loginctl list-sessions --no-legend | awk '$3=="aesc" && $4=="seat0" {print $1; exit}')
+     python3 /home/aesc/vivian/launch_mc_and_spawn.py \
+       --instance "Fabulously Optimized" \
+       --profile "Miracle_Involker" \
+       --server "alt.crazy-fools.co.uk:25565" \
+       --no-spawn
+     ```
 3. **Declarative GameMode & VM/ZRAM Sysctls**:
    - Keep `programs.gamemode` and kernel sysctls configured in `/etc/nixos/modules/features/gaming.nix`:
      ```nix

@@ -8,6 +8,7 @@
       "noctalia"
       "plasma"
       "niri"
+      "umbriel"
       "sway"
       "monitor-layout"
       "hyprland"

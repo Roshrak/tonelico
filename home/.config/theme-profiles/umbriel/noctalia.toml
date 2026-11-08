@@ -1,0 +1,48 @@
+# Noctalia theme for Umbriel (matching Tonelico Niri colors.kdl)
+
+[colors]
+background = "#0f141c"
+backdrop = "#000000"
+text_primary = "#dee2ef"
+text_muted = "#bec7d4"
+accent_primary = "#50d8ec"
+accent_secondary = "#b2cbd1"
+warning = "#bbc5e8"
+error = "#ffb4ab"
+shadow = "#00000070"
+insert_hint = "#50d8ec80"
+
+[colors.border]
+focused = "#50d8ec"
+unfocused = "#0f141c"
+outer = "#3f484b"
+
+[colors.overview]
+background_tint = "#0f141ccc"
+workspace_background = "#1b202988"
+badge = "#50d8ec"
+
+[colors.title_bar]
+background = "#30353e"
+background_unfocused = "#1b2029"
+text = "#dee2ef"
+text_unfocused = "#bec7d4"
+close = "#ffb4ab"
+close_glyph = "#690005"
+close_glyph_hover = "#690005"
+maximize = "#50d8ec"
+maximize_glyph = "#00363d"
+maximize_glyph_hover = "#00363d"
+minimize = "#bbc5e8"
+minimize_glyph = "#252f4b"
+minimize_glyph_hover = "#252f4b"
+
+[colors.tab_bar]
+background = "#1b2029"
+active = "#50d8ec"
+active_text = "#00363d"
+active_unfocused = "#004f58"
+active_unfocused_text = "#a1efff"
+text = "#bec7d4"
+urgent = "#ffb4ab"
+urgent_text = "#690005"

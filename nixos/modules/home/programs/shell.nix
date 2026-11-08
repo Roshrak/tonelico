@@ -33,6 +33,7 @@
             case "''${XDG_CURRENT_DESKTOP:-}" in
               *sway*|*Sway*) export KITTY_CONFIG_DIRECTORY="$HOME/.config/kitty/profiles/sway" ;;
               *niri*|*Niri*) export KITTY_CONFIG_DIRECTORY="$HOME/.config/kitty/profiles/niri" ;;
+              *umbriel*|*Umbriel*) export KITTY_CONFIG_DIRECTORY="$HOME/.config/kitty/profiles/umbriel" ;;
               *mango*|*Mango*) export KITTY_CONFIG_DIRECTORY="$HOME/.config/kitty/profiles/mango" ;;
               *KDE*|*kde*|*Plasma*|*plasma*) export KITTY_CONFIG_DIRECTORY="$HOME/.config/kitty/profiles/kde" ;;
             esac

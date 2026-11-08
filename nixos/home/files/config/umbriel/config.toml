@@ -1,0 +1,301 @@
+# ============================================================
+# TONELICO UMBRIEL
+#
+# Independent Umbriel session configured to match Tonelico Niri's
+# look, feel, layout, startup, and keybindings.
+# Owns its Noctalia / GTK / Kitty theme state through:
+#
+#     ~/.config/theme-profiles/umbriel
+#
+# Visual goal (matching Tonelico Niri):
+#   - DWM-like minimal windows in a scrollable tiling strip
+#   - square corners (corner_radius = 0)
+#   - tiny gaps (gap = 2)
+#   - very thin active/inactive borders (border_width = 1)
+#   - no shadows
+#   - default column width 0.62, never auto-centered
+#   - focus follows mouse
+# ============================================================
+
+[general]
+mod_key = "Super"
+focus_on_activate = true
+attach_modal_dialogs = true
+show_cheatsheet = false
+xwayland = true
+xwayland_xsettings = true
+autostart = [
+    "/run/current-system/sw/bin/theme-profile-activate umbriel",
+    "/home/aesc/.local/bin/clean-stray-sessions",
+    "/run/current-system/sw/bin/noctalia-profile umbriel",
+    "/run/current-system/sw/bin/kanshi --config /etc/kanshi/umbriel.conf",
+]
+
+# ============================================================
+# ENVIRONMENT
+# ============================================================
+
+[environment]
+TERMINAL = "kitty"
+KITTY_CONFIG_DIRECTORY = "/home/aesc/.config/kitty/profiles/umbriel"
+THEME_PROFILE = "umbriel"
+NOCTALIA_STATE_HOME = "/home/aesc/.local/state/theme-profiles/umbriel"
+NOCTALIA_CONFIG_HOME = "/home/aesc/.config/theme-profiles/umbriel/config-home"
+QT_QPA_PLATFORMTHEME = "qt6ct"
+NIXOS_OZONE_WL = "1"
+MOZ_ENABLE_WAYLAND = "1"
+WLR_NO_HARDWARE_CURSORS = "1"
+
+# ============================================================
+# OUTPUTS
+# ============================================================
+
+# External HDMI monitor (LEFT).
+# 1920 x 1080, vertically centered relative to the 1200px-high laptop panel.
+[output."HDMI-A-1"]
+mode = "1920x1080@60.000"
+scale = 1.0
+position = [0, 60]
+direct_scanout = false
+
+# Internal laptop panel (MAIN / RIGHT).
+# 1920 x 1200, focused at startup.
+[output."eDP-1"]
+mode = "1920x1200@60.096"
+scale = 1.0
+focus_at_startup = true
+position = [1920, 0]
+direct_scanout = false
+
+# ============================================================
+# INPUT & CURSOR
+# ============================================================
+
+[input]
+client_window_drag = true
+middle_click_paste = true
+
+[input.cursor]
+theme = "Bibata-Modern-Ice"
+size = 24
+hardware_cursor = false
+
+[input.focus]
+follows_mouse = true
+
+[input.keyboard]
+layout = "us"
+repeat_rate = 30
+repeat_delay = 400
+
+[input.touchpad]
+enabled = true
+tap = true
+drag_lock = "timeout"
+natural_scroll = true
+disable_while_typing = true
+
+# ============================================================
+# HOT CORNERS & OVERVIEW
+# ============================================================
+
+[hot_corners.top_left]
+enabled = false
+
+[hot_corners.top_right]
+enabled = false
+
+[hot_corners.bottom_left]
+enabled = false
+
+[hot_corners.bottom_right]
+enabled = false
+
+[overview]
+zoom = 0.5
+workspace_wallpaper = true
+background_blur = true
+shortcuts = true
+
+# ============================================================
+# WINDOW LAYOUT & APPEARANCE (Matching Tonelico Niri)
+# ============================================================
+
+[layout]
+mode = "scrolling"
+gap = 2
+extent_presets = [0.33333, 0.5, 0.62, 0.66667]
+client_maximize = "column"
+
+[layout.scrolling]
+default_extent_fraction = 0.62
+center_focused = "never"
+center_underfull_strip = false
+center_on_overview_select = false
+
+[layout.struts]
+left = 0
+right = 0
+top = 0
+bottom = 0
+
+[appearance]
+prefer_no_csd = true
+border_width = 1
+outer_border_width = 0
+corner_radius = 0
+opaque_fullscreen = true
+
+[appearance.shadow]
+enabled = false
+
+[appearance.title_bar]
+mode = "off"
+
+[appearance.tab_bar]
+visible = true
+position = "left"
+style = "indicator"
+height = 4
+gap = 4
+tab_gap = 2
+corner_radius = 0
+hide_when_single = true
+
+[colors]
+backdrop = "#000000"
+
+[colors.border]
+focused = "#89b4fa"
+unfocused = "#45475a"
+
+# ============================================================
+# KEYBINDS (1:1 Parity with Tonelico Niri config.kdl)
+# ============================================================
+
+[keybinds]
+# Help
+"Mod+Shift+Slash" = { action = "cheatsheet-toggle", repeat = false }
+
+# Mouse window navigation
+"Mod+Shift+WheelDown" = { action = "window-focus-right", cooldown_ms = 10 }
+"Mod+Shift+WheelUp" = { action = "window-focus-left", cooldown_ms = 10 }
+
+# Applications / Noctalia
+"Mod+Return" = { action = "spawn kitty", repeat = false }
+"Mod+Space" = { action = "spawn noctalia msg panel-toggle launcher", repeat = false }
+"Mod+S" = { action = "spawn noctalia msg panel-toggle control-center", repeat = false }
+"Mod+Comma" = { action = "spawn noctalia msg settings-toggle", repeat = false }
+"Mod+E" = { action = "spawn nautilus", repeat = false }
+"Mod+Z" = { action = "spawn chromium", repeat = false }
+"Mod+Escape" = { action = "spawn noctalia msg session lock", repeat = false }
+"Mod+Shift+E" = { action = "spawn noctalia msg panel-toggle session", repeat = false }
+"Mod+V" = { action = "spawn noctalia msg panel-toggle clipboard", repeat = false }
+"Alt+Tab" = { action = "spawn noctalia msg window-switcher", repeat = false }
+"Alt+Z" = { action = "spawn fcitx5-remote -t", repeat = false }
+
+# Screenshots
+"Print" = { action = "spawn noctalia msg screenshot-region", repeat = false }
+"Mod+Print" = { action = "spawn bash -lc 'mkdir -p ~/Pictures/Screenshots && grim ~/Pictures/Screenshots/\"Screenshot from $(date +\"%Y-%m-%d %H-%M-%S\").png\" && grim - | wl-copy'", repeat = false }
+"Ctrl+Print" = { action = "spawn noctalia msg screenshot-region", repeat = false }
+
+# Window control
+"Mod+Q" = { action = "window-close", repeat = false }
+"Mod+M" = "window-toggle-maximize-to-edges"
+"Mod+N" = "window-cycle-primary-extent"
+"Mod+F" = "window-toggle-fullscreen"
+"Mod+Shift+F" = "window-toggle-floating"
+"Mod+Shift+Alt+M" = { action = "session-quit skip-confirmation", repeat = false }
+
+# Window focus
+"Mod+H" = "window-focus-left"
+"Mod+L" = "window-focus-right"
+"Mod+K" = "window-focus-up"
+"Mod+J" = "window-focus-down"
+"Mod+Tab" = "window-focus-down"
+"Mod+Left" = "window-focus-left"
+"Mod+Right" = "window-focus-right"
+"Mod+Up" = "window-focus-up"
+"Mod+Down" = "window-focus-down"
+
+# Move / swap windows
+"Mod+Ctrl+H" = "column-move-left"
+"Mod+Ctrl+L" = "column-move-right"
+"Mod+Ctrl+K" = "window-move-up"
+"Mod+Ctrl+J" = "window-move-down"
+"Mod+Ctrl+Left" = "column-move-left"
+"Mod+Ctrl+Right" = "column-move-right"
+"Mod+Ctrl+Up" = "window-move-up"
+"Mod+Ctrl+Down" = "window-move-down"
+
+# Workspaces
+"Mod+1" = "workspace-switch 1"
+"Mod+2" = "workspace-switch 2"
+"Mod+3" = "workspace-switch 3"
+"Mod+4" = "workspace-switch 4"
+"Mod+5" = "workspace-switch 5"
+"Mod+6" = "workspace-switch 6"
+"Mod+7" = "workspace-switch 7"
+"Mod+8" = "workspace-switch 8"
+"Mod+9" = "workspace-switch 9"
+
+# Move window/column to workspace
+"Mod+Shift+1" = "column-move-to-workspace 1"
+"Mod+Shift+2" = "column-move-to-workspace 2"
+"Mod+Shift+3" = "column-move-to-workspace 3"
+"Mod+Shift+4" = "column-move-to-workspace 4"
+"Mod+Shift+5" = "column-move-to-workspace 5"
+"Mod+Shift+6" = "column-move-to-workspace 6"
+"Mod+Shift+7" = "column-move-to-workspace 7"
+"Mod+Shift+8" = "column-move-to-workspace 8"
+"Mod+Shift+9" = "column-move-to-workspace 9"
+
+# Workspace scroll
+"Mod+WheelUp" = "workspace-previous"
+"Mod+WheelDown" = "workspace-next"
+
+# Overview (manual only; hot corners disabled)
+"Mod+Shift+MouseMiddle" = { action = "overview-toggle", repeat = false }
+"Mod+O" = { action = "overview-toggle", repeat = false }
+
+# Monitors (HDMI is physically LEFT, Laptop is physically RIGHT)
+"Mod+Alt+Left" = "output-focus-left"
+"Mod+Alt+Right" = "output-focus-right"
+
+# Move columns between monitors
+"Mod+Alt+Shift+Left" = "column-move-to-output-left"
+"Mod+Alt+Shift+Right" = "column-move-to-output-right"
+"Mod+Shift+Left" = "column-move-to-output-left"
+"Mod+Shift+Right" = "column-move-to-output-right"
+
+# Vertical monitor movement
+"Mod+Shift+Up" = "window-move-to-output-up"
+"Mod+Shift+Down" = "window-move-to-output-down"
+
+# Column stacking / sizing helpers
+"Mod+BracketLeft" = "window-consume-or-expel-left"
+"Mod+BracketRight" = "window-consume-or-expel-right"
+"Mod+R" = "window-cycle-primary-extent"
+"Mod+Shift+R" = "window-cycle-primary-extent-back"
+"Mod+Minus" = "window-modify-primary-extent -0.1"
+"Mod+Equal" = "window-modify-primary-extent +0.1"
+"Mod+W" = "column-toggle-tabbed"
+
+# Audio
+"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume @DEFAULT_SINK@ 5%+", allow_when_locked = true }
+"XF86AudioLowerVolume" = { action = "spawn wpctl set-volume @DEFAULT_SINK@ 5%-", allow_when_locked = true }
+"XF86AudioMute" = { action = "spawn wpctl set-mute @DEFAULT_SINK@ toggle", allow_when_locked = true, repeat = false }
+"XF86AudioMicMute" = { action = "spawn noctalia msg mic-mute", allow_when_locked = true, repeat = false }
+
+# Brightness
+"XF86MonBrightnessUp" = { action = "spawn noctalia msg brightness-up", allow_when_locked = true }
+"XF86MonBrightnessDown" = { action = "spawn noctalia msg brightness-down", allow_when_locked = true }
+
+# Media
+"XF86AudioPlay" = { action = "spawn noctalia msg media toggle", allow_when_locked = true, repeat = false }
+"XF86AudioNext" = { action = "spawn noctalia msg media next", allow_when_locked = true, repeat = false }
+"XF86AudioPrev" = { action = "spawn noctalia msg media previous", allow_when_locked = true, repeat = false }
+
+# Dynamic session colors generated from theme profile
+[include]
+files = ["noctalia.toml"]

@@ -8,6 +8,7 @@
       waylandNames = [
         "mango"
         "niri"
+        "umbriel"
         "sway"
         "plasma"
         "hyprland"
@@ -25,7 +26,7 @@
           ''
             mkdir -p "$out/share/wayland-sessions"
 
-            for name in mango niri sway plasma hyprland; do
+            for name in mango niri umbriel sway plasma hyprland; do
               source=""
               for package in ${packagePaths}; do
                 candidate="$package/share/wayland-sessions/$name.desktop"
@@ -46,6 +47,10 @@
                   ;;
                 niri)
                   sed 's|^Exec=.*|Exec=/run/current-system/sw/bin/niri-session-guarded|' "$source" \
+                    > "$out/share/wayland-sessions/$name.desktop"
+                  ;;
+                umbriel)
+                  sed 's|^Exec=.*|Exec=/run/current-system/sw/bin/umbriel-session-guarded|' "$source" \
                     > "$out/share/wayland-sessions/$name.desktop"
                   ;;
                 sway)
@@ -104,8 +109,8 @@
 
       assertions = [
         {
-          assertion = builtins.length waylandNames == 5;
-          message = "The curated Noctalia Greeter Wayland session allowlist must contain exactly five sessions.";
+          assertion = builtins.length waylandNames == 6;
+          message = "The curated Noctalia Greeter Wayland session allowlist must contain exactly six sessions.";
         }
         {
           assertion =

@@ -20,9 +20,9 @@
         set -euo pipefail
         profile="''${1:-''${THEME_PROFILE:-}}"
         case "$profile" in
-          niri|sway|mango|hyprland) ;;
+          niri|umbriel|sway|mango|hyprland) ;;
           *)
-            echo "Usage: noctalia-profile <niri|sway|mango|hyprland>" >&2
+            echo "Usage: noctalia-profile <niri|umbriel|sway|mango|hyprland>" >&2
             exit 2
             ;;
         esac
@@ -99,6 +99,7 @@
         set -uo pipefail
         /run/current-system/sw/bin/theme-session-admit || exit $?
         /run/current-system/sw/bin/systemctl --user stop niri.service 2>/dev/null || true
+        /run/current-system/sw/bin/systemctl --user stop umbriel.service 2>/dev/null || true
         /run/current-system/sw/bin/systemctl --user stop geoclue-agent.service 2>/dev/null || true
         # Stop compositor-bound portal processes before clearing their inherited
         # display environment; they will be activated again by the next session.
@@ -108,6 +109,7 @@
           xdg-desktop-portal-wlr.service \
           xdg-desktop-portal-gnome.service \
           xdg-desktop-portal-hyprland.service \
+          xdg-desktop-portal-umbriel.service \
           plasma-xdg-desktop-portal-kde.service 2>/dev/null || true
         /run/current-system/sw/bin/systemctl --user unset-environment \
           THEME_PROFILE \
@@ -121,7 +123,10 @@
           XDG_SESSION_TYPE \
           XDG_SESSION_CLASS \
           WAYLAND_DISPLAY \
+          WAYLAND_SOCKET \
           NIRI_SOCKET \
+          UMBRIEL_SOCKET \
+          LIBEI_SOCKET \
           SWAYSOCK \
           MANGO_INSTANCE_SIGNATURE \
           HYPRLAND_INSTANCE_SIGNATURE \
@@ -157,7 +162,10 @@
           XDG_SESSION_TYPE= \
           XDG_SESSION_CLASS= \
           WAYLAND_DISPLAY= \
+          WAYLAND_SOCKET= \
           NIRI_SOCKET= \
+          UMBRIEL_SOCKET= \
+          LIBEI_SOCKET= \
           SWAYSOCK= \
           MANGO_INSTANCE_SIGNATURE= \
           HYPRLAND_INSTANCE_SIGNATURE= \
@@ -236,7 +244,7 @@
             set -euo pipefail
 
             usage() {
-              echo "Usage: theme-profile-activate <niri|sway|mango|hyprland|kde>" >&2
+              echo "Usage: theme-profile-activate <niri|umbriel|sway|mango|hyprland|kde>" >&2
               exit 2
             }
 
@@ -244,7 +252,7 @@
             PROFILE="$1"
 
             case "$PROFILE" in
-              niri|sway|mango|hyprland|kde) ;;
+              niri|umbriel|sway|mango|hyprland|kde) ;;
               *) usage ;;
             esac
 
@@ -381,6 +389,13 @@
                     atomic_copy "$CONFIG_ROOT/niri/colors.kdl" "$HOME/.config/niri/colors.kdl"
                   fi
                   ;;
+                umbriel)
+                  if [ -f "$STATE_ROOT/umbriel/generated/umbriel/noctalia.toml" ]; then
+                    atomic_copy "$STATE_ROOT/umbriel/generated/umbriel/noctalia.toml" "$HOME/.config/umbriel/noctalia.toml"
+                  elif [ -f "$CONFIG_ROOT/umbriel/noctalia.toml" ]; then
+                    atomic_copy "$CONFIG_ROOT/umbriel/noctalia.toml" "$HOME/.config/umbriel/noctalia.toml"
+                  fi
+                  ;;
                 sway)
                   if [ -f "$STATE_ROOT/sway/generated/sway/colors" ]; then
                     atomic_copy "$STATE_ROOT/sway/generated/sway/colors" "$HOME/.config/sway/colors"
@@ -446,6 +461,7 @@
         if [ -z "$PROFILE" ]; then
           case "''${XDG_CURRENT_DESKTOP:-}" in
             *niri*|*Niri*) PROFILE="niri" ;;
+            *umbriel*|*Umbriel*) PROFILE="umbriel" ;;
             *sway*|*Sway*) PROFILE="sway" ;;
             *mango*|*Mango*) PROFILE="mango" ;;
             *hyprland*|*Hyprland*) PROFILE="hyprland" ;;
@@ -454,7 +470,7 @@
         fi
 
         case "$PROFILE" in
-          niri|sway|mango|hyprland) ;;
+          niri|umbriel|sway|mango|hyprland) ;;
           *) exit 0 ;;
         esac
 
@@ -514,6 +530,11 @@
           niri)
             if command -v niri >/dev/null 2>&1; then
               niri msg action reload-config 2>/dev/null || true
+            fi
+            ;;
+          umbriel)
+            if command -v umbriel >/dev/null 2>&1; then
+              umbriel msg config-reload 2>/dev/null || true
             fi
             ;;
           sway)
@@ -599,6 +620,81 @@
 
         /run/current-system/sw/bin/niri-session "$@"
         rc=$?
+
+        trap - EXIT
+        on_exit
+        exit "$rc"
+      '';
+
+      umbrielSessionGuarded = pkgs.writeShellScriptBin "umbriel-session-guarded" ''
+        set -u
+        ${sessionLeaseGuard}
+
+        /run/current-system/sw/bin/theme-session-admit || exit $?
+
+        SYSTEMCTL=/run/current-system/sw/bin/systemctl
+
+        /run/current-system/sw/bin/theme-session-cleanup >/dev/null 2>&1 || true
+
+        export THEME_PROFILE="umbriel"
+        export NOCTALIA_CONFIG_HOME="$HOME/.config/theme-profiles/umbriel/config-home"
+        export NOCTALIA_STATE_HOME="$HOME/.local/state/theme-profiles/umbriel"
+        export KITTY_CONFIG_DIRECTORY="$HOME/.config/kitty/profiles/umbriel"
+        export QT_QPA_PLATFORMTHEME="qt6ct"
+
+        /run/current-system/sw/bin/theme-profile-activate umbriel >/dev/null 2>&1 || true
+        /run/current-system/sw/bin/systemctl --user start geoclue-agent.service 2>/dev/null || true
+
+        on_exit() {
+          /run/current-system/sw/bin/theme-session-cleanup >/dev/null 2>&1 || true
+        }
+        trap on_exit EXIT TERM INT HUP
+
+        state() { "$SYSTEMCTL" --user is-active umbriel.service 2>/dev/null || true; }
+
+        wait_inactive() {
+          local i=0
+          while [ $i -lt "$1" ]; do
+            case "$(state)" in inactive|unknown|failed) return 0 ;; esac
+            sleep 0.1; i=$((i+1))
+          done
+          return 1
+        }
+
+        force_cleanup() {
+          echo "umbriel-guard: leftover umbriel state detected (state=$(state)), cleaning"
+          "$SYSTEMCTL" --user --no-block stop umbriel.service 2>/dev/null || true
+          wait_inactive 30 || true
+
+          jobs="$("$SYSTEMCTL" --user list-jobs --no-legend 2>/dev/null || true)"
+          while read -r job_id job_unit _; do
+            [ "$job_unit" = "umbriel.service" ] || continue
+            case "$job_id" in
+              ""|*[!0-9]*) continue ;;
+            esac
+            "$SYSTEMCTL" --user cancel "$job_id" 2>/dev/null || true
+          done <<< "$jobs"
+
+          "$SYSTEMCTL" --user reset-failed umbriel.service 2>/dev/null || true
+          sleep 0.3
+        }
+
+        attempt=0
+        until [ "$(state)" = inactive ]; do
+          attempt=$((attempt+1))
+          [ $attempt -gt 3 ] && {
+            echo "umbriel-guard: FATAL: umbriel.service never reached inactive; aborting." >&2
+            exit 1
+          }
+          force_cleanup
+        done
+
+        /run/current-system/sw/bin/desktop-main-pointer umbriel >/dev/null 2>&1 &
+        pointer_pid=$!
+        /run/current-system/sw/bin/start-umbriel "$@"
+        rc=$?
+        kill -TERM "$pointer_pid" 2>/dev/null || true
+        wait "$pointer_pid" 2>/dev/null || true
 
         trap - EXIT
         on_exit
@@ -757,6 +853,7 @@
         themeSessionCleanup
         plasmaSessionCleanup
         niriSessionGuarded
+        umbrielSessionGuarded
         swaySessionReady
         swaySessionGuarded
         mangoSessionGuarded

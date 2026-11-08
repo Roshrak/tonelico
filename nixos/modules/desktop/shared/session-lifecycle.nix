@@ -112,6 +112,19 @@
               "$SLEEP" 0.15
             done
             ;;
+          umbriel)
+            # Umbriel's [output."eDP-1"] focus_at_startup = true centers focus on
+            # eDP-1 natively; also nudge output-focus-right once IPC is live.
+            attempt=0
+            while [ "$attempt" -lt 20 ]; do
+              if /run/current-system/sw/bin/umbriel outputs >/dev/null 2>&1; then
+                /run/current-system/sw/bin/umbriel msg output-focus-right >/dev/null 2>&1 || true
+                exit 0
+              fi
+              attempt=$((attempt + 1))
+              "$SLEEP" 0.15
+            done
+            ;;
           mango)
             MMSG=/run/current-system/sw/bin/mmsg
             attempt=0
@@ -129,7 +142,7 @@
             done
             ;;
           *)
-            echo "usage: desktop-main-pointer <sway|hyprland|niri|mango>" >&2
+            echo "usage: desktop-main-pointer <sway|hyprland|niri|umbriel|mango>" >&2
             exit 2
             ;;
         esac
@@ -147,7 +160,7 @@
           esac
         done
         /run/current-system/sw/bin/theme-session-admit || exit $?
-        unset WAYLAND_DISPLAY DISPLAY XAUTHORITY NIRI_SOCKET SWAYSOCK \
+        unset WAYLAND_DISPLAY WAYLAND_SOCKET DISPLAY XAUTHORITY NIRI_SOCKET UMBRIEL_SOCKET LIBEI_SOCKET SWAYSOCK \
           MANGO_INSTANCE_SIGNATURE HYPRLAND_INSTANCE_SIGNATURE \
           KDE_FULL_SESSION KDE_SESSION_VERSION KDE_SESSION_UID KDE_SESSION_VT \
           GNOME_DESKTOP_SESSION_ID GNOME_SETUP_DISPLAY MATE_DESKTOP_SESSION_ID \
