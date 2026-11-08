@@ -8,7 +8,6 @@
         "--ozone-platform=wayland"
         "--enable-gpu-rasterization"
         "--enable-zero-copy"
-        "--disable-background-networking"
         "--disable-breakpad"
         "--disable-crash-reporter"
         "--disable-domain-reliability"
