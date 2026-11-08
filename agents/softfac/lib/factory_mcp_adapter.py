@@ -241,7 +241,7 @@ class FactoryMcpServer:
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
-                "result": {"tools": self.list_tools()},
+                "result": {"tools": self.list_tools(), "ttlMs": 604800000},
             }
         elif method == "resources/list":
             return {

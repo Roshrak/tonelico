@@ -37,7 +37,19 @@ Instructions for deploying standalone upstream binaries, tarballs, and AppImages
   - Always unlink first: `rm -f ~/.local/bin/<cmd>` before creating a wrapper or updating a symlink.
 
 ## 3. Desktop Application Integration
-- **Icon Installation:** Extract `.DirIcon` or application icon from AppImage (`--appimage-extract`) and install to `~/.local/share/icons/hicolor/256x256/apps/<app>.png`.
+- **Build Third-Party Flake Packages Against System `nixpkgs`:** Evaluating an external flake directly (`nix build <flake>#<pkg>`) pulls its own locked `nixpkgs` closure (hundreds of duplicate store paths). Evaluate `callPackage` against `/etc/nixos`'s locked `nixpkgs` and pin the GC root in one step so existing local store paths are reused:
+  ```bash
+  nix build --impure -o ~/.local/share/nix-roots/<app> --expr '
+    let
+      sysFlake = builtins.getFlake "path:/etc/nixos";
+      pkgs = import sysFlake.inputs.nixpkgs {
+        system = "x86_64-linux";
+        config.allowUnfree = true;
+      };
+    in pkgs.callPackage /path/to/package.nix {}
+  '
+  ```
+- **Icon Installation:** Extract `.DirIcon` or application icon from AppImage (`--appimage-extract`) and install to `~/.local/share/icons/hicolor/256x256/apps/<app>.png` (and `512x512` if present).
 - **Desktop Entry:** Write a standard specification to `~/.local/share/applications/<app>.desktop`:
   ```ini
   [Desktop Entry]
@@ -48,6 +60,14 @@ Instructions for deploying standalone upstream binaries, tarballs, and AppImages
   Terminal=false
   Type=Application
   Categories=Network;Development;
+  ```
+- **Replacing Chromium PWA / WebApp Shortcuts:** When replacing a Chromium webapp (`chrome-<app-id>-Default.desktop`) with a native/AppImage desktop app, remove all three Chromium webapp artifact locations and refresh caches so duplicate launcher entries do not remain:
+  ```bash
+  rm -f ~/.local/share/applications/chrome-<app-id>-Default.desktop
+  rm -f ~/.local/share/icons/hicolor/*/apps/chrome-<app-id>-Default.png
+  rm -rf "$HOME/.config/chromium/Default/Web Applications/Manifest Resources/<app-id>"
+  update-desktop-database ~/.local/share/applications
+  gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
   ```
 - **Cleanup:** Always delete temporary `squashfs-root` extraction folders and downloaded archive files immediately after verification.
 

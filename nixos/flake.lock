@@ -689,7 +689,8 @@
         "nixpkgs": "nixpkgs_4",
         "noctalia": "noctalia",
         "noctalia-greeter": "noctalia-greeter",
-        "umbriel": "umbriel"
+        "umbriel": "umbriel",
+        "zalo-for-linux": "zalo-for-linux"
       }
     },
     "scenefx": {
@@ -915,6 +916,26 @@
       "original": {
         "owner": "Supreeeme",
         "repo": "xwayland-satellite",
+        "type": "github"
+      }
+    },
+    "zalo-for-linux": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1794139659,
+        "narHash": "sha256-ZK6zxuW5A1fBBwNpDrz670+PGEC0ZIMxeymfJgyuDZU=",
+        "owner": "VN-Linux-Family",
+        "repo": "zalo-for-linux",
+        "rev": "024dd09c67111d95847a74d8e9ee23963eb54b95",
+        "type": "github"
+      },
+      "original": {
+        "owner": "VN-Linux-Family",
+        "repo": "zalo-for-linux",
         "type": "github"
       }
     }

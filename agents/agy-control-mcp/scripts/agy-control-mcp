@@ -29,9 +29,9 @@ done
 
 export PATH="$HOME/.local/bin:$PATH"
 export AGY_CONTROL_LIVE="${AGY_CONTROL_LIVE:-1}"
-export AGY_CONTROL_FAST_BUDGET="${AGY_CONTROL_FAST_BUDGET:-42000}"
-export AGY_CONTROL_REASONING_BUDGET="${AGY_CONTROL_REASONING_BUDGET:-72000}"
-export AGY_CONTROL_EXPERT_BUDGET="${AGY_CONTROL_EXPERT_BUDGET:-100000}"
+export AGY_CONTROL_FAST_BUDGET="${AGY_CONTROL_FAST_BUDGET:-120000}"
+export AGY_CONTROL_REASONING_BUDGET="${AGY_CONTROL_REASONING_BUDGET:-160000}"
+export AGY_CONTROL_EXPERT_BUDGET="${AGY_CONTROL_EXPERT_BUDGET:-240000}"
 export AGY_BIN="${AGY_BIN:-$(command -v agy 2>/dev/null || echo agy)}"
 
 if [[ ! -f "$server" ]]; then
@@ -47,11 +47,11 @@ fi
 node_major() { "$1" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0; }
 
 if command -v node >/dev/null 2>&1 && [[ "$(node_major node)" -ge 22 ]]; then
-  exec node "$server"
+  exec node --max-old-space-size=128 "$server"
 fi
 
 if command -v nix >/dev/null 2>&1; then
-  exec nix develop "$repo" -c node "$server"
+  exec nix develop "$repo" -c node --max-old-space-size=128 "$server"
 fi
 
 echo "agy-control-mcp: Node.js 22+ is required (found none on PATH, and nix is unavailable)" >&2

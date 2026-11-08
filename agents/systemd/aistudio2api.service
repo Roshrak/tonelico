@@ -7,6 +7,11 @@ Type=simple
 WorkingDirectory=/home/aesc/aistudio2api
 Environment="PATH=/home/aesc/.local/share/nix-roots/aistudio2api-xvfb/bin:/home/aesc/.local/bin:/run/current-system/sw/bin:/usr/bin:/bin"
 Environment="AUTO_START=true"
+Environment="GOGC=50"
+Environment="GOMEMLIMIT=256MiB"
+Environment="MALLOC_TRIM_THRESHOLD_=65536"
+MemoryHigh=384M
+MemoryMax=640M
 ExecStart=/home/aesc/aistudio2api/aistudio2api -listen 127.0.0.1:2048
 Restart=always
 RestartSec=3

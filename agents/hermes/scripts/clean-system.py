@@ -285,7 +285,7 @@ def main() -> int:
     hermes_removed += remove_tree_contents(hermes_dir / "cache" / "scratch", max_age_seconds=1 * DAY, now=now)
     hermes_removed += remove_tree_contents(hermes_dir / "cache" / "terminal-output", max_age_seconds=1 * DAY, now=now)
 
-    # 7. Antigravity Manager SQLite log compaction (prevent proxy_logs.db bloat)
+    # 7. Antigravity Manager & AIStudio2API SQLite log compaction (prevent DB & RAM bloat)
     agm_logs_db = home / ".antigravity_tools" / "proxy_logs.db"
     if agm_logs_db.is_file() and agm_logs_db.stat().st_size > 10 * 1024 * 1024:
         try:
@@ -299,6 +299,37 @@ def main() -> int:
                 conn.execute("VACUUM")
         except Exception:
             pass
+
+    aistudio_req_db = home / "aistudio2api" / "runtime" / "requests.db"
+    if aistudio_req_db.is_file() and aistudio_req_db.stat().st_size > 10 * 1024 * 1024:
+        try:
+            import sqlite3
+            with sqlite3.connect(str(aistudio_req_db), timeout=5.0) as conn:
+                conn.execute(
+                    "DELETE FROM requests WHERE id NOT IN ("
+                    "SELECT id FROM requests ORDER BY time DESC LIMIT 200)"
+                )
+                conn.commit()
+                conn.execute("VACUUM")
+        except Exception:
+            pass
+
+    # 8. Stop idle background memory-bloat user services (KDE portals/indexers, duplicate trays)
+    for idle_svc in (
+        "localsearch-3.service",
+        "kunifiedpush-distributor.service",
+        "plasma-xdg-desktop-portal-kde.service",
+        "warp-taskbar.service",
+        r"app-nm\x2dapplet@autostart.service",
+        "agy-bridge.service",
+    ):
+        subprocess.run(
+            ["systemctl", "--user", "stop", idle_svc],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
 
     end_usage = shutil.disk_usage("/")
     end_free = end_usage.free

@@ -6,6 +6,7 @@
       home.packages = with pkgs; [
         (discord.override { commandLineArgs = "--ozone-platform=wayland"; })
         telegram-desktop
+        zalo
       ];
     }
   ;

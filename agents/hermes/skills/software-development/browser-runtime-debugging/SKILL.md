@@ -64,10 +64,13 @@ Protocol for inspecting, diagnosing, and fixing browser DOM issues, visual artif
      ```
    - This provides instant gratification and preserves active form inputs, playback, or work in progress.
 
-## 5. Managing Extensions & Unpacked MV2 Extensions via `chrome://extensions` CDP
-- **Enabling Unpacked `--load-extension` (e.g., Full MV2 uBlock Origin)**:
+## 5. Managing Extensions & Declarative Web Store Policies via `chrome://extensions` CDP
+- **Declarative Policy-Managed Web Store Extensions (`ExtensionSettings`)**:
+  - Prefer declarative `"ExtensionSettings"` (`"installation_mode": "normal_installed"`, `"toolbar_pin": "force_pinned"`, `"update_url": "https://clients2.google.com/service/update2/crx"`) in `/etc/chromium/policies/managed/default-browser.json` over unpacked `--load-extension` directories — policy-managed Web Store extensions install and update cleanly without triggering startup developer-mode warnings.
+  - **Pitfall**: Never pass `--disable-background-networking` on Chromium's command line when using `ExtensionSettings` — it disables the background extension fetcher (`chrome.developerPrivate.autoUpdate()` / `repairExtension()`) so missing or newly declared policy extensions never download.
+- **Enabling Unpacked `--load-extension` When Required**:
   - Chromium 138+ automatically disables unpacked `--load-extension` directories with `disable_reasons: [16777216]` (`DISABLE_UNSUPPORTED_DEVELOPER_EXTENSION`) unless Developer Mode is enabled in the profile (`"extensions": {"ui": {"developer_mode": true}}` in `Default/Preferences`) and allowed by policy (`"ExtensionDeveloperModeSettings": 0` in `/etc/chromium/policies/managed/default-browser.json`).
-  - To enable Developer Mode and activate an unpacked MV2 extension live without restarting Chromium:
+  - To enable Developer Mode and activate an unpacked extension live without restarting Chromium:
     1. Open a temporary `chrome://extensions` target via `PUT http://127.0.0.1:9222/json/new?chrome://extensions`.
     2. Connect to its `webSocketDebuggerUrl` and evaluate via `Runtime.evaluate` (`awaitPromise: true`):
        ```javascript
@@ -75,15 +78,16 @@ Protocol for inspecting, diagnosing, and fixing browser DOM issues, visual artif
          inDeveloperMode: true,
          isMv2DeprecationNoticeDismissed: true
        });
-       await chrome.management.setEnabled(extensionId, true);
+       await new Promise(r => chrome.management.setEnabled(extensionId, true, r));
        await chrome.developerPrivate.updateExtensionConfiguration({
          extensionId,
          pinnedToToolbar: true
        });
        ```
+       - **Pitfall**: `chrome.developerPrivate.updateExtensionConfiguration` rejects `isActive` (`Unexpected property: 'isActive'`); always use `chrome.management.setEnabled(extensionId, true)` to enable an extension and `updateExtensionConfiguration` only for properties like `pinnedToToolbar`, `incognitoAccess`, or `fileAccess`.
     3. Close the temporary `chrome://extensions` tab via `http://127.0.0.1:9222/json/close/<tab_id>`.
 - **Removing Installed Extensions Without Triggering `Error ⋮` or `ERR_FILE_NOT_FOUND`**:
-  - Never delete an extension folder from `~/.config/chromium/Default/Extensions/<id>` while Chromium is running without also disabling it via `chrome.management.setEnabled(id, false)` on `chrome://extensions` and blocking its ID in `/etc/chromium/policies/managed/default-browser.json` (`"ExtensionSettings": { "<id>": { "installation_mode": "blocked" } }`) — otherwise Chromium's in-memory `ExtensionRegistry` overwrites `Preferences`, flags the missing directory as corrupted (`Error ⋮` pill in the toolbar), and opens broken `ERR_FILE_NOT_FOUND` onboarding tabs.
+  - To permanently purge retired or corrupted extension entries without leaving ghost entries in `chrome://extensions`, stop Chromium, delete their keys from `.extensions.settings.<id>` in both `~/.config/chromium/Default/Preferences` and `~/.config/chromium/Default/Secure Preferences` with `jq`, and remove their folders from `~/.config/chromium/Default/Extensions/`. Never delete an extension folder while Chromium is running without also disabling/removing its registry state, as Chromium's in-memory `ExtensionRegistry` rewrites `Preferences` on exit and displays the `Error ⋮` badge.
 
 ## 6. Automating Embedded Router / Admin Web UIs over CDP
 - **Server-side active-page state:** Embedded `.asp`/CGI web servers (e.g., Econet/ZTE/ISP ONTs) track the last-requested `.asp` page in server-side session state. Fetching other `.asp` pages via background `fetch()` shifts the server's active page context and causes subsequent form submissions to redirect or fail. Always navigate the tab back to the target page (`location.href = '/cgi-bin/...'`) and wait for `onload` initialization before calling `doSubmit()`.

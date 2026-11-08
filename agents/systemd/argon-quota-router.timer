@@ -1,10 +1,10 @@
 [Unit]
-Description=Run Argon Quota Tracker every 15 seconds
+Description=Run Argon Quota Tracker every 60 seconds
 
 [Timer]
-OnBootSec=5s
-OnUnitActiveSec=15s
-AccuracySec=1s
+OnBootSec=15s
+OnUnitActiveSec=60s
+AccuracySec=5s
 
 [Install]
 WantedBy=timers.target

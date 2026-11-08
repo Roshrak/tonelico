@@ -45,6 +45,10 @@
     llm-agents.url = "github:numtide/llm-agents.nix/e452052b9efb54fd59f8a06cbc09978fb542a3c2";
     # Hermes CLI and Telegram gateway, pinned to the current upstream release.
     hermes-agent.url = "tarball+https://codeload.github.com/NousResearch/hermes-agent/tar.gz/refs/tags/v2026.9.24";
+    zalo-for-linux = {
+      url = "github:VN-Linux-Family/zalo-for-linux";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =

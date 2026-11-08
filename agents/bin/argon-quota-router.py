@@ -10,6 +10,7 @@ Rules (No Compromise):
 3. Every 3.8 Flash request (gemini-3.8-flash, -low, -medium, -tiered, -high) ALWAYS maps to high (gemini-3.8-flash-high).
 """
 
+import base64
 import json
 import os
 import sqlite3
@@ -24,6 +25,25 @@ REQUESTS_DB = "/home/aesc/aistudio2api/runtime/requests.db"
 AISTUDIO_ENV = "/home/aesc/aistudio2api/.env"
 STATE_FILE = "/home/aesc/.hermes/cache/argon_quota_state.json"
 ESTIMATED_DAILY_ARGON_LIMIT_PER_ACCOUNT = 100
+
+
+def get_aistudio_auth_headers() -> dict:
+    user = "admin"
+    pw = ""
+    if os.path.exists(AISTUDIO_ENV):
+        try:
+            for line in open(AISTUDIO_ENV):
+                line = line.strip()
+                if line.startswith("ADMIN_USERNAME="):
+                    user = line.split("=", 1)[1].strip()
+                elif line.startswith("ADMIN_PASSWORD="):
+                    pw = line.split("=", 1)[1].strip()
+        except Exception:
+            pass
+    if pw:
+        token = base64.b64encode(f"{user}:{pw}".encode()).decode()
+        return {"Authorization": f"Basic {token}"}
+    return {}
 
 
 def parse_iso_utc(ts_str: str) -> float:
@@ -49,16 +69,21 @@ def get_argon_quota_status() -> dict:
     ready_Ids = []
     cooldown_Ids = set()
 
+    auth_headers = get_aistudio_auth_headers()
     try:
-        req = urllib.request.Request(f"{AISTUDIO_URL}/api/accounts")
+        req = urllib.request.Request(f"{AISTUDIO_URL}/api/accounts", headers=auth_headers)
         accs_data = json.loads(urllib.request.urlopen(req, timeout=3).read().decode())
-        enabled_accs = [a["id"] for a in accs_data.get("accounts", []) if a.get("enabled", True)]
+        enabled_accs = [
+            a["id"]
+            for a in accs_data.get("accounts", [])
+            if a.get("enabled", True) and a.get("state") == "ready"
+        ]
         total_accounts = len(enabled_accs)
     except Exception:
         enabled_accs = []
 
     try:
-        req = urllib.request.Request(f"{AISTUDIO_URL}/api/cooldowns")
+        req = urllib.request.Request(f"{AISTUDIO_URL}/api/cooldowns", headers=auth_headers)
         cd_data = json.loads(urllib.request.urlopen(req, timeout=3).read().decode())
         for c in cd_data.get("cooldowns", []):
             model_id = c.get("model_id", "") or c.get("scope", "")
@@ -172,14 +197,17 @@ def build_aistudio_model_mapping(argon_effort: str = "high") -> str:
 def sync_aistudio_mapping(status: dict) -> bool:
     desired_mapping = build_aistudio_model_mapping("high")
     changed = False
+    auth_headers = get_aistudio_auth_headers()
     try:
-        req = urllib.request.Request(f"{AISTUDIO_URL}/api/config")
+        req = urllib.request.Request(f"{AISTUDIO_URL}/api/config", headers=auth_headers)
         cfg = json.loads(urllib.request.urlopen(req, timeout=3).read().decode())
         if cfg.get("model_mapping") != desired_mapping:
+            cfg["model_mapping"] = desired_mapping
+            put_headers = {**auth_headers, "Content-Type": "application/json"}
             put_req = urllib.request.Request(
                 f"{AISTUDIO_URL}/api/config",
-                data=json.dumps({"model_mapping": desired_mapping}).encode(),
-                headers={"Content-Type": "application/json"},
+                data=json.dumps(cfg).encode(),
+                headers=put_headers,
                 method="PUT",
             )
             urllib.request.urlopen(put_req, timeout=5).read()
@@ -189,10 +217,9 @@ def sync_aistudio_mapping(status: dict) -> bool:
 
     # Ensure Hermes config.yaml has primary: gemini-4-argon-high (aistudio2api)
     # and fallback chain:
-    # 1. gemini-4-argon-high (antigravity-manager)
-    # 2. gemini-3.8-flash-high (aistudio2api)
-    # 3. gemini-3.8-flash-high (antigravity-manager)
-    # 4. claude-opus-4-6-thinking (antigravity-manager)
+    # 1. gemini-3.8-flash-high (aistudio2api)
+    # 2. gemini-3.8-flash-high (antigravity-manager)
+    # 3. claude-opus-4-6-thinking (antigravity-manager)
     hermes_cfg = "/home/aesc/.hermes/config.yaml"
     if os.path.exists(hermes_cfg):
         try:
@@ -203,8 +230,6 @@ def sync_aistudio_mapping(status: dict) -> bool:
             new_txt = new_txt.replace("reasoning_effort: low", "reasoning_effort: high")
             desired_fb = (
                 "fallback_providers:\n"
-                "  - provider: antigravity-manager\n"
-                "    model: gemini-4-argon-high\n"
                 "  - provider: aistudio2api\n"
                 "    model: gemini-3.8-flash-high\n"
                 "  - provider: antigravity-manager\n"

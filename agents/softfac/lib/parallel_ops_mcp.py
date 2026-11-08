@@ -313,7 +313,7 @@ class ParallelOpsMcpServer:
         if method == "notifications/initialized":
             return None
         if method == "tools/list":
-            return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": self.tool_definitions()}}
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": self.tool_definitions(), "ttlMs": 604800000}}
         if method == "tools/call":
             result = self.call_tool(str(params.get("name") or ""), dict(params.get("arguments") or {}))
             return {"jsonrpc": "2.0", "id": req_id, "result": result}

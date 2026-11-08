@@ -15,6 +15,11 @@ services:
       - WEB_PASSWORD=${WEB_PASSWORD}
       - ABV_BIND_LOCAL_ONLY=false
       - ABV_DATA_DIR=/root/.antigravity_tools
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+      - 100.100.100.100
+    mem_limit: 256m
     restart: unless-stopped
     # tini as PID 1 forwards SIGTERM; without it the app ignores SIGTERM and every
     # shutdown waits the full 10s docker stop timeout.

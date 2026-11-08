@@ -713,7 +713,7 @@ print(json.dumps({{"page_count": len(pdf), "has_embedded_text": any(p["char_coun
         if method == "ping":
             return {"jsonrpc": "2.0", "id": req_id, "result": {}}
         if method == "tools/list":
-            return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": self.list_tools()}}
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": self.list_tools(), "ttlMs": 604800000}}
         if method == "resources/list":
             return {"jsonrpc": "2.0", "id": req_id, "result": {"resources": []}}
         if method == "prompts/list":

@@ -31,8 +31,6 @@ providers:
     transport: chat_completions
     discover_models: true
 fallback_providers:
-  - provider: antigravity-manager
-    model: gemini-4-argon-high
   - provider: aistudio2api
     model: gemini-3.8-flash-high
   - provider: antigravity-manager
@@ -110,6 +108,8 @@ mcp_servers:
     command: /run/current-system/sw/bin/python3
     args:
       - /home/aesc/.local/lib/factory_mcp_adapter.py
+    lazy: true
+    idle_timeout_seconds: 120
     enabled: true
   agy-control:
     command: /home/aesc/agy-control-mcp/scripts/agy-control-mcp
@@ -118,46 +118,64 @@ mcp_servers:
       - hermes
     connect_timeout: 240
     timeout: 3600
+    lazy: true
+    idle_timeout_seconds: 120
     enabled: true
   doc-scanner-mcp:
     command: /run/current-system/sw/bin/python3
     args:
       - /home/aesc/.local/lib/doc_scanner_mcp.py
+    lazy: true
+    idle_timeout_seconds: 120
     enabled: true
   customs-legal-mcp:
     command: /run/current-system/sw/bin/python3
     args:
       - /home/aesc/.local/lib/customs_legal_mcp.py
+    lazy: true
+    idle_timeout_seconds: 120
     enabled: true
   desktop-computer-use-mcp:
     command: /run/current-system/sw/bin/python3
     args:
       - /home/aesc/.local/lib/desktop_computer_use_mcp.py
+    lazy: true
+    idle_timeout_seconds: 120
     enabled: true
   browser-automation-mcp:
     command: /run/current-system/sw/bin/python3
     args:
       - /home/aesc/.local/lib/browser_automation_mcp.py
+    lazy: true
+    idle_timeout_seconds: 120
     enabled: true
   minecraft-ops-mcp:
     command: /run/current-system/sw/bin/python3
     args:
       - /home/aesc/.local/lib/minecraft_ops_mcp.py
+    lazy: true
+    idle_timeout_seconds: 120
     enabled: true
   discord-ops-mcp:
     command: /run/current-system/sw/bin/python3
     args:
       - /home/aesc/.local/lib/discord_ops_mcp.py
+    lazy: true
+    idle_timeout_seconds: 120
     enabled: true
   fast-chat-mcp:
     command: /run/current-system/sw/bin/python3
     args:
       - /home/aesc/.local/lib/fast_chat_mcp.py
+    lazy: true
+    idle_timeout_seconds: 120
     enabled: true
   parallel-ops-mcp:
     command: /run/current-system/sw/bin/python3
     args:
       - /home/aesc/.local/lib/parallel_ops_mcp.py
+    lazy: true
+    idle_timeout_seconds: 120
     enabled: true
 platform_toolsets:
   cli:
@@ -185,7 +203,6 @@ platform_toolsets:
     - video_gen
     - vision
     - web
-    - x_search
     - yuanbao
 known_plugin_toolsets:
   cli:

@@ -37,7 +37,10 @@ let
             _module.args.host = host;
             # Codex is intentionally sourced from the dedicated pinned input
             # instead of upgrading all NixOS packages.
-            nixpkgs.overlays = [ (_final: _prev: { codex = codexPackage; chromium-latest = chromiumPackage; }) ];
+            nixpkgs.overlays = [
+              inputs.zalo-for-linux.overlays.default
+              (_final: _prev: { codex = codexPackage; chromium-latest = chromiumPackage; })
+            ];
           }
           config.nixos.system
           { networking.hostName = host.hostName; }
