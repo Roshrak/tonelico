@@ -5,35 +5,8 @@
     let
       home = config.home.homeDirectory;
       portable = path: lib.replaceStrings [ "/home/aesc" ] [ home ] (builtins.readFile path);
-      chromiumFlags = [
-        "--password-store=basic"
-        "--ozone-platform=wayland"
-        "--enable-gpu-rasterization"
-        "--enable-zero-copy"
-        "--disable-breakpad"
-        "--disable-crash-reporter"
-        "--disable-domain-reliability"
-        "--disable-pings"
-        "--no-default-browser-check"
-        "--no-first-run"
-        "--enable-features=VaapiVideoDecoder,VaapiIgnoreDriverChecks,HighEfficiencyModeAvailable,CanvasOopRasterization"
-        "--disable-features=OptimizationHints,OptimizationGuideModelDownloading,OptimizationTargetPrediction,OptimizationHintsFetching,MediaRouter,DialMediaRouteProvider,PrivacySandboxSettings4,AutofillServerCommunication,InterestFeedContentSuggestions"
-      ];
-      chromium = pkgs.chromium-latest.override { commandLineArgs = chromiumFlags; };
       discord = pkgs.discord.override { commandLineArgs = "--ozone-platform=wayland"; };
       hermes = inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.messaging;
-      chromiumLauncher = pkgs.writeShellScript "chromium-app" ''
-        export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-        if [ -z "''${WAYLAND_DISPLAY:-}" ]; then
-          if [ -S "$XDG_RUNTIME_DIR/wayland-1" ]; then
-            export WAYLAND_DISPLAY="wayland-1"
-          else
-            export WAYLAND_DISPLAY="wayland-0"
-          fi
-        fi
-        export GTK_USE_PORTAL=1
-        exec ${chromium}/bin/chromium --ozone-platform=wayland --remote-debugging-port=9222 "$@"
-      '';
       scripts = [
         "apply-theme-profile" "save-theme-profile" "sync-active-theme"
         "clean-stray-sessions" "hypr-active-window-screenshot"
@@ -54,14 +27,6 @@
         ".local/bin/uinput_type" = {
           source = ../../home/files/bin/uinput_type;
           executable = true;
-          force = true;
-        };
-        ".local/bin/chromium-app" = {
-          source = chromiumLauncher;
-          force = true;
-        };
-        ".local/bin/chromium" = {
-          source = chromiumLauncher;
           force = true;
         };
         ".local/bin/obs-safe" = {

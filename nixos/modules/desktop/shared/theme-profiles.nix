@@ -111,6 +111,43 @@
           xdg-desktop-portal-hyprland.service \
           xdg-desktop-portal-umbriel.service \
           plasma-xdg-desktop-portal-kde.service 2>/dev/null || true
+        # This D-Bus helper cannot remove entries (--unset is unsupported). Set
+        # the old session values to empty in the D-Bus activation environment
+        # first, then unset them in systemd --user afterwards (because
+        # dbus-daemon --systemd-activation forwards empty vars to systemd).
+        /run/current-system/sw/bin/dbus-update-activation-environment \
+          THEME_PROFILE= \
+          NOCTALIA_STATE_HOME= \
+          NOCTALIA_CONFIG_HOME= \
+          KITTY_CONFIG_DIRECTORY= \
+          QT_QPA_PLATFORMTHEME= \
+          DESKTOP_SESSION= \
+          XDG_CURRENT_DESKTOP= \
+          XDG_SESSION_DESKTOP= \
+          XDG_SESSION_TYPE= \
+          XDG_SESSION_CLASS= \
+          WAYLAND_DISPLAY= \
+          NIRI_SOCKET= \
+          UMBRIEL_SOCKET= \
+          SWAYSOCK= \
+          MANGO_INSTANCE_SIGNATURE= \
+          HYPRLAND_INSTANCE_SIGNATURE= \
+          KDE_FULL_SESSION= \
+          KDE_SESSION_VERSION= \
+          KDE_SESSION_UID= \
+          KDE_SESSION_VT= \
+          KDE_APPLICATIONS_AS_SCOPE= \
+          GNOME_DESKTOP_SESSION_ID= \
+          GNOME_SETUP_DISPLAY= \
+          MATE_DESKTOP_SESSION_ID= \
+          CINNAMON_VERSION= \
+          LXQT_SESSION_CONFIG= \
+          LXQT_SESSION_ID= \
+          AWESOME_CONF= \
+          NIX_GSETTINGS_OVERRIDES_DIR= \
+          DISPLAY= \
+          XAUTHORITY= \
+          2>/dev/null || true
         /run/current-system/sw/bin/systemctl --user unset-environment \
           THEME_PROFILE \
           NOCTALIA_STATE_HOME \
@@ -145,45 +182,6 @@
           NIX_GSETTINGS_OVERRIDES_DIR \
           DISPLAY \
           XAUTHORITY \
-          2>/dev/null || true
-        # This D-Bus helper cannot remove entries (--unset is unsupported). Set
-        # the old session values to empty in the D-Bus activation environment;
-        # the next session imports its actual values. Do not pass --systemd here:
-        # systemd's stale values were removed by unset-environment above.
-        /run/current-system/sw/bin/dbus-update-activation-environment \
-          THEME_PROFILE= \
-          NOCTALIA_STATE_HOME= \
-          NOCTALIA_CONFIG_HOME= \
-          KITTY_CONFIG_DIRECTORY= \
-          QT_QPA_PLATFORMTHEME= \
-          DESKTOP_SESSION= \
-          XDG_CURRENT_DESKTOP= \
-          XDG_SESSION_DESKTOP= \
-          XDG_SESSION_TYPE= \
-          XDG_SESSION_CLASS= \
-          WAYLAND_DISPLAY= \
-          WAYLAND_SOCKET= \
-          NIRI_SOCKET= \
-          UMBRIEL_SOCKET= \
-          LIBEI_SOCKET= \
-          SWAYSOCK= \
-          MANGO_INSTANCE_SIGNATURE= \
-          HYPRLAND_INSTANCE_SIGNATURE= \
-          KDE_FULL_SESSION= \
-          KDE_SESSION_VERSION= \
-          KDE_SESSION_UID= \
-          KDE_SESSION_VT= \
-          KDE_APPLICATIONS_AS_SCOPE= \
-          GNOME_DESKTOP_SESSION_ID= \
-          GNOME_SETUP_DISPLAY= \
-          MATE_DESKTOP_SESSION_ID= \
-          CINNAMON_VERSION= \
-          LXQT_SESSION_CONFIG= \
-          LXQT_SESSION_ID= \
-          AWESOME_CONF= \
-          NIX_GSETTINGS_OVERRIDES_DIR= \
-          DISPLAY= \
-          XAUTHORITY= \
           2>/dev/null || true
       '';
 

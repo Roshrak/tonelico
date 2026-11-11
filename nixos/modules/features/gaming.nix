@@ -1,8 +1,21 @@
-{ ... }:
+{ inputs, ... }:
 {
   nixos.gaming =
     { pkgs, ... }:
+    let
+      system = pkgs.stdenv.hostPlatform.system;
+      wrapAAGL = pkgs.callPackage "${inputs.aagl}/pkgs/wrapAAGL" { };
+      honkers-railway-launcher = pkgs.callPackage "${inputs.aagl}/pkgs/honkers-railway-launcher" {
+        inherit wrapAAGL;
+        unwrapped = inputs.aagl.packages.${system}.the-honkers-railway-launcher-unwrapped;
+      };
+    in
     {
+      imports = [ "${inputs.aagl}/module/hosts.nix" ];
+
+      environment.systemPackages = [ honkers-railway-launcher ];
+      networking.mihoyo-telemetry.block = true;
+
       programs.steam.enable = true;
       programs.gamemode = {
         enable = true;

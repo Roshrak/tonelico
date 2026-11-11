@@ -3,6 +3,7 @@
 
 hl.monitor({ output = "eDP-1", mode = "preferred", position = "auto", scale = 1 })
 hl.monitor({ output = "HDMI-A-1", mode = "preferred", position = "auto-left", scale = 1 })
+hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
 
 hl.env("XCURSOR_THEME", "Bibata-Modern-Ice")
 hl.env("XCURSOR_SIZE", "24")
@@ -23,6 +24,9 @@ hl.config({
             tap_to_click = true,
             disable_while_typing = true,
         },
+    },
+    binds = {
+        scroll_event_delay = 10,
     },
     general = {
         gaps_in = 2,
@@ -58,7 +62,7 @@ hl.animation({ leaf = "windowsIn", enabled = true, speed = 2.2, bezier = "mango"
 hl.animation({ leaf = "windowsOut", enabled = true, speed = 1.0, bezier = "mango", style = "popin 96%" })
 hl.animation({ leaf = "fadeOut", enabled = true, speed = 1.0, bezier = "mango" })
 hl.animation({ leaf = "windowsMove", enabled = true, speed = 3.0, bezier = "mango" })
-hl.animation({ leaf = "workspaces", enabled = true, speed = 2.5, bezier = "mango", style = "slide" })
+hl.animation({ leaf = "workspaces", enabled = true, speed = 1.5, bezier = "mango", style = "slide" })
 -- Noctalia owns its shell animation; avoid a second compositor animation.
 hl.animation({ leaf = "layers", enabled = false })
 
@@ -130,7 +134,7 @@ bind("SUPER + Space", "noctalia msg panel-toggle launcher")
 bind("SUPER + S", "noctalia msg panel-toggle control-center")
 bind("SUPER + Comma", "noctalia msg settings-toggle")
 bind("SUPER + E", "nautilus")
-bind("SUPER + Z", "chromium")
+bind("SUPER + Z", "librewolf")
 bind("SUPER + Escape", "noctalia msg session lock")
 bind("SUPER + SHIFT + E", "noctalia msg panel-toggle session")
 bind("SUPER + V", "noctalia msg panel-toggle clipboard")
@@ -168,15 +172,16 @@ hl.bind("SUPER + Up", hl.dsp.focus({ direction = "up" }))
 hl.bind("SUPER + Down", hl.dsp.focus({ direction = "down" }))
 
 for i = 1, 9 do
+    hl.workspace_rule({ workspace = tostring(i), persistent = true })
     hl.bind("SUPER + " .. i, hl.dsp.focus({ workspace = i }))
     hl.bind("SUPER + SHIFT + " .. i, hl.dsp.window.move({ workspace = i }))
 end
 hl.bind("SUPER + CTRL + Left", hl.dsp.focus({ workspace = "e-1" }))
 hl.bind("SUPER + CTRL + Right", hl.dsp.focus({ workspace = "e+1" }))
-hl.bind("SUPER + mouse_up", hl.dsp.focus({ workspace = "e-1" }))
-hl.bind("SUPER + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
-hl.bind("SUPER + SHIFT + mouse_up", hl.dsp.focus({ direction = "left" }))
-hl.bind("SUPER + SHIFT + mouse_down", hl.dsp.focus({ direction = "right" }))
+hl.bind("SUPER + mouse_up", hl.dsp.focus({ workspace = "e+1" }))
+hl.bind("SUPER + mouse_down", hl.dsp.focus({ workspace = "e-1" }))
+hl.bind("SUPER + SHIFT + mouse_up", hl.dsp.focus({ direction = "right" }))
+hl.bind("SUPER + SHIFT + mouse_down", hl.dsp.focus({ direction = "left" }))
 hl.bind("SUPER + ALT + Left", focus_neighbor_monitor("l"))
 hl.bind("SUPER + ALT + Right", focus_neighbor_monitor("r"))
 hl.bind("SUPER + ALT + SHIFT + Left", move_to_neighbor_monitor("l"))

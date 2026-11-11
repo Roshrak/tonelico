@@ -1,4 +1,4 @@
-config_version = 15
+config_version = 16
 
 [bar.default]
 background_opacity = 0.68999998457729816
@@ -46,7 +46,7 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
     type = "login_box"
 
         [lockscreen_widgets.widget."lockscreen-login-box@HDMI-A-1".settings]
-        background_color = "surface_variant"
+        background_color = "surface_container"
         background_opacity = 0.88
         background_radius = 12.0
         center_password_text = false
@@ -73,7 +73,7 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
     type = "login_box"
 
         [lockscreen_widgets.widget."lockscreen-login-box@HEADLESS-1".settings]
-        background_color = "surface_variant"
+        background_color = "surface_container"
         background_opacity = 0.88
         background_radius = 12.0
         center_password_text = false
@@ -100,7 +100,7 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
     type = "login_box"
 
         [lockscreen_widgets.widget."lockscreen-login-box@eDP-1".settings]
-        background_color = "surface_variant"
+        background_color = "surface_container"
         background_opacity = 0.88
         background_radius = 12.0
         center_password_text = false
@@ -139,7 +139,7 @@ community_palette = "Oxocarbon"
 custom_palette = "konachan-com-362509-bikini-bow-braids-breasts-bunny-fang-flowers-gray-eyes-headdress-long-hair-navel-red-hair-ribbons-rose-signed-swimsuit-thighhighs-wristwear-vib"
 mode = "dark"
 source = "wallpaper"
-wallpaper_scheme = "m3-content"
+wallpaper_scheme = "m3-fruit-salad"
 
     [theme.templates]
     builtin_ids = [ "btop", "cava" ]
@@ -149,16 +149,16 @@ wallpaper_scheme = "m3-content"
 directory = "/home/aesc/Pictures/Wallpapers"
 
     [wallpaper.default]
-    path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_mento__f67538d98eaf6f373f3f6e0eb1ba8d49.jpg"
 
     [wallpaper.last]
-    path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_mento__f67538d98eaf6f373f3f6e0eb1ba8d49.jpg"
 
     [wallpaper.monitors.HDMI-A-1]
     path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
 
     [wallpaper.monitors.eDP-1]
-    path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_mento__f67538d98eaf6f373f3f6e0eb1ba8d49.jpg"
 
     [[wallpaper.favorite]]
     palette_source = "wallpaper"

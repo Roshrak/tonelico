@@ -183,17 +183,17 @@ def navigate_via_sway_wtype(target_url):
     if not os.path.exists(wtype_bin):
         wtype_bin = shutil.which("wtype") or "wtype"
     try:
-        # Check if Chromium window exists in Sway
+        # Check if LibreWolf window exists in Sway
         check = subprocess.run(
             ["swaymsg", "-t", "get_tree"],
             capture_output=True, text=True, timeout=2
         )
-        if "chromium" not in check.stdout.lower():
+        if "librewolf" not in check.stdout.lower():
             return False
 
-        # Focus Chromium window
+        # Focus LibreWolf window
         subprocess.run(
-            ["swaymsg", '[app_id="chromium-browser" or app_id="chromium"] focus'],
+            ["swaymsg", '[app_id="librewolf"] focus'],
             capture_output=True, text=True, timeout=2
         )
         time.sleep(0.15)
@@ -254,15 +254,15 @@ def play_or_search(query):
                 print(f"Reused tab {t.get('title', '')[:30]} for YouTube Music: {target_url}")
                 return
 
-    # If CDP is not active, try reusing the active Chromium tab via Sway + wtype
+    # If CDP is not active, try reusing the active LibreWolf tab via Sway + wtype
     if navigate_via_sway_wtype(target_url):
-        print(f"Reused existing Chromium tab via Sway/wtype: {target_url}")
+        print(f"Reused existing LibreWolf tab via Sway/wtype: {target_url}")
         return
 
-    # Chromium is not running at all, launch it fresh with YouTube Music
-    cmd = ["nohup", "/home/aesc/.local/bin/chromium", target_url]
+    # LibreWolf is not running at all, launch it fresh with YouTube Music
+    cmd = ["nohup", "librewolf", target_url]
     subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-    print(f"Launched Chromium with YouTube Music: {target_url}")
+    print(f"Launched LibreWolf with YouTube Music: {target_url}")
 
 def main():
     if len(sys.argv) < 2:

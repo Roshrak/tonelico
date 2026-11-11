@@ -34,6 +34,9 @@ if ! dbus-update-activation-environment --systemd "${variables[@]}"; then
     log 'ERROR: Failed to import Hyprland session variables into D-Bus; startup deferred.'
     exit 1
 fi
+systemctl --user unset-environment \
+    WAYLAND_SOCKET NIRI_SOCKET UMBRIEL_SOCKET LIBEI_SOCKET SWAYSOCK MANGO_INSTANCE_SIGNATURE I3SOCK \
+    >/dev/null 2>&1 || true
 if ! systemctl --user reset-failed \
     xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service; then
     log 'WARNING: Could not reset failed portal unit state.'

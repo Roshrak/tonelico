@@ -158,7 +158,7 @@ cp -p -- "$H/agm-docker/compose.yml" "$am/"
 # --- 7. Helper scripts, systemd units, client instructions ------------------
 step "agents/bin, agents/systemd, agents/clients"
 mkdir -p "$REPO/agents/bin" "$REPO/agents/systemd" "$REPO/agents/clients"
-rm -f "$REPO"/agents/bin/* "$REPO"/agents/systemd/* "$REPO"/agents/clients/*
+rm -f "$REPO"/agents/bin/* "$REPO"/agents/clients/*
 for f in agy_telegram_bot.py aistudio2api-ui aistudio2api-watchdog antigravity-manager \
          argon-quota-router.py cua-driver gpu_market_search.py hermes-memory-guard \
          import_pool_bundle.py mc_chat_responder_alt mc_responder_ctl npu-python \
@@ -172,7 +172,9 @@ done
 for u in agy-telegram.service aistudio2api.service aistudio2api-watchdog.service \
          aistudio2api-watchdog.timer argon-quota-router.service argon-quota-router.timer \
          hermes-memory-guard.path hermes-memory-guard.service hermes-memory-guard.timer; do
-  [ -f "$H/.config/systemd/user/$u" ] && cp -p -- "$H/.config/systemd/user/$u" "$REPO/agents/systemd/$u"
+  if [ -f "$H/.config/systemd/user/$u" ] && [ ! -L "$H/.config/systemd/user/$u" ]; then
+    cp -p -- "$H/.config/systemd/user/$u" "$REPO/agents/systemd/$u"
+  fi
 done
 sed -E 's#/nix/store/[a-z0-9]{32}-hermes-agent-env#@HERMES_ENV@#g' \
   "$H/.config/systemd/user/hermes-gateway.service" > "$REPO/agents/systemd/hermes-gateway.service"

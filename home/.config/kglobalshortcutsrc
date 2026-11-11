@@ -272,7 +272,7 @@ switch to next activity=,,Switch to Next Activity
 switch to previous activity=,,Switch to Previous Activity
 toggle do not disturb=,,Toggle do not disturb
 
-[services][chromium-browser.desktop]
+[services][librewolf.desktop]
 _launch=Meta+Z
 
 [services][kitty.desktop]

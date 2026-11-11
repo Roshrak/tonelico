@@ -7,7 +7,9 @@ model:
     argon: aistudio2api/gemini-4-argon-high
     argon-high: aistudio2api/gemini-4-argon-high
     argon-med: aistudio2api/gemini-4-argon-high
-    argon-low: aistudio2api/gemini-4-argon-low
+    argon-low: aistudio2api/gemini-4-argon-high
+    agy-argon: antigravity-manager/gemini-4-argon-high
+    aistudio-flash: aistudio2api/gemini-3.8-flash-high
     opus: antigravity-manager/claude-opus-4-6-thinking
     claude-opus: antigravity-manager/claude-opus-4-6-thinking
     opus-5.5: antigravity-manager/claude-opus-5-5-high
@@ -15,28 +17,28 @@ model:
     flash-med: antigravity-manager/gemini-3.8-flash-high
     flash-low: antigravity-manager/gemini-3.8-flash-high
     flash: antigravity-manager/gemini-3.8-flash-high
-    antigravity: antigravity-manager/gemini-3.8-flash-high
+    antigravity: antigravity-manager/gemini-4-argon-high
     lite: antigravity-manager/gemini-3.1-flash-lite
     tab-lite: antigravity-manager/tab_flash_lite_preview
 providers:
   aistudio2api:
-    api: http://127.0.0.1:2048/v1
+    api: http://134.185.85.64:2048/v1
     default_model: gemini-4-argon-high
     key_env: AISTUDIO2API_API_KEY
   antigravity-manager:
     name: Antigravity Manager
-    api: http://127.0.0.1:8045/v1
-    default_model: gemini-3.8-flash-high
+    api: http://134.185.85.64:8045/v1
+    default_model: gemini-4-argon-high
     key_env: AGY_ROTATOR_API_KEY
     transport: chat_completions
     discover_models: true
 fallback_providers:
+  - provider: antigravity-manager
+    model: gemini-4-argon-high
   - provider: aistudio2api
     model: gemini-3.8-flash-high
   - provider: antigravity-manager
     model: gemini-3.8-flash-high
-  - provider: antigravity-manager
-    model: claude-opus-4-6-thinking
 credential_pool_strategies:
   default: fill_first
 browser:
@@ -240,6 +242,15 @@ known_builtin_toolsets:
     - yuanbao
 agent:
   reasoning_effort: high
+  api_max_retries: 6
 web:
   backend: keenable
   extract_backend: keenable
+platforms:
+  telegram:
+    enabled: true
+    home_channel:
+      platform: telegram
+      chat_id: '@TELEGRAM_USER_ID@'
+      name: Trong
+      user_id: '@TELEGRAM_USER_ID@'

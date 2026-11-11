@@ -27,6 +27,7 @@
     in
     {
       # Merged into the graphics driver directory the system loads from.
+      hardware.cpu.intel.npu.enable = true;
       hardware.graphics.extraPackages = [ npuCompiler ];
     }
   ;

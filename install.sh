@@ -6,7 +6,6 @@
 #   ./install.sh --post       force the second part
 #
 # Options:  --yes             never prompt (secrets come from the environment or are left empty)
-#           --same-hardware   skip the "is this the Acer Swift SFG16-72" check
 #           --skip-agents     install only the system and the theme
 #           --overwrite-nixos replace an existing flake config in /etc/nixos (refused by default)
 #
@@ -75,13 +74,7 @@ preflight() {
   sudo -v || die "sudo is required"
   if [ "$MODE" = system ]; then
     curl -fsS -o /dev/null --max-time 15 https://cache.nixos.org/nix-cache-info || die "no internet (could not reach cache.nixos.org)"
-    local product avail
-    product="$(cat /sys/class/dmi/id/product_name 2>/dev/null || echo unknown)"
-    if [ "$product" != "Swift SFG16-72" ] && [ "$FORCE_HW" = 0 ]; then
-      die "this repository is tuned for the Acer Swift SFG16-72, but this machine reports '$product'.
-       Its battery-limit module, touchpad fix and NPU compiler will not fit other hardware.
-       Re-run with --same-hardware only if you accept that and will edit nixos/hosts/tonelico/default.nix."
-    fi
+    local avail
     avail="$(df --output=avail -BG /nix 2>/dev/null | tail -n1 | tr -dc '0-9')"
     if [ -n "$avail" ] && [ "$avail" -lt 40 ]; then
       die "only ${avail} GB free on /nix; the build needs about 40 GB"

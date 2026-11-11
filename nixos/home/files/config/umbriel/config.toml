@@ -79,9 +79,11 @@ middle_click_paste = true
 theme = "Bibata-Modern-Ice"
 size = 24
 hardware_cursor = false
+follows_focus = true
 
 [input.focus]
 follows_mouse = true
+hover_raises = false
 
 [input.keyboard]
 layout = "us"
@@ -94,6 +96,55 @@ tap = true
 drag_lock = "timeout"
 natural_scroll = true
 disable_while_typing = true
+
+# ============================================================
+# ANIMATIONS (Physical Springs matching Tonelico Niri)
+# ============================================================
+
+[animation]
+enabled = true
+duration_ms = 200
+curve = "spring"
+
+[animation.springs.spring]
+damping = 1.0
+stiffness = 800.0
+
+[animation.springs.workspace_spring]
+damping = 1.0
+stiffness = 1000.0
+
+[animation.windows_in]
+enabled = true
+duration_ms = 150
+curve = "ease_out_expo"
+style = "popin"
+scale = 0.92
+
+[animation.windows_out]
+enabled = true
+duration_ms = 150
+curve = "ease_out_quad"
+style = "fade"
+scale = 0.92
+
+[animation.windows_move]
+enabled = true
+curve = "spring"
+
+[animation.windows_resize]
+enabled = true
+curve = "spring"
+
+[animation.workspaces]
+enabled = true
+curve = "workspace_spring"
+style = "slide"
+
+[animation.overview]
+enabled = true
+curve = "spring"
+workspace_curve = "workspace_spring"
 
 # ============================================================
 # HOT CORNERS & OVERVIEW
@@ -180,6 +231,12 @@ unfocused = "#45475a"
 # Mouse window navigation
 "Mod+Shift+WheelDown" = { action = "window-focus-right", cooldown_ms = 10 }
 "Mod+Shift+WheelUp" = { action = "window-focus-left", cooldown_ms = 10 }
+"Mod+WheelRight" = { action = "window-focus-right", cooldown_ms = 10 }
+"Mod+WheelLeft" = { action = "window-focus-left", cooldown_ms = 10 }
+"Mod+Ctrl+Shift+WheelDown" = { action = "column-move-right", cooldown_ms = 10 }
+"Mod+Ctrl+Shift+WheelUp" = { action = "column-move-left", cooldown_ms = 10 }
+"Mod+Ctrl+WheelRight" = { action = "column-move-right", cooldown_ms = 10 }
+"Mod+Ctrl+WheelLeft" = { action = "column-move-left", cooldown_ms = 10 }
 
 # Applications / Noctalia
 "Mod+Return" = { action = "spawn kitty", repeat = false }
@@ -187,7 +244,7 @@ unfocused = "#45475a"
 "Mod+S" = { action = "spawn noctalia msg panel-toggle control-center", repeat = false }
 "Mod+Comma" = { action = "spawn noctalia msg settings-toggle", repeat = false }
 "Mod+E" = { action = "spawn nautilus", repeat = false }
-"Mod+Z" = { action = "spawn chromium", repeat = false }
+"Mod+Z" = { action = "spawn librewolf", repeat = false }
 "Mod+Escape" = { action = "spawn noctalia msg session lock", repeat = false }
 "Mod+Shift+E" = { action = "spawn noctalia msg panel-toggle session", repeat = false }
 "Mod+V" = { action = "spawn noctalia msg panel-toggle clipboard", repeat = false }
@@ -200,12 +257,22 @@ unfocused = "#45475a"
 "Ctrl+Print" = { action = "spawn noctalia msg screenshot-region", repeat = false }
 
 # Window control
-"Mod+Q" = { action = "window-close", repeat = false }
+"Mod+Q" = { action = "window-close", repeat = true }
+"Mod+Shift+Q" = { action = "window-close", repeat = false }
+"Alt+F4" = { action = "window-close", repeat = false }
 "Mod+M" = "window-toggle-maximize-to-edges"
+"Mod+Shift+M" = "window-toggle-maximize"
 "Mod+N" = "window-cycle-primary-extent"
+"Mod+Shift+N" = "window-cycle-primary-extent-back"
 "Mod+F" = "window-toggle-fullscreen"
 "Mod+Shift+F" = "window-toggle-floating"
+"Mod+Shift+Space" = "window-toggle-floating"
+"Mod+Ctrl+F" = "window-set-primary-extent 1.0"
+"Mod+C" = "column-center"
+"Mod+P" = "window-toggle-pinned"
+"Mod+Shift+P" = "dpms-off"
 "Mod+Shift+Alt+M" = { action = "session-quit skip-confirmation", repeat = false }
+"Ctrl+Alt+Delete" = "session-quit"
 
 # Window focus
 "Mod+H" = "window-focus-left"
@@ -213,10 +280,13 @@ unfocused = "#45475a"
 "Mod+K" = "window-focus-up"
 "Mod+J" = "window-focus-down"
 "Mod+Tab" = "window-focus-down"
+"Mod+Shift+Tab" = "window-focus-up"
 "Mod+Left" = "window-focus-left"
 "Mod+Right" = "window-focus-right"
 "Mod+Up" = "window-focus-up"
 "Mod+Down" = "window-focus-down"
+"Mod+Home" = "column-focus-first"
+"Mod+End" = "column-focus-last"
 
 # Move / swap windows
 "Mod+Ctrl+H" = "column-move-left"
@@ -227,6 +297,8 @@ unfocused = "#45475a"
 "Mod+Ctrl+Right" = "column-move-right"
 "Mod+Ctrl+Up" = "window-move-up"
 "Mod+Ctrl+Down" = "window-move-down"
+"Mod+Ctrl+Home" = "column-move-to-first"
+"Mod+Ctrl+End" = "column-move-to-last"
 
 # Workspaces
 "Mod+1" = "workspace-switch 1"
@@ -250,9 +322,36 @@ unfocused = "#45475a"
 "Mod+Shift+8" = "column-move-to-workspace 8"
 "Mod+Shift+9" = "column-move-to-workspace 9"
 
+"Mod+Ctrl+1" = "window-move-to-workspace 1"
+"Mod+Ctrl+2" = "window-move-to-workspace 2"
+"Mod+Ctrl+3" = "window-move-to-workspace 3"
+"Mod+Ctrl+4" = "window-move-to-workspace 4"
+"Mod+Ctrl+5" = "window-move-to-workspace 5"
+"Mod+Ctrl+6" = "window-move-to-workspace 6"
+"Mod+Ctrl+7" = "window-move-to-workspace 7"
+"Mod+Ctrl+8" = "window-move-to-workspace 8"
+"Mod+Ctrl+9" = "window-move-to-workspace 9"
+
+"Mod+Page_Down" = "workspace-next"
+"Mod+Page_Up" = "workspace-previous"
+"Mod+U" = "workspace-next"
+"Mod+I" = "workspace-previous"
+"Mod+Ctrl+Page_Down" = "column-move-to-workspace-next"
+"Mod+Ctrl+Page_Up" = "column-move-to-workspace-previous"
+"Mod+Ctrl+U" = "column-move-to-workspace-next"
+"Mod+Ctrl+I" = "column-move-to-workspace-previous"
+"Mod+Shift+Page_Down" = "workspace-move-down"
+"Mod+Shift+Page_Up" = "workspace-move-up"
+"Mod+Shift+U" = "workspace-move-down"
+"Mod+Shift+I" = "workspace-move-up"
+
 # Workspace scroll
-"Mod+WheelUp" = "workspace-previous"
-"Mod+WheelDown" = "workspace-next"
+"Mod+WheelUp" = { action = "workspace-previous", cooldown_ms = 10 }
+"Mod+WheelDown" = { action = "workspace-next", cooldown_ms = 10 }
+"Mod+Ctrl+WheelUp" = { action = "column-move-to-workspace-previous", cooldown_ms = 10 }
+"Mod+Ctrl+WheelDown" = { action = "column-move-to-workspace-next", cooldown_ms = 10 }
+"Mod+Alt+WheelUp" = "layout-scroll-left"
+"Mod+Alt+WheelDown" = "layout-scroll-right"
 
 # Overview (manual only; hot corners disabled)
 "Mod+Shift+MouseMiddle" = { action = "overview-toggle", repeat = false }
@@ -261,25 +360,53 @@ unfocused = "#45475a"
 # Monitors (HDMI is physically LEFT, Laptop is physically RIGHT)
 "Mod+Alt+Left" = "output-focus-left"
 "Mod+Alt+Right" = "output-focus-right"
+"Mod+Alt+Up" = "output-focus-up"
+"Mod+Alt+Down" = "output-focus-down"
+"Mod+Alt+H" = "output-focus-left"
+"Mod+Alt+L" = "output-focus-right"
+"Mod+Alt+K" = "output-focus-up"
+"Mod+Alt+J" = "output-focus-down"
 
 # Move columns between monitors
 "Mod+Alt+Shift+Left" = "column-move-to-output-left"
 "Mod+Alt+Shift+Right" = "column-move-to-output-right"
+"Mod+Alt+Shift+H" = "column-move-to-output-left"
+"Mod+Alt+Shift+L" = "column-move-to-output-right"
 "Mod+Shift+Left" = "column-move-to-output-left"
 "Mod+Shift+Right" = "column-move-to-output-right"
+"Mod+Shift+H" = "column-move-to-output-left"
+"Mod+Shift+L" = "column-move-to-output-right"
+"Mod+Shift+Ctrl+Left" = "column-move-to-output-left"
+"Mod+Shift+Ctrl+Right" = "column-move-to-output-right"
+"Mod+Shift+Ctrl+H" = "column-move-to-output-left"
+"Mod+Shift+Ctrl+L" = "column-move-to-output-right"
 
 # Vertical monitor movement
 "Mod+Shift+Up" = "window-move-to-output-up"
 "Mod+Shift+Down" = "window-move-to-output-down"
+"Mod+Shift+K" = "window-move-to-output-up"
+"Mod+Shift+J" = "window-move-to-output-down"
+"Mod+Shift+Ctrl+Up" = "column-move-to-output-up"
+"Mod+Shift+Ctrl+Down" = "column-move-to-output-down"
+"Mod+Shift+Ctrl+K" = "column-move-to-output-up"
+"Mod+Shift+Ctrl+J" = "column-move-to-output-down"
 
 # Column stacking / sizing helpers
 "Mod+BracketLeft" = "window-consume-or-expel-left"
 "Mod+BracketRight" = "window-consume-or-expel-right"
+"Mod+Period" = "window-consume-or-expel-right"
 "Mod+R" = "window-cycle-primary-extent"
 "Mod+Shift+R" = "window-cycle-primary-extent-back"
+"Mod+Ctrl+R" = "window-cycle-secondary-extent"
 "Mod+Minus" = "window-modify-primary-extent -0.1"
 "Mod+Equal" = "window-modify-primary-extent +0.1"
+"Mod+Shift+Minus" = "window-modify-secondary-extent -0.1"
+"Mod+Shift+Equal" = "window-modify-secondary-extent +0.1"
 "Mod+W" = "column-toggle-tabbed"
+"Mod+Grave" = "scratchpad-toggle"
+"Mod+Shift+Grave" = "window-toggle-scratchpad"
+"Mod+Ctrl+Grave" = "window-move-to-scratchpad"
+"Mod+Shift+C" = "config-reload"
 
 # Audio
 "XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume @DEFAULT_SINK@ 5%+", allow_when_locked = true }
@@ -295,6 +422,15 @@ unfocused = "#45475a"
 "XF86AudioPlay" = { action = "spawn noctalia msg media toggle", allow_when_locked = true, repeat = false }
 "XF86AudioNext" = { action = "spawn noctalia msg media next", allow_when_locked = true, repeat = false }
 "XF86AudioPrev" = { action = "spawn noctalia msg media previous", allow_when_locked = true, repeat = false }
+
+[[window_rule]]
+match.app_id = "^(org\\.pulseaudio\\.pavucontrol|nm-connection-editor|\\.blueman-manager-wrapped|xdg-desktop-portal-gtk)$"
+default_floating = true
+
+[[window_rule]]
+match.title = "Picture-in-Picture"
+default_floating = true
+default_pinned = true
 
 # Dynamic session colors generated from theme profile
 [include]

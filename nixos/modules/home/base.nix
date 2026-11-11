@@ -9,7 +9,7 @@
       xdg.enable = true;
       home.sessionPath = [ "${config.home.homeDirectory}/.local/bin" ];
       home.sessionVariables = {
-        BROWSER = "chromium";
+        BROWSER = "librewolf";
         TERMINAL = "kitty";
         XCURSOR_THEME = "Bibata-Modern-Ice";
         XCURSOR_SIZE = "24";

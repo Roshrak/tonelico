@@ -18,9 +18,6 @@
     # newer Codex CLI independently. This avoids a broad system upgrade just
     # to receive Codex fixes.
     codex-nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    # Chromium follows the current 26.05 branch on its own, so browser security
-    # updates do not require moving the whole system to a newer nixpkgs.
-    chromium-nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     mango = {
       url = "github:mangowm/mango";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -49,6 +46,7 @@
       url = "github:VN-Linux-Family/zalo-for-linux";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    aagl.url = "github:ezKEa/aagl-gtk-on-nix";
   };
 
   outputs =
@@ -62,6 +60,7 @@
       "https://cache.numtide.com"
       "https://niri-epireyn.cachix.org"
       "https://nix-community.cachix.org"
+      "https://ezkea.cachix.org"
     ];
     extra-trusted-public-keys = [
       "noctalia.cachix.org-1:pCOR47nnMEo5thcxNDtzWpOxNFQsBRglJzxWPp3dkU4="
@@ -69,6 +68,7 @@
       "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
       "niri-epireyn.cachix.org-1:tlVyFN7CtsDT+ZcLPS+ekFWeT1X6X4OqvWqbBMyIzFA="
       "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
+      "ezkea.cachix.org-1:ioBmUbJTZIKsHmWWXPe1FSFbeVe+afhfgqgTSNd34eI="
     ];
   };
 }

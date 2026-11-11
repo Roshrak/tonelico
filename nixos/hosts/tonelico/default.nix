@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   # Build against this host's selected kernel, keeping the previously verified
@@ -45,8 +45,9 @@ in
 {
   imports = [ ./input-devices.nix ];
 
-  # Restore this Acer's firmware-backed 80% cap on every boot. These controls
-  # belong to this laptop, not the shared modules for other hardware.
+  # Hardware-adaptive kernel modules and low-latency driver options.
+  # Device-specific units below check sysfs/DMI/CPU vendor before running, so
+  # this host profile works on any future laptop or desktop without manual edits.
   boot.extraModulePackages = [ acerWmiBattery ];
   boot.extraModprobeConfig = ''
     options acer-wmi-battery enable_health_mode=1
@@ -61,10 +62,10 @@ in
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
-      # Only Acer machines have this firmware interface. Any other machine skips
-      # the unit (exit 1 in ExecCondition is a skip, not a failure).
+      # Only Acer laptops with a battery have this firmware interface. Any other
+      # machine skips the unit cleanly (exit 1 in ExecCondition is a skip).
       ExecCondition = pkgs.writeShellScript "acer-wmi-battery-only-on-acer" ''
-        grep -qx 'Acer' /sys/class/dmi/id/sys_vendor
+        grep -qx 'Acer' /sys/class/dmi/id/sys_vendor && compgen -G '/sys/class/power_supply/BAT*' >/dev/null
       '';
       # Extra modules live outside kmod's default /lib/modules on NixOS.
       ExecStart = pkgs.writeShellScript "load-acer-wmi-battery" ''
@@ -75,10 +76,14 @@ in
         fi
       '';
       # Also reapply when the module is already loaded. Verify the driver's
-      # firmware readback; loading a module alone does not establish success.
+      # firmware readback when present; skip gracefully on Acer models without it.
       ExecStartPost = pkgs.writeShellScript "verify-acer-battery-limit" ''
         set -eu
         control=/sys/bus/wmi/drivers/acer-wmi-battery/health_mode
+        if [ ! -e "$control" ]; then
+          printf 'Acer WMI battery health_mode interface not present on this model; skipping.\n'
+          exit 0
+        fi
         printf '1\n' > "$control"
         read -r enabled < "$control"
         if [ "$enabled" != 1 ]; then
@@ -90,31 +95,30 @@ in
     };
   };
 
-  # Acer Swift SFG16-72 / Intel Core Ultra 5 125U-specific tuning.
-  # Keep vendor-specific settings here instead of in shared modules/system.
-  hardware.cpu.intel.updateMicrocode = true;
+  # CPU microcode updates and GPU/media runtimes.
+  # Mesa + libva auto-select the active GPU driver (iHD on Intel, radeonsi on AMD, etc.).
+  hardware.cpu.intel.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
+  hardware.cpu.amd.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
   hardware.graphics.extraPackages = with pkgs; [
     intel-media-driver
     vpl-gpu-rt
     intel-compute-runtime
   ];
   services.thermald.enable = true;
+  systemd.services.thermald.unitConfig.ConditionCPUVendor = "GenuineIntel";
 
-  environment.sessionVariables.LIBVA_DRIVER_NAME = "iHD";
-
-  # Fix for PixArt PIXA3848 I2C Touchpad boot race condition.
-  # On cold boot, the touchpad power/controller takes a moment to stabilize,
-  # causing the initial i2c_hid_acpi descriptor probe to fail with error -22
-  # ("unexpected long global item"). Reloading i2c_hid_acpi if missing fixes it.
+  # Fix for PixArt PIXA3848 I2C Touchpad boot race condition (only runs on machines
+  # that physically expose the PIXA3848 ACPI device).
   systemd.services.pixart-touchpad-fix = {
     description = "Fix PixArt PIXA3848 I2C Touchpad Initialization";
     wantedBy = [ "multi-user.target" ];
     after = [ "multi-user.target" ];
+    unitConfig.ConditionPathExists = "/sys/bus/acpi/devices/PIXA3848:00";
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = false;
       ExecStart = pkgs.writeShellScript "pixart-touchpad-fix" ''
-        if ! grep -q "PIXA3848.*Touchpad" /proc/bus/input/devices; then
+        if [ -e /sys/bus/acpi/devices/PIXA3848:00 ] && ! grep -q "PIXA3848.*Touchpad" /proc/bus/input/devices; then
           echo "PIXA3848 touchpad not detected in input devices. Reloading i2c_hid_acpi..."
           ${pkgs.kmod}/bin/modprobe -r i2c_hid_acpi || true
           sleep 0.5
@@ -126,9 +130,9 @@ in
     };
   };
 
-  # Ensure the touchpad is re-checked upon resuming from sleep/suspend
+  # Ensure the touchpad is re-checked upon resuming from sleep/suspend on hardware with PIXA3848
   powerManagement.resumeCommands = ''
-    if ! grep -q "PIXA3848.*Touchpad" /proc/bus/input/devices; then
+    if [ -e /sys/bus/acpi/devices/PIXA3848:00 ] && ! grep -q "PIXA3848.*Touchpad" /proc/bus/input/devices; then
       ${pkgs.kmod}/bin/modprobe -r i2c_hid_acpi || true
       sleep 0.5
       ${pkgs.kmod}/bin/modprobe i2c_hid_acpi

@@ -303,7 +303,7 @@ binds {
     }
 
     Mod+Z {
-        spawn "chromium";
+        spawn "librewolf";
     }
 
     Mod+Escape {
@@ -349,7 +349,7 @@ binds {
     // ========================================================
 
     // Close focused window.
-    Mod+Q {
+    Mod+Q repeat=true {
         close-window;
     }
 
@@ -526,11 +526,11 @@ binds {
     // Workspace scroll
     // --------------------------------------------------------
 
-    Mod+WheelScrollUp {
+    Mod+WheelScrollUp cooldown-ms=10 {
         focus-workspace-up;
     }
 
-    Mod+WheelScrollDown {
+    Mod+WheelScrollDown cooldown-ms=10 {
         focus-workspace-down;
     }
 

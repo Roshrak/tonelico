@@ -7,45 +7,45 @@
 /* App-scoped CSS of enabled community GTK extensions; Noctalia maintains this file. */
 @import url("noctalia-extensions.css");
 
-@define-color accent_color #7aa2f7;
-@define-color accent_bg_color #7aa2f7;
-@define-color accent_fg_color #16161e;
+@define-color accent_color #3584e4;
+@define-color accent_bg_color #3584e4;
+@define-color accent_fg_color #ffffff;
 
-@define-color destructive_bg_color #f7768e;
-@define-color destructive_fg_color #16161e;
+@define-color destructive_bg_color #c01c28;
+@define-color destructive_fg_color #ffffff;
 
-@define-color error_bg_color #f7768e;
-@define-color error_fg_color #16161e;
+@define-color error_bg_color #c01c28;
+@define-color error_fg_color #ffffff;
 
-@define-color window_bg_color #1a1b26;
-@define-color window_fg_color #c0caf5;
+@define-color window_bg_color #242424;
+@define-color window_fg_color #ffffff;
 
-@define-color view_bg_color #1a1b26;
-@define-color view_fg_color #c0caf5;
+@define-color view_bg_color #242424;
+@define-color view_fg_color #ffffff;
 
-@define-color headerbar_bg_color #1a1b26;
-@define-color headerbar_fg_color #c0caf5;
+@define-color headerbar_bg_color #242424;
+@define-color headerbar_fg_color #ffffff;
 @define-color headerbar_backdrop_color @window_bg_color;
 
-@define-color popover_bg_color #24283b;
-@define-color popover_fg_color #c0caf5;
+@define-color popover_bg_color #1e1e1e;
+@define-color popover_fg_color #ffffff;
 
-@define-color card_bg_color #24283b;
-@define-color card_fg_color #c0caf5;
+@define-color card_bg_color #1e1e1e;
+@define-color card_fg_color #ffffff;
 
-@define-color dialog_bg_color #1a1b26;
-@define-color dialog_fg_color #c0caf5;
+@define-color dialog_bg_color #242424;
+@define-color dialog_fg_color #ffffff;
 
-@define-color overview_bg_color #24283b;
-@define-color overview_fg_color #c0caf5;
+@define-color overview_bg_color #1e1e1e;
+@define-color overview_fg_color #ffffff;
 
-@define-color sidebar_bg_color #24283b;
-@define-color sidebar_fg_color #c0caf5;
+@define-color sidebar_bg_color #1e1e1e;
+@define-color sidebar_fg_color #ffffff;
 @define-color sidebar_backdrop_color @window_bg_color;
 @define-color sidebar_border_color @window_bg_color;
 
-@define-color secondary_sidebar_bg_color #1a1b26;
-@define-color secondary_sidebar_fg_color #c0caf5;
+@define-color secondary_sidebar_bg_color #242424;
+@define-color secondary_sidebar_fg_color #ffffff;
 
 /* Focused selection states */
 @define-color theme_selected_bg_color @accent_bg_color;
@@ -60,51 +60,51 @@
 @define-color theme_unfocused_selected_fg_color @accent_fg_color;
 
 :root {
-    --accent-color: #7aa2f7;
-    --accent-bg-color: #7aa2f7; 
-    --accent-fg-color: #16161e;
+    --accent-color: #3584e4;
+    --accent-bg-color: #3584e4; 
+    --accent-fg-color: #ffffff;
 
-    --destructive-bg-color: #f7768e;
-    --destructive-fg-color: #16161e;
+    --destructive-bg-color: #c01c28;
+    --destructive-fg-color: #ffffff;
 
-    --error-bg-color: #f7768e;
-    --error-fg-color: #16161e;
-    --error-color: #f7768e;
+    --error-bg-color: #c01c28;
+    --error-fg-color: #ffffff;
+    --error-color: #c01c28;
 
-    --window-bg-color: #1a1b26;
-    --window-fg-color: #c0caf5;
+    --window-bg-color: #242424;
+    --window-fg-color: #ffffff;
 
-    --view-bg-color: #1a1b26;
-    --view-fg-color: #c0caf5;
+    --view-bg-color: #242424;
+    --view-fg-color: #ffffff;
 
-    --headerbar-bg-color: #1a1b26;
-    --headerbar-fg-color: #c0caf5;
+    --headerbar-bg-color: #242424;
+    --headerbar-fg-color: #ffffff;
     --headerbar-backdrop-color: @window_bg_color;
 
-    --popover-bg-color: #24283b;
-    --popover-fg-color: #c0caf5;
+    --popover-bg-color: #1e1e1e;
+    --popover-fg-color: #ffffff;
 
-    --card-bg-color: #24283b;
-    --card-fg-color: #c0caf5;
+    --card-bg-color: #1e1e1e;
+    --card-fg-color: #ffffff;
 
-    --dialog-bg-color: #1a1b26;
-    --dialog-fg-color: #c0caf5;
+    --dialog-bg-color: #242424;
+    --dialog-fg-color: #ffffff;
 
-    --overview-bg-color: #24283b;
-    --overview-fg-color: #c0caf5;
+    --overview-bg-color: #1e1e1e;
+    --overview-fg-color: #ffffff;
 
-    --sidebar-bg-color: #24283b;
-    --sidebar-fg-color: #c0caf5;
+    --sidebar-bg-color: #1e1e1e;
+    --sidebar-fg-color: #ffffff;
     --sidebar-backdrop-color: @window_bg_color;
     --sidebar-border-color: @window_bg_color;
 
-    --warning-bg-color: #41503a;
-    --warning-fg-color: #9ece6a;
-    --warning-color: #9ece6a;
+    --warning-bg-color: #656565;
+    --warning-fg-color: #ffffff;
+    --warning-color: #ffffff;
 
-    --success-color: #bb9af7;
-    --success-bg-color: #4a4164;
-    --success-fg-color: #c4a4ff;
+    --success-color: #1b467c;
+    --success-bg-color: #212e3e;
+    --success-fg-color: #6896d2;
     
     --shade-color: rgba(0, 0, 0, 0.36);
 }

@@ -42,9 +42,11 @@ SDDM to greetd under a running Plasma session would end that session halfway thr
 
 ### Hardware
 
-`nixos/hosts/tonelico` is tuned for the **Acer Swift SFG16-72** (battery charge limit, PixArt
-touchpad fix, Intel NPU compiler). The installer refuses other hardware unless you pass
-`--same-hardware`; then edit `nixos/hosts/tonelico/default.nix` first.
+Works on any UEFI `x86_64` laptop or desktop out of the box. During install, `nixos-generate-config`
+writes the target machine's own `hardware-configuration.nix` (disks, LUKS, CPU microcode, KVM modules),
+Mesa and `libva` select the active GPU driver automatically, and device-specific units (Intel `thermald`,
+Acer 80% battery health limit, PixArt I2C touchpad cold-boot fix) check CPU/DMI/ACPI state at runtime
+and skip cleanly on other hardware.
 
 ## Keybindings
 

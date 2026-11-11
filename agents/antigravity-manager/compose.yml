@@ -20,7 +20,7 @@ services:
       - 8.8.8.8
       - 100.100.100.100
     mem_limit: 256m
-    restart: unless-stopped
+    restart: "no"
     # tini as PID 1 forwards SIGTERM; without it the app ignores SIGTERM and every
     # shutdown waits the full 10s docker stop timeout.
     init: true

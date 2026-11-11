@@ -145,10 +145,10 @@ password_style = "random"
 
 [theme]
 builtin = "Tokyo-Night"
-community_palette = "Oxocarbon"
+community_palette = "ADW"
 custom_palette = "konachan-com-362509-bikini-bow-braids-breasts-bunny-fang-flowers-gray-eyes-headdress-long-hair-navel-red-hair-ribbons-rose-signed-swimsuit-thighhighs-wristwear-vib"
 mode = "dark"
-source = "builtin"
+source = "community"
 wallpaper_scheme = "m3-fruit-salad"
 
     [theme.templates]

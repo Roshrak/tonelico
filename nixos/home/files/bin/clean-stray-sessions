@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reap Chromium processes only when their exact logind session has ended.
+# Reap browser processes only when their exact logind session has ended.
 # Unknown cgroups, query failures and live sessions are always preserved.
 set -uo pipefail
 
@@ -42,13 +42,13 @@ same_process() {
 
     [ "$actual_start" = "$expected_start" ] &&
         [ "$actual_uid" = "$uid" ] &&
-        [ "$actual_comm" = chromium ] &&
+        { [ "$actual_comm" = librewolf ] || [ "$actual_comm" = ".librewolf-wrap" ]; } &&
         [ "$actual_cgroup" = "$expected_cgroup" ]
 }
 
 term_sent=0
 unknown=0
-for pid in $("$pgrep_bin" -u "$uid" -x chromium 2>/dev/null); do
+for pid in $("$pgrep_bin" -u "$uid" -x 'librewolf|\.librewolf-wrap' 2>/dev/null); do
     case "$pid" in ''|*[!0-9]*) continue ;; esac
 
     cgroup="$(awk -F: '$1 == "0" { print $3; exit }' "$proc_root/$pid/cgroup" 2>/dev/null)"
@@ -90,9 +90,9 @@ for pid in $("$pgrep_bin" -u "$uid" -x chromium 2>/dev/null); do
     fi
 
     if [ "$testing" -eq 1 ]; then
-        printf 'TEST: would send TERM to chromium pid=%s ended-session=%s\n' "$pid" "$session_id"
+        printf 'TEST: would send TERM to librewolf pid=%s ended-session=%s\n' "$pid" "$session_id"
     elif kill -TERM "$pid" 2>/dev/null; then
-        printf 'Sent TERM to Chromium process %s left in ended session %s.\n' "$pid" "$session_id"
+        printf 'Sent TERM to LibreWolf process %s left in ended session %s.\n' "$pid" "$session_id"
     else
         printf 'clean-stray-sessions: could not signal verified stale PID %s\n' "$pid" >&2
         continue
@@ -100,7 +100,5 @@ for pid in $("$pgrep_bin" -u "$uid" -x chromium 2>/dev/null); do
     term_sent=$((term_sent + 1))
 done
 
-# Never delete Chromium singleton metadata here. Chromium itself validates and
-# recovers stale profile locks; removing several lock files races a new launch.
 printf 'clean-stray-sessions: TERM=%s unknown-or-unowned=%s; singleton files left untouched\n' \
     "$term_sent" "$unknown"

@@ -22,8 +22,6 @@ let
       hostPath = hostRoot + "/${hostKey}";
       host = readHost hostKey;
       codexPackage = inputs.codex-nixpkgs.legacyPackages.${host.system}.codex;
-      # Only the browser uses this; replacing pkgs.chromium would also rebuild Electron.
-      chromiumPackage = inputs.chromium-nixpkgs.legacyPackages.${host.system}.chromium;
     in
     lib.nameValuePair hostKey (
       inputs.nixpkgs.lib.nixosSystem {
@@ -39,7 +37,7 @@ let
             # instead of upgrading all NixOS packages.
             nixpkgs.overlays = [
               inputs.zalo-for-linux.overlays.default
-              (_final: _prev: { codex = codexPackage; chromium-latest = chromiumPackage; })
+              (_final: _prev: { codex = codexPackage; })
             ];
           }
           config.nixos.system

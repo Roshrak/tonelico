@@ -14,7 +14,7 @@ has its own (the file manager, the settings app). The key does not.
 | `Super+S` | control center | System Settings | quick settings | settings manager |
 | `Super+,` | settings | System Settings | GNOME Settings | settings manager |
 | `Super+E` | files | Dolphin | Nautilus | Thunar |
-| `Super+Z` | browser | Chromium | Chromium | Chromium |
+| `Super+Z` | browser | LibreWolf | LibreWolf | LibreWolf |
 | `Super+V` | clipboard history | Klipper | clipboard-indicator | Clipman |
 | `Alt+Z` | toggle input method | fcitx5 | fcitx5 | fcitx5 |
 | `Super+Escape` | lock screen | lock | lock | lock |

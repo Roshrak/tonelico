@@ -10,17 +10,27 @@
       # Preserve the existing grammars and package/session ownership. In
       # particular Hyprland uses Lua; the ordinary HM text config generator would
       # change that grammar. NixOS still owns compositor and greeter integration.
-      xdg.configFile."niri/config.kdl".text =
-        lib.replaceStrings
-          [ ''include "colors.kdl"'' ]
-          [ ''include "${config.xdg.configHome}/niri/colors.kdl"'' ]
-          (portable ../../../home/files/config/niri/config.kdl);
-      xdg.configFile."umbriel/config.toml".text =
-        portable ../../../home/files/config/umbriel/config.toml;
-      xdg.configFile."sway/config".text = portable ../../../home/files/config/sway/config;
+      xdg.configFile."niri/config.kdl" = {
+        text =
+          lib.replaceStrings
+            [ ''include "colors.kdl"'' ]
+            [ ''include "${config.xdg.configHome}/niri/colors.kdl"'' ]
+            (portable ../../../home/files/config/niri/config.kdl);
+        force = true;
+      };
+      xdg.configFile."umbriel/config.toml" = {
+        text = portable ../../../home/files/config/umbriel/config.toml;
+        force = true;
+      };
+      xdg.configFile."sway/config" = {
+        text = portable ../../../home/files/config/sway/config;
+        force = true;
+      };
       xdg.configFile."sway/noctalia".text = portable ../../../home/files/config/sway/noctalia;
-      xdg.configFile."hypr/hyprland.lua".text =
-        portable ../../desktop/sessions/hyprland/hyprland.lua;
+      xdg.configFile."hypr/hyprland.lua" = {
+        text = portable ../../desktop/sessions/hyprland/hyprland.lua;
+        force = true;
+      };
 
       # Mango's animation helper, Noctalia, Fcitx, GTK and Plasma write their
       # own runtime settings. Seed portable defaults only on a new machine; never

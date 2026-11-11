@@ -1,30 +1,49 @@
 #!/usr/bin/env python3
 """
 Argon Quota Tracker & Dynamic Model Router for AIStudio2API (:2048) & Antigravity-Manager (:8045).
-Rules (No Compromise):
-1. Default model is ALWAYS Argon High (gemini-4-argon-high).
-2. Track Argon quota across all enabled accounts in AIStudio2API (:2048):
-   - > 20% remaining: Argon maps to gemini-4-argon(high)
-   - <= 20% remaining (> 0%): Argon automatically switches to gemini-4-argon(low)
-   - 0% remaining (limit reached): Fallback to Antigravity-Manager (:8045) with claude-opus-4-6-thinking or gemini-3.8-flash-high
-3. Every 3.8 Flash request (gemini-3.8-flash, -low, -medium, -tiered, -high) ALWAYS maps to high (gemini-3.8-flash-high).
+Rules (Fully Automatic High-Setting Cascade):
+1. Default model is ALWAYS AIStudio Argon High (aistudio2api / gemini-4-argon-high).
+2. If AIStudio Argon runs out, Hermes retries connecting 5 times, waiting 3 minutes (180s) each time.
+3. If still unavailable after 5 retries (5 x 3m), automatically cascade in strict order:
+   - Fallback 1: Antigravity Manager/Tools Argon High (antigravity-manager / gemini-4-argon-high)
+   - Fallback 2: AIStudio Flash 3.8 High (aistudio2api / gemini-3.8-flash-high)
+   - Fallback 3: Antigravity Manager/Tools Flash 3.8 High (antigravity-manager / gemini-3.8-flash-high)
+4. Both AIStudio Argon and Antigravity Argon ALWAYS use the high setting (gemini-4-argon-high).
 """
 
 import base64
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
 import urllib.request
 from datetime import datetime, timezone
 
-AISTUDIO_URL = "http://127.0.0.1:2048"
-ANTIGRAVITY_URL = "http://127.0.0.1:8045"
+AISTUDIO_URL = "http://134.185.85.64:2048"
+ANTIGRAVITY_URL = "http://134.185.85.64:8045"
 REQUESTS_DB = "/home/aesc/aistudio2api/runtime/requests.db"
 AISTUDIO_ENV = "/home/aesc/aistudio2api/.env"
+HERMES_ENV = "/home/aesc/.hermes/.env"
 STATE_FILE = "/home/aesc/.hermes/cache/argon_quota_state.json"
 ESTIMATED_DAILY_ARGON_LIMIT_PER_ACCOUNT = 100
+
+
+def load_proxy_keys() -> tuple[str, str]:
+    aistudio_key = ""
+    agm_key = ""
+    if os.path.exists(HERMES_ENV):
+        try:
+            for line in open(HERMES_ENV):
+                line = line.strip()
+                if line.startswith("AISTUDIO2API_API_KEY="):
+                    aistudio_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                elif line.startswith("AGY_ROTATOR_API_KEY="):
+                    agm_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+        except Exception:
+            pass
+    return aistudio_key, agm_key
 
 
 def get_aistudio_auth_headers() -> dict:
@@ -52,7 +71,6 @@ def parse_iso_utc(ts_str: str) -> float:
     s = ts_str.strip()
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
-    # Truncate nanoseconds to microseconds for fromisoformat
     if "." in s and "+" in s:
         main, tz = s.split("+", 1)
         sec, frac = main.split(".", 1)
@@ -61,6 +79,14 @@ def parse_iso_utc(ts_str: str) -> float:
         return datetime.fromisoformat(s).timestamp()
     except Exception:
         return 0.0
+
+
+def probe_v1_models(base_url: str, api_key: str) -> list[str]:
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    req = urllib.request.Request(f"{base_url}/v1/models", headers=headers)
+    with urllib.request.urlopen(req, timeout=4) as r:
+        data = json.loads(r.read().decode())
+    return [m.get("id", "") for m in data.get("data", []) if isinstance(m, dict)]
 
 
 def get_argon_quota_status() -> dict:
@@ -82,99 +108,72 @@ def get_argon_quota_status() -> dict:
     except Exception:
         enabled_accs = []
 
-    try:
-        req = urllib.request.Request(f"{AISTUDIO_URL}/api/cooldowns", headers=auth_headers)
-        cd_data = json.loads(urllib.request.urlopen(req, timeout=3).read().decode())
-        for c in cd_data.get("cooldowns", []):
-            model_id = c.get("model_id", "") or c.get("scope", "")
-            until_ts = parse_iso_utc(c.get("until", ""))
-            if ("argon" in model_id or model_id == "*") and until_ts > now:
-                cooldown_Ids.add(c.get("account_id"))
-    except Exception:
-        pass
-
-    ready_Ids = [a for a in enabled_accs if a not in cooldown_Ids]
-    ready_count = len(ready_Ids)
-
-    if total_accounts == 0:
-        return {
-            "total_accounts": 0,
-            "ready_accounts": 0,
-            "cooldown_accounts": 0,
-            "remaining_pct": 0.0,
-            "tier": "fallback",
-            "argon_target": "gemini-3.8-flash-high",
-            "provider": "antigravity-manager",
-        }
-
-    account_pct = (ready_count / total_accounts) * 100.0
-
-    # Also check 24h Argon request usage on ready accounts from requests.db
-    used_on_ready = 0
-    if os.path.exists(REQUESTS_DB) and ready_Ids:
+    if total_accounts > 0:
         try:
-            conn = sqlite3.connect(f"file:{REQUESTS_DB}?mode=ro", uri=True)
-            cutoff_ms = int((now - 86400) * 1000)
-            placeholders = ",".join("?" for _ in ready_Ids)
-            row = conn.execute(
-                f"SELECT COUNT(*) FROM requests WHERE model LIKE '%argon%' AND status = 200 AND time >= ? AND account IN ({placeholders})",
-                [cutoff_ms, *ready_Ids],
-            ).fetchone()
-            used_on_ready = row[0] if row else 0
-            conn.close()
+            req = urllib.request.Request(f"{AISTUDIO_URL}/api/cooldowns", headers=auth_headers)
+            cd_data = json.loads(urllib.request.urlopen(req, timeout=3).read().decode())
+            for c in cd_data.get("cooldowns", []):
+                model_id = c.get("model_id", "") or c.get("scope", "")
+                until_ts = parse_iso_utc(c.get("until", ""))
+                if ("argon" in model_id or model_id == "*") and until_ts > now:
+                    cooldown_Ids.add(c.get("account_id"))
         except Exception:
-            used_on_ready = 0
-
-    total_pool_capacity = total_accounts * ESTIMATED_DAILY_ARGON_LIMIT_PER_ACCOUNT
-    ready_remaining_capacity = max(0, ready_count * ESTIMATED_DAILY_ARGON_LIMIT_PER_ACCOUNT - used_on_ready)
-    req_pct = (ready_remaining_capacity / total_pool_capacity) * 100.0 if total_pool_capacity > 0 else account_pct
-
-    # Effective remaining percentage: if ready_count > 0, never report 0% solely from heuristic request count
-    if ready_count == 0:
-        remaining_pct = 0.0
+            pass
+        ready_Ids = [a for a in enabled_accs if a not in cooldown_Ids]
+        ready_count = len(ready_Ids)
+        account_pct = (ready_count / total_accounts) * 100.0 if total_accounts > 0 else 100.0
     else:
-        remaining_pct = max(1.0, min(account_pct, req_pct))
+        # Remote /api/accounts is restricted (403); probe /v1/models with Bearer key instead
+        aistudio_key, _ = load_proxy_keys()
+        try:
+            models = probe_v1_models(AISTUDIO_URL, aistudio_key)
+            has_argon = any("argon" in m.lower() for m in models)
+            total_accounts = 9 if has_argon else 0
+            ready_count = 9 if has_argon else 0
+            account_pct = 100.0 if has_argon else 0.0
+        except Exception:
+            total_accounts = 9
+            ready_count = 9
+            account_pct = 100.0
 
-    if remaining_pct <= 0.0:
-        tier = "fallback"
-        argon_target = "gemini-3.8-flash-high"
-        provider = "antigravity-manager"
-    elif remaining_pct <= 20.0:
-        tier = "low"
-        argon_target = "gemini-4-argon-low"
-        provider = "aistudio2api"
-    else:
-        tier = "high"
-        argon_target = "gemini-4-argon-high"
-        provider = "aistudio2api"
-
+    remaining_pct = account_pct if ready_count > 0 else 0.0
     return {
         "total_accounts": total_accounts,
         "ready_accounts": ready_count,
         "cooldown_accounts": len(cooldown_Ids),
         "remaining_pct": round(remaining_pct, 1),
         "account_pct": round(account_pct, 1),
-        "tier": tier,
-        "argon_target": argon_target,
-        "provider": provider,
+        "tier": "high",
+        "argon_target": "gemini-4-argon-high",
+        "provider": "aistudio2api",
+        "retry_policy": {
+            "primary_retries": 5,
+            "primary_retry_wait_seconds": 180,
+            "fallback_chain": [
+                {"provider": "antigravity-manager", "model": "gemini-4-argon-high"},
+                {"provider": "aistudio2api", "model": "gemini-3.8-flash-high"},
+                {"provider": "antigravity-manager", "model": "gemini-3.8-flash-high"},
+            ],
+        },
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
-def build_aistudio_model_mapping(argon_effort: str = "high") -> str:
+def build_aistudio_model_mapping(tier: str = "high") -> str:
     """
     Build MODEL_MAPPING for AIStudio2API:
-    - Argon ALWAYS maps to high (gemini-4-argon(high)).
-    - Every 3.8 flash variant ALWAYS maps to gemini-3.8-flash(high).
+    - All Argon variants map to gemini-4-argon(high) (both use high setting).
+    - All 3.8 Flash variants map to gemini-3.8-flash(high).
     """
+    argon_high_target = "gemini-4-argon(high)"
     mappings = [
-        "gemini-4-argon:gemini-4-argon(high)",
-        "gemini-4-argon-high:gemini-4-argon(high)",
-        "gemini-4-argon-medium:gemini-4-argon(high)",
-        "gemini-4-argon-low:gemini-4-argon(low)",
-        "Gemini 4 Argon (High):gemini-4-argon(high)",
-        "Gemini 4 Argon (Medium):gemini-4-argon(high)",
-        "Gemini 4 Argon (Low):gemini-4-argon(low)",
+        f"gemini-4-argon:{argon_high_target}",
+        f"gemini-4-argon-high:{argon_high_target}",
+        f"gemini-4-argon-medium:{argon_high_target}",
+        f"gemini-4-argon-low:{argon_high_target}",
+        f"Gemini 4 Argon (High):{argon_high_target}",
+        f"Gemini 4 Argon (Medium):{argon_high_target}",
+        f"Gemini 4 Argon (Low):{argon_high_target}",
         "gemini-3.8-flash:gemini-3.8-flash(high)",
         "gemini-3.8-flash-high:gemini-3.8-flash(high)",
         "gemini-3.8-flash-medium:gemini-3.8-flash(high)",
@@ -215,27 +214,49 @@ def sync_aistudio_mapping(status: dict) -> bool:
     except Exception:
         pass
 
-    # Ensure Hermes config.yaml has primary: gemini-4-argon-high (aistudio2api)
-    # and fallback chain:
-    # 1. gemini-3.8-flash-high (aistudio2api)
-    # 2. gemini-3.8-flash-high (antigravity-manager)
-    # 3. claude-opus-4-6-thinking (antigravity-manager)
+    # Always keep Hermes config.yaml locked to:
+    # Primary: aistudio2api / gemini-4-argon-high
+    # Fallback 1: antigravity-manager / gemini-4-argon-high
+    # Fallback 2: aistudio2api / gemini-3.8-flash-high
+    # Fallback 3: antigravity-manager / gemini-3.8-flash-high
     hermes_cfg = "/home/aesc/.hermes/config.yaml"
     if os.path.exists(hermes_cfg):
         try:
             txt = open(hermes_cfg).read()
-            import re
-            new_txt = re.sub(r"provider:\s*(?:aistudio2api|antigravity-manager)", "provider: aistudio2api", txt, count=1)
-            new_txt = re.sub(r"default:\s*gemini-4-argon[^\n]*", "default: gemini-4-argon-high", new_txt)
+            new_txt = re.sub(
+                r"provider:\s*(?:aistudio2api|antigravity-manager)",
+                "provider: aistudio2api",
+                txt,
+                count=1,
+            )
+            new_txt = re.sub(
+                r"default:\s*(?:gemini-4-argon[^\n]*|gemini-3\.8-flash[^\n]*)",
+                "default: gemini-4-argon-high",
+                new_txt,
+                count=1,
+            )
+            new_txt = re.sub(
+                r"(aistudio2api:\n(?:[ \t]+[^\n]+\n)*?[ \t]+default_model:\s*)(?:gemini-4-argon[^\n]*|gemini-3\.8-flash[^\n]*)",
+                r"\g<1>gemini-4-argon-high",
+                new_txt,
+                count=1,
+            )
+            new_txt = re.sub(
+                r"(antigravity-manager:\n(?:[ \t]+[^\n]+\n)*?[ \t]+default_model:\s*)(?:gemini-4-argon[^\n]*|gemini-3\.8-flash[^\n]*)",
+                r"\g<1>gemini-4-argon-high",
+                new_txt,
+                count=1,
+            )
+            new_txt = new_txt.replace("argon-low: aistudio2api/gemini-4-argon-low", "argon-low: aistudio2api/gemini-4-argon-high")
             new_txt = new_txt.replace("reasoning_effort: low", "reasoning_effort: high")
             desired_fb = (
                 "fallback_providers:\n"
+                "  - provider: antigravity-manager\n"
+                "    model: gemini-4-argon-high\n"
                 "  - provider: aistudio2api\n"
                 "    model: gemini-3.8-flash-high\n"
                 "  - provider: antigravity-manager\n"
                 "    model: gemini-3.8-flash-high\n"
-                "  - provider: antigravity-manager\n"
-                "    model: claude-opus-4-6-thinking\n"
             )
             new_txt = re.sub(
                 r"fallback_providers:\n(?:[ \t]*-[^\n]*\n(?:[ \t]+[^\n]*\n)*)+",
@@ -249,7 +270,6 @@ def sync_aistudio_mapping(status: dict) -> bool:
         except Exception:
             pass
 
-    # Persist in .env as well so restarts keep the mapping
     if os.path.exists(AISTUDIO_ENV):
         try:
             lines = open(AISTUDIO_ENV).read().splitlines()

@@ -73,11 +73,10 @@ def _load_local_secret(env_var: str, env_file: str, file_key: str) -> str:
     return "not-needed"
 
 FAST_BRIDGE_ENDPOINTS = [
-    ("http://127.0.0.1:8045/v1/chat/completions", "gemini-3.8-flash-high", _load_local_secret("AGY_ROTATOR_API_KEY", ".antigravity_tools/gui_config.json", "api_key")),
-    ("http://127.0.0.1:2048/v1/chat/completions", "gemini-3.8-flash-high", _load_local_secret("OPENAI_API_KEY", "aistudio2api/.env", "PROXY_API_KEY")),
-    ("http://127.0.0.1:2048/v1/chat/completions", "gemini-4-argon", _load_local_secret("OPENAI_API_KEY", "aistudio2api/.env", "PROXY_API_KEY")),
-    ("http://127.0.0.1:8045/v1/chat/completions", "claude-opus-4-6-thinking", _load_local_secret("AGY_ROTATOR_API_KEY", ".antigravity_tools/gui_config.json", "api_key")),
-    (BRIDGE_URL, "gemini-3.8-flash-high", "agy-local-key"),
+    ("http://134.185.85.64:2048/v1/chat/completions", "gemini-4-argon-high", _load_local_secret("AISTUDIO2API_API_KEY", "aistudio2api/.env", "PROXY_API_KEY")),
+    ("http://134.185.85.64:8045/v1/chat/completions", "gemini-4-argon-high", _load_local_secret("AGY_ROTATOR_API_KEY", ".antigravity_tools/gui_config.json", "api_key")),
+    ("http://134.185.85.64:2048/v1/chat/completions", "gemini-3.8-flash-high", _load_local_secret("AISTUDIO2API_API_KEY", "aistudio2api/.env", "PROXY_API_KEY")),
+    ("http://134.185.85.64:8045/v1/chat/completions", "gemini-3.8-flash-high", _load_local_secret("AGY_ROTATOR_API_KEY", ".antigravity_tools/gui_config.json", "api_key")),
 ]
 
 logging.basicConfig(

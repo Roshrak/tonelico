@@ -76,7 +76,7 @@ bindsym $mod+space exec noctalia msg panel-toggle launcher
 bindsym $mod+s exec noctalia msg panel-toggle control-center
 bindsym $mod+comma exec noctalia msg settings-toggle
 bindsym $mod+e exec nautilus
-bindsym $mod+z exec chromium
+bindsym $mod+z exec librewolf
 bindsym $mod+Escape exec noctalia msg session lock
 bindsym $mod+Shift+e exec noctalia msg panel-toggle session
 bindsym Print exec noctalia msg screenshot-region
@@ -115,6 +115,8 @@ bindsym $mod+Left focus left
 bindsym $mod+Right focus right
 bindsym $mod+Up focus up
 bindsym $mod+Down focus down
+bindsym --whole-window $mod+Shift+button4 focus prev
+bindsym --whole-window $mod+Shift+button5 focus next
 
 # Move / Swap focused window
 bindsym $mod+Shift+h move left
@@ -158,6 +160,8 @@ bindsym $mod+Shift+9 move container to workspace number 9
 # Workspace navigation
 bindsym $mod+Ctrl+Left workspace prev
 bindsym $mod+Ctrl+Right workspace next
+bindsym --whole-window $mod+button4 workspace prev_on_output
+bindsym --whole-window $mod+button5 workspace next_on_output
 
 # Safe reload & quit (matching Mango SUPER+SHIFT+ALT,m and Niri Mod+Shift+Alt+M)
 bindsym $mod+r reload

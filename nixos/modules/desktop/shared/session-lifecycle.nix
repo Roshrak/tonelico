@@ -73,12 +73,12 @@
               if [ "$mode" = sway ]; then
                 json="$(/run/current-system/sw/bin/swaymsg -t get_outputs 2>/dev/null || true)"
                 coords="$(printf '%s' "$json" | "$JQ" -r '
-                  .[] | select(.name == "eDP-1" and .active) |
+                  ([.[] | select(.name == "eDP-1" and .active)] + [.[] | select(.active)])[0] // empty |
                   [.rect.x, .rect.y, .rect.width, .rect.height] | @tsv' 2>/dev/null || true)"
               else
                 json="$(/run/current-system/sw/bin/hyprctl -j monitors 2>/dev/null || true)"
                 coords="$(printf '%s' "$json" | "$JQ" -r '
-                  .[] | select(.name == "eDP-1" and ((.disabled // false) == false)) |
+                  ([.[] | select(.name == "eDP-1" and ((.disabled // false) == false))] + [.[] | select((.disabled // false) == false)])[0] // empty |
                   [(.x + (.width / (.scale // 1)) / 2 | floor),
                    (.y + (.height / (.scale // 1)) / 2 | floor)] | @tsv' 2>/dev/null || true)"
               fi

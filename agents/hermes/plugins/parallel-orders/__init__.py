@@ -1205,45 +1205,345 @@ def _should_defer_to_builtin_busy_handler(event: Any) -> bool:
     return False
 
 
+_DESIRED_FALLBACK_CHAIN = [
+    {"provider": "antigravity-manager", "model": "gemini-4-argon-high"},
+    {"provider": "aistudio2api", "model": "gemini-3.8-flash-high"},
+    {"provider": "antigravity-manager", "model": "gemini-3.8-flash-high"},
+]
+
+
+def _is_primary_aistudio_argon(agent: Any) -> bool:
+    if getattr(agent, "_fallback_activated", False):
+        return False
+    prov = str(getattr(agent, "provider", "") or "").lower()
+    burl = str(getattr(agent, "base_url", "") or "").lower()
+    mdl = str(getattr(agent, "model", "") or "").lower()
+    return ("aistudio" in prov or ":2048" in burl) and "argon" in mdl
+
+
+def _normalize_agent_argon_routing(agent: Any) -> None:
+    with suppress(Exception):
+        mdl = str(getattr(agent, "model", "") or "").strip()
+        mdl_lower = mdl.lower()
+        if "argon" in mdl_lower and mdl != "gemini-4-argon-high":
+            agent.model = "gemini-4-argon-high"
+        elif "3.8-flash" in mdl_lower and mdl != "gemini-3.8-flash-high":
+            agent.model = "gemini-3.8-flash-high"
+
+        fb_chain = getattr(agent, "_fallback_chain", None)
+        desired_tuples = [(d["provider"], d["model"]) for d in _DESIRED_FALLBACK_CHAIN]
+        cur_tuples = [
+            (str(d.get("provider", "")).strip().lower(), str(d.get("model", "")).strip())
+            for d in (fb_chain or [])
+            if isinstance(d, dict)
+        ]
+        if cur_tuples != desired_tuples:
+            agent._fallback_chain = [dict(d) for d in _DESIRED_FALLBACK_CHAIN]
+
+        if _is_primary_aistudio_argon(agent):
+            agent._api_max_retries = 6
+
+
+def _emit_agent_progress_note(agent: Any, note_text: str) -> None:
+    with suppress(Exception):
+        if hasattr(agent, "_emit_diagnostic_status"):
+            agent._emit_diagnostic_status(note_text)
+    with suppress(Exception):
+        cb = getattr(agent, "tool_progress_callback", None)
+        if callable(cb):
+            cb("_thinking", "_thinking", note_text)
+
+
 def _patch_fallback_model_continuation() -> None:
-    """Ensure fallback model / profile switches never prematurely stop an in-progress task."""
+    """Enforce automatic AIStudio Argon High default + 5x 3-minute retries + 3-tier High fallback cascade."""
+    with suppress(Exception):
+        from agent.credential_pool_model_cooldowns import CredentialPoolModelCooldownMixin  # type: ignore
+
+        if not hasattr(CredentialPoolModelCooldownMixin, "_orig_is_model_scoped_failure"):
+            CredentialPoolModelCooldownMixin._orig_is_model_scoped_failure = (
+                CredentialPoolModelCooldownMixin._is_model_scoped_failure
+            )
+        orig_is_model_scoped = CredentialPoolModelCooldownMixin._orig_is_model_scoped_failure
+
+        def patched_is_model_scoped_failure(self, status_code: int, model=None, failure_reason=None) -> bool:
+            prov = str(getattr(self, "provider", "") or "").lower()
+            if model and status_code == 429 and ("aistudio" in prov or "antigravity" in prov):
+                return True
+            return orig_is_model_scoped(self, status_code, model=model, failure_reason=failure_reason)
+
+        CredentialPoolModelCooldownMixin._is_model_scoped_failure = patched_is_model_scoped_failure
+
     with suppress(Exception):
         import inspect
-        import agent.turn_recovery as _tr
-        import agent.chat_completion_helpers as _cch
-        import agent.conversation_loop as _cl
-        import agent.turn_iteration_prep as _tip
+        import agent.turn_recovery as _tr  # type: ignore
+        import agent.turn_api_error as _tae  # type: ignore
+        import agent.turn_response_check as _trc  # type: ignore
+        import agent.error_classifier as _ec  # type: ignore
+        import agent.chat_completion_helpers as _cch  # type: ignore
+        import agent.conversation_loop as _cl  # type: ignore
+        import agent.turn_iteration_prep as _tip  # type: ignore
+        from agent.error_classifier import FailoverReason  # type: ignore
 
-        if not getattr(_tip, "_fallback_continuation_patched", False):
-            orig_apply_retry_restarts = _tip.apply_retry_restarts
+        if not hasattr(_ec, "_orig_classify_api_error"):
+            _ec._orig_classify_api_error = _ec.classify_api_error
+        orig_classify = _ec._orig_classify_api_error
 
-            @functools.wraps(orig_apply_retry_restarts)
-            def patched_apply_retry_restarts(agent, **kwargs):
-                if "max_retries" in kwargs and isinstance(kwargs["max_retries"], int):
-                    kwargs["max_retries"] = max(kwargs["max_retries"], 12)
-                return orig_apply_retry_restarts(agent, **kwargs)
+        def patched_classify_api_error(error, *args, **kwargs):
+            classified = orig_classify(error, *args, **kwargs)
+            with suppress(Exception):
+                if classified.reason not in _tae._CONTEXT_OVERFLOW_REASONS:
+                    classified.retryable = True
+                    if classified.reason in (
+                        FailoverReason.billing,
+                        FailoverReason.auth,
+                        FailoverReason.model_not_found,
+                        FailoverReason.format,
+                        FailoverReason.unknown,
+                    ):
+                        classified.reason = FailoverReason.rate_limit
+            return classified
 
-            _tip.apply_retry_restarts = patched_apply_retry_restarts
-            _cl.apply_retry_restarts = patched_apply_retry_restarts
-            if hasattr(_cl, "_PHASE_PARAMS"):
-                _cl._PHASE_PARAMS[patched_apply_retry_restarts] = tuple(
-                    p for p in inspect.signature(orig_apply_retry_restarts).parameters if p != "agent"
+        _ec.classify_api_error = patched_classify_api_error
+        _tae.classify_api_error = patched_classify_api_error
+
+        if not hasattr(_tip, "_orig_apply_retry_restarts"):
+            _tip._orig_apply_retry_restarts = _tip.apply_retry_restarts
+        orig_apply_retry_restarts = _tip._orig_apply_retry_restarts
+
+        @functools.wraps(orig_apply_retry_restarts)
+        def patched_apply_retry_restarts(agent, **kwargs):
+            if "max_retries" in kwargs and isinstance(kwargs["max_retries"], int):
+                kwargs["max_retries"] = max(kwargs["max_retries"], 12)
+            return orig_apply_retry_restarts(agent, **kwargs)
+
+        _tip.apply_retry_restarts = patched_apply_retry_restarts
+        _cl.apply_retry_restarts = patched_apply_retry_restarts
+        if hasattr(_cl, "_PHASE_PARAMS"):
+            _cl._PHASE_PARAMS[patched_apply_retry_restarts] = tuple(
+                p for p in inspect.signature(orig_apply_retry_restarts).parameters if p != "agent"
+            )
+
+        if not hasattr(_cch, "_orig_should_skip_fallback_candidate"):
+            _cch._orig_should_skip_fallback_candidate = _cch._should_skip_fallback_candidate
+
+        def patched_should_skip_fallback_candidate(agent, fb, fb_key, fb_provider, fb_model, *args, **kwargs) -> bool:
+            cur_prov = str(getattr(agent, "provider", "") or "").strip().lower()
+            cur_mdl = str(getattr(agent, "model", "") or "").strip().lower()
+            if str(fb_provider).strip().lower() == cur_prov and str(fb_model).strip().lower() == cur_mdl:
+                return True
+            return False
+
+        _cch._should_skip_fallback_candidate = patched_should_skip_fallback_candidate
+
+        if not hasattr(_cch, "_orig_try_activate_fallback"):
+            _cch._orig_try_activate_fallback = _cch.try_activate_fallback
+        orig_try_activate_fallback = _cch._orig_try_activate_fallback
+
+        def patched_try_activate_fallback(agent, *args, **kwargs) -> bool:
+            _normalize_agent_argon_routing(agent)
+            if _is_primary_aistudio_argon(agent):
+                attempt = int(getattr(agent, "_argon_primary_retry_attempt", 0) or 0)
+                required_retries = int(os.environ.get("HERMES_ARGON_PRIMARY_RETRIES", "5"))
+                if attempt <= required_retries:
+                    # Defer fallback until all 5 retries (5 x 3m) on AIStudio Argon have been attempted
+                    return False
+            activated = orig_try_activate_fallback(agent, *args, **kwargs)
+            if activated:
+                with suppress(Exception):
+                    _normalize_agent_argon_routing(agent)
+                    agent._just_switched_to_fallback = True
+                    agent._argon_primary_retry_attempt = 0
+                    agent._rate_limited_until = max(
+                        getattr(agent, "_rate_limited_until", 0.0) or 0.0,
+                        time.monotonic() + 300.0,
+                    )
+                    _emit_agent_progress_note(
+                        agent,
+                        f"🔄 Switched to fallback: {getattr(agent, 'model', '')} ({getattr(agent, 'provider', '')})",
+                    )
+            return activated
+
+        _cch.try_activate_fallback = patched_try_activate_fallback
+
+        if not hasattr(_tr, "_orig_route_classified_error"):
+            _tr._orig_route_classified_error = _tr.route_classified_error
+        if not hasattr(_tr, "_orig_interruptible_backoff_sleep"):
+            _tr._orig_interruptible_backoff_sleep = _tr.interruptible_backoff_sleep
+        orig_route_classified_error = _tr._orig_route_classified_error
+        orig_interruptible_sleep = _tr._orig_interruptible_backoff_sleep
+
+        @functools.wraps(orig_route_classified_error)
+        def patched_route_classified_error(agent, **kwargs):
+            _normalize_agent_argon_routing(agent)
+            retry_count = int(kwargs.get("retry_count", 0) or 0)
+            max_retries = int(kwargs.get("max_retries", 6) or 6)
+            classified = kwargs.get("classified")
+            _retry = kwargs.get("_retry")
+            api_messages = kwargs.get("api_messages")
+            active_system_prompt = kwargs.get("active_system_prompt")
+            compression_attempts = kwargs.get("compression_attempts", 0)
+            reset_at = kwargs.get("reset_at")
+
+            if _is_primary_aistudio_argon(agent):
+                agent._argon_primary_retry_attempt = retry_count
+                required_retries = int(os.environ.get("HERMES_ARGON_PRIMARY_RETRIES", "5"))
+                if (
+                    classified is not None
+                    and classified.reason not in _tae._CONTEXT_OVERFLOW_REASONS
+                    and retry_count <= required_retries
+                ):
+                    # Fall through to settle_unrecovered_error so it sleeps 3 minutes (180s) and retries AIStudio Argon
+                    return _tr._verdict(
+                        "fallthrough",
+                        retry_count=retry_count,
+                        max_retries=max(max_retries, required_retries + 1),
+                        compression_attempts=compression_attempts,
+                        active_system_prompt=active_system_prompt,
+                    )
+
+            elif getattr(agent, "_fallback_activated", False):
+                # On any fallback tier, immediately cascade to the next fallback on non-overflow error
+                if classified is not None and classified.reason not in _tae._CONTEXT_OVERFLOW_REASONS:
+                    if agent._try_activate_fallback(reason=classified.reason, reset_at=reset_at):
+                        active_system_prompt = _tr._arm_fallback_restart(
+                            agent, api_messages, active_system_prompt, _retry
+                        )
+                        return _tr._verdict(
+                            "break",
+                            retry_count=0,
+                            max_retries=max_retries,
+                            compression_attempts=0,
+                            active_system_prompt=active_system_prompt,
+                        )
+
+            return orig_route_classified_error(agent, **kwargs)
+
+        def patched_interruptible_backoff_sleep(agent, wait_time: float, *args, **kwargs) -> bool:
+            if _is_primary_aistudio_argon(agent):
+                attempt = int(getattr(agent, "_argon_primary_retry_attempt", 1) or 1)
+                required_retries = int(os.environ.get("HERMES_ARGON_PRIMARY_RETRIES", "5"))
+                if 1 <= attempt <= required_retries:
+                    wait_time = float(os.environ.get("HERMES_ARGON_RETRY_WAIT_SECONDS", "180.0"))
+                    mins = round(wait_time / 60.0, 1) if wait_time >= 60 else wait_time
+                    unit = "m" if wait_time >= 60 else "s"
+                    _emit_agent_progress_note(
+                        agent,
+                        f"⏳ AIStudio Argon ran out — waiting {mins}{unit} ({int(wait_time)}s) before retry {attempt}/{required_retries}...",
+                    )
+            return orig_interruptible_sleep(agent, wait_time, *args, **kwargs)
+
+        _tr.route_classified_error = patched_route_classified_error
+        _tae.route_classified_error = patched_route_classified_error
+        _tr.interruptible_backoff_sleep = patched_interruptible_backoff_sleep
+        _tae.interruptible_backoff_sleep = patched_interruptible_backoff_sleep
+        _trc.interruptible_backoff_sleep = patched_interruptible_backoff_sleep
+
+        if not hasattr(_cl, "_orig_run_api_retry_loop"):
+            _cl._orig_run_api_retry_loop = _cl._run_api_retry_loop
+
+        def patched_run_api_retry_loop(agent, s):
+            _normalize_agent_argon_routing(agent)
+            required_retries = int(os.environ.get("HERMES_ARGON_PRIMARY_RETRIES", "5"))
+            if _is_primary_aistudio_argon(agent):
+                s.max_retries = required_retries + 1
+                agent._api_max_retries = required_retries + 1
+                agent._argon_primary_retry_attempt = 0
+            else:
+                s.max_retries = 1
+            while s.retry_count < s.max_retries:
+                _ng = _cl._run_phase(_cl.nous_rate_limit_guard, agent, s)
+                if _ng.action == "return":
+                    return _ng.result
+                if _ng.action == "break":
+                    return None
+                try:
+                    _cl._run_phase(_cl.build_api_request, agent, s)
+                    if _cl._run_phase(_cl.perform_api_call, agent, s).action == "break":
+                        return None
+                    if s.response is None or not getattr(s.response, "choices", None) or len(s.response.choices) == 0:
+                        if _is_primary_aistudio_argon(agent):
+                            agent._argon_primary_retry_attempt = s.retry_count + 1
+                    _rc = _cl._run_phase(_cl.check_api_response, agent, s)
+                    if _rc.action == "return":
+                        return _rc.result
+                    if _rc.action == "break":
+                        return None
+                except InterruptedError:
+                    if _cl._run_phase(_cl.handle_api_interrupt, agent, s).action == "break":
+                        return None
+                except Exception as api_error:
+                    if _is_primary_aistudio_argon(agent):
+                        agent._argon_primary_retry_attempt = s.retry_count + 1
+                    _ae = _cl._run_phase(_cl.handle_api_error, agent, s, api_error=api_error)
+                    if _ae.action == "return":
+                        return _ae.result
+                    if _ae.action == "break":
+                        return None
+            return None
+
+        _cl._run_api_retry_loop = patched_run_api_retry_loop
+
+        import agent.agent_runtime_helpers as _arh  # type: ignore
+
+        if not hasattr(_arh, "_orig_try_recover_primary_transport"):
+            _arh._orig_try_recover_primary_transport = _arh.try_recover_primary_transport
+        orig_recover_transport = _arh._orig_try_recover_primary_transport
+
+        def patched_try_recover_primary_transport(agent, api_error, *args, **kwargs) -> bool:
+            if _is_primary_aistudio_argon(agent):
+                return False
+            return orig_recover_transport(agent, api_error, *args, **kwargs)
+
+        _arh.try_recover_primary_transport = patched_try_recover_primary_transport
+
+    import sys
+
+    if any(k.startswith("gateway") for k in sys.modules):
+        with suppress(Exception):
+            from gateway.run_turn import GatewayTurnMixin  # type: ignore
+
+            if not hasattr(GatewayTurnMixin, "_orig_evict_on_fallback_before_parallel"):
+                GatewayTurnMixin._orig_evict_on_fallback_before_parallel = (
+                    GatewayTurnMixin._run_agent_evict_on_fallback
                 )
-            _tip._fallback_continuation_patched = True
-            _tr._fallback_continuation_patched = True
+            orig_evict_on_fallback = GatewayTurnMixin._orig_evict_on_fallback_before_parallel
 
-        if not getattr(_cch, "_fallback_continuation_patched", False):
-            orig_try_activate_fallback = _cch.try_activate_fallback
+            def patched_run_agent_evict_on_fallback(self, turn_ctx: Any) -> None:
+                with suppress(Exception):
+                    _agent = turn_ctx.agent_holder[0] if getattr(turn_ctx, "agent_holder", None) else None
+                    if (
+                        _agent is not None
+                        and getattr(_agent, "_fallback_activated", False)
+                        and (getattr(_agent, "_rate_limited_until", 0) or 0) > time.monotonic()
+                    ):
+                        # Keep cached agent on the fallback model while primary is rate-limited
+                        # so restore_primary_runtime() respects _rate_limited_until across turns.
+                        return
+                return orig_evict_on_fallback(self, turn_ctx)
 
-            def patched_try_activate_fallback(agent) -> bool:
-                activated = orig_try_activate_fallback(agent)
-                if activated:
+            GatewayTurnMixin._run_agent_evict_on_fallback = patched_run_agent_evict_on_fallback
+
+        with suppress(Exception):
+            from gateway.slash_commands_model import GatewayModelCommandsMixin  # type: ignore
+
+            if not getattr(GatewayModelCommandsMixin, "_fallback_continuation_patched", False):
+                orig_handle_model_command = GatewayModelCommandsMixin._handle_model_command
+
+                async def patched_handle_model_command(self, *args, **kwargs) -> str:
+                    res = await orig_handle_model_command(self, *args, **kwargs)
                     with suppress(Exception):
-                        agent._just_switched_to_fallback = True
-                return activated
+                        event = args[0] if args else kwargs.get("event")
+                        if event:
+                            skey = self._session_key_for_source(event.source)
+                            note = self._pending_model_notes.get(skey)
+                            if isinstance(note, str) and "Do NOT resume or finish tasks from earlier turns" in note:
+                                self._pending_model_notes[skey] = (
+                                    f"{note.rstrip(']')}; if a task is currently in progress, continue executing it normally without stopping and use agy_control (mcp__agy_control__*) whenever possible.]"
+                                )
+                    return res
 
-            _cch.try_activate_fallback = patched_try_activate_fallback
-            _cch._fallback_continuation_patched = True
+                GatewayModelCommandsMixin._handle_model_command = patched_handle_model_command
+                GatewayModelCommandsMixin._fallback_continuation_patched = True
 
     with suppress(Exception):
         from hermes_cli.cli_model_switch_mixin import CLIModelSwitchMixin
@@ -1262,26 +1562,6 @@ def _patch_fallback_model_continuation() -> None:
 
             CLIModelSwitchMixin._apply_model_switch_result = patched_apply_model_switch
             CLIModelSwitchMixin._fallback_continuation_patched = True
-
-    with suppress(Exception):
-        from gateway.slash_commands_model import GatewayModelCommandsMixin
-
-        if not getattr(GatewayModelCommandsMixin, "_fallback_continuation_patched", False):
-            orig_handle_model_command = GatewayModelCommandsMixin._handle_model_command
-
-            async def patched_handle_model_command(self, event, args_text: str) -> str:
-                res = await orig_handle_model_command(self, event, args_text)
-                with suppress(Exception):
-                    skey = self._session_key_for_source(event.source)
-                    note = self._pending_model_notes.get(skey)
-                    if isinstance(note, str) and "Do NOT resume or finish tasks from earlier turns" in note:
-                        self._pending_model_notes[skey] = (
-                            f"{note.rstrip(']')}; if a task is currently in progress, continue executing it normally without stopping and use agy_control (mcp__agy_control__*) whenever possible.]"
-                        )
-                return res
-
-            GatewayModelCommandsMixin._handle_model_command = patched_handle_model_command
-            GatewayModelCommandsMixin._fallback_continuation_patched = True
 
 
 def _patch_primary_turn_runner_and_adapters() -> None:
@@ -1475,6 +1755,11 @@ def register(ctx) -> None:
     with suppress(Exception):
         ctx.register_hook("pre_llm_call", _on_pre_llm_call)
         ctx.register_hook("pre_verify", _on_pre_verify)
+
+    import sys
+
+    if not any(k.startswith("gateway") for k in sys.modules):
+        return
 
     try:
         _patch_primary_turn_runner_and_adapters()

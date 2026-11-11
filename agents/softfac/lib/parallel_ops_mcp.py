@@ -220,76 +220,38 @@ class ParallelOpsMcpServer:
                 })
 
             if name == "parallel_argon_pool_status":
-                admin_pw = ""
-                if AISTUDIO_ENV_FILE.exists():
-                    for line in AISTUDIO_ENV_FILE.read_text(encoding="utf-8", errors="ignore").splitlines():
-                        if line.startswith("ADMIN_PASSWORD="):
-                            admin_pw = line.split("=", 1)[1].strip()
-                            break
-                auth = base64.b64encode(f"admin:{admin_pw}".encode()).decode()
-                req = urllib.request.Request(
-                    "http://127.0.0.1:2048/api/accounts",
-                    headers={"Authorization": f"Basic {auth}"},
-                )
-                with urllib.request.urlopen(req, timeout=5) as r:
-                    data = json.loads(r.read().decode())
-                accs = data.get("accounts", [])
-                cds = []
-                try:
-                    cd_req = urllib.request.Request(
-                        "http://127.0.0.1:2048/api/cooldowns",
-                        headers={"Authorization": f"Basic {auth}"},
-                    )
-                    with urllib.request.urlopen(cd_req, timeout=5) as r:
-                        cds = json.loads(r.read().decode()).get("cooldowns", [])
-                except Exception:
-                    pass
-                cd_by_acc: dict[str, list[dict[str, Any]]] = {}
-                for c in cds:
-                    aid = str(c.get("account_id") or c.get("account_label") or "")
-                    if aid:
-                        cd_by_acc.setdefault(aid, []).append(c)
-                summary = []
-                ready_argon = 0
-                cooldown_argon = 0
-                for idx, a in enumerate(accs, 1):
-                    models = [m.get("id") if isinstance(m, dict) else str(m) for m in (a.get("models") or [])]
-                    has_argon = "gemini-4-argon" in models
-                    aid = str(a.get("id") or a.get("label") or "")
-                    acds = cd_by_acc.get(aid, [])
-                    argon_cd = next(
-                        (
-                            c
-                            for c in acds
-                            if "argon" in str(c.get("model_id", ""))
-                            or "argon" in str(c.get("scope", ""))
-                        ),
-                        None,
-                    )
-                    state = "cooldown" if argon_cd else a.get("state", "unknown")
-                    if state == "ready" and has_argon:
-                        ready_argon += 1
-                    elif argon_cd:
-                        cooldown_argon += 1
-                    entry: dict[str, Any] = {
-                        "worker_slot": f"pro_account_{idx}",
-                        "label": a.get("label", ""),
-                        "enabled": a.get("enabled", False),
-                        "state": state,
-                        "tier": a.get("benefit_tier", ""),
-                        "has_gemini_4_argon": has_argon,
-                        "message": a.get("message", ""),
-                    }
-                    if argon_cd:
-                        entry["cooldown_until"] = argon_cd.get("until", "")
-                        entry["cooldown_reason"] = argon_cd.get("reason", "")
-                    summary.append(entry)
+                hermes_env = Path("/home/aesc/.hermes/.env")
+                aistudio_key = ""
+                agm_key = ""
+                if hermes_env.exists():
+                    for line in hermes_env.read_text(encoding="utf-8", errors="ignore").splitlines():
+                        line = line.strip()
+                        if line.startswith("AISTUDIO2API_API_KEY="):
+                            aistudio_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        elif line.startswith("AGY_ROTATOR_API_KEY="):
+                            agm_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+
+                tiers = [
+                    ("1_primary_aistudio_argon_high", "http://134.185.85.64:2048/v1/models", aistudio_key, "gemini-4-argon-high"),
+                    ("2_fallback_antigravity_argon_high", "http://134.185.85.64:8045/v1/models", agm_key, "gemini-4-argon-high"),
+                    ("3_fallback_aistudio_flash38_high", "http://134.185.85.64:2048/v1/models", aistudio_key, "gemini-3.8-flash-high"),
+                    ("4_fallback_antigravity_flash38_high", "http://134.185.85.64:8045/v1/models", agm_key, "gemini-3.8-flash-high"),
+                ]
+                tier_status = []
+                for label, url, key, target_model in tiers:
+                    try:
+                        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})
+                        with urllib.request.urlopen(req, timeout=4) as r:
+                            models = [m.get("id", "") for m in json.loads(r.read().decode()).get("data", []) if isinstance(m, dict)]
+                        available = target_model in models or any(target_model.replace("-high", "") in m for m in models)
+                        tier_status.append({"tier": label, "model": target_model, "available": available, "status": "ready" if available else "missing"})
+                    except Exception as exc:
+                        tier_status.append({"tier": label, "model": target_model, "available": False, "status": f"error: {exc}"})
+
                 return _ok({
-                    "total_accounts": len(accs),
-                    "ready_argon_workers": ready_argon,
-                    "cooldown_argon_workers": cooldown_argon,
-                    "strict_argon_lock": True,
-                    "workers": summary,
+                    "default_primary": "aistudio2api/gemini-4-argon-high",
+                    "primary_retry_policy": {"retries": 5, "wait_seconds_per_retry": 180},
+                    "cascade_order": tier_status,
                 })
 
             return _err(f"Unknown tool: {name}")

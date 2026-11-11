@@ -51,52 +51,6 @@
         SystemBell=false
         VisibleBell=false
       '';
-
-      # Chromium policy: clean privacy, zero AI/telemetry bloat, and Memory Saver without breaking sites.
-      # Declarative (was a manual /etc/chromium/... copy) so reinstalls keep it.
-      environment.etc."chromium/policies/managed/default-browser.json".text = ''
-        {
-          "DefaultBrowserSettingEnabled": false,
-          "BackgroundModeEnabled": false,
-          "HighEfficiencyModeEnabled": true,
-          "HardwareAccelerationModeEnabled": true,
-          "MetricsReportingEnabled": false,
-          "UrlKeyedAnonymizedDataCollectionEnabled": false,
-          "FeedbackSurveysEnabled": false,
-          "ShoppingListEnabled": false,
-          "PromotionsEnabled": false,
-          "BuiltInAiAPIsEnabled": false,
-          "GenAiDefaultSettings": 2,
-          "HelpMeWriteSettings": 2,
-          "TabCompareSettings": 2,
-          "HistorySearchSettings": 2,
-          "CreateThemesSettings": 2,
-          "PrivacySandboxPromptEnabled": false,
-          "PrivacySandboxAdMeasurementEnabled": false,
-          "PrivacySandboxAdTopicsEnabled": false,
-          "PrivacySandboxSiteEnabledAdsEnabled": false,
-          "BlockThirdPartyCookies": true,
-          "DnsOverHttpsMode": "automatic",
-          "WebRtcIPHandling": "default_public_interface_only",
-          "PaymentMethodQueryEnabled": false,
-          "DefaultSearchProviderEnabled": true,
-          "DefaultSearchProviderName": "Google",
-          "DefaultSearchProviderKeyword": "google.com",
-          "DefaultSearchProviderSearchURL": "https://www.google.com/search?q={searchTerms}",
-          "DefaultSearchProviderSuggestURL": "https://www.google.com/complete/search?output=chrome&q={searchTerms}",
-          "SearchSuggestEnabled": true,
-          "ExtensionSettings": {
-            "ddkjiahejlhfcafbddmgiahcphecmpfh": {
-              "installation_mode": "normal_installed",
-              "update_url": "https://clients2.google.com/service/update2/crx",
-              "toolbar_pin": "force_pinned"
-            },
-            "hdannnflhlmdablckfkjpleikpphncik": {
-              "installation_mode": "blocked"
-            }
-          }
-        }
-      '';
     }
   ;
 }

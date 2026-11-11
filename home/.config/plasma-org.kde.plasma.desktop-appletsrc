@@ -17,6 +17,12 @@ location=0
 plugin=org.kde.plasma.folder
 wallpaperplugin=org.kde.image
 
+[Containments][24][General]
+changedPositions={"desktop:/Huong_Dan_API_Pool_Oracle.md":["1920x1200","2","4"]}
+lastResolution=1920x1200
+positions={"1920x1200":["1","17","desktop:/Huong_Dan_API_Pool_Oracle.md","2","4"]}
+sortMode=-1
+
 [Containments][24][Wallpaper][org.kde.image][General]
 Image=file:///home/aesc/Pictures/Morgan/wallpapersden.com_blue-sky-in-evening_1920x1200.jpg
 SlidePaths=/nix/store/0gj9qmpza3dasncn8iz34c7fc6w8hwjr-breeze-6.6.6/share/wallpapers/,/run/current-system/sw/share/wallpapers/
@@ -165,3 +171,4 @@ SlidePaths=/nix/store/0gj9qmpza3dasncn8iz34c7fc6w8hwjr-breeze-6.6.6/share/wallpa
 
 [ScreenMapping]
 itemsOnDisabledScreens=
+screenMapping=
