@@ -28,15 +28,6 @@ that install into the full setup. The theme comes across by itself; nothing is s
    PASS / FAIL report. Nothing is called done until it has been checked.
 
 ### What happens
-
-| Step | What it does |
-|---|---|
-| System | Copies `nixos/` to `/etc/nixos`, generates **this machine's own** `hardware-configuration.nix` (disks, encryption), runs `nixos-rebuild boot` |
-| Kernel | `boot.kernelPackages = pkgs.linuxPackages_latest`: the newest kernel NixOS 26.05 ships (7.2.x at export time) |
-| Theme | Staged in `/var/lib/tonelico/home`; the `tonelico-restore` service copies it into `~` **before the display manager starts**, so nothing running can overwrite it and every file stays editable |
-| Agents | AGY Control is built with `npm ci && npm run build`; softfac, Hermes and helper scripts are copied to where the units expect them |
-| Rotator | Upstream Antigravity-Manager is fetched at the pinned commit and started with `docker compose` |
-
 `nixos-rebuild boot` is used rather than `switch` because switching the display manager from
 SDDM to greetd under a running Plasma session would end that session halfway through.
 
