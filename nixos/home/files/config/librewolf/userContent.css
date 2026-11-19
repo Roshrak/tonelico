@@ -1,0 +1,26 @@
+@-moz-document url-prefix("about:") {
+  :root,
+  * {
+    --border-radius-small: 0px !important;
+    --border-radius-medium: 0px !important;
+    --border-radius-large: 0px !important;
+    --border-radius-circle: 0px !important;
+    --newtab-search-border-radius: 0px !important;
+  }
+
+  *,
+  *::before,
+  *::after,
+  .search-handoff-button,
+  .fake-editable,
+  .search-wrapper input,
+  .top-site-outer,
+  .top-site-outer .tile,
+  .top-site-outer .top-site-icon,
+  .card-outer,
+  button,
+  input,
+  select {
+    border-radius: 0px !important;
+  }
+}

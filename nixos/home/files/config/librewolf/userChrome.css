@@ -1,0 +1,88 @@
+:root,
+* {
+  --tab-border-radius: 0px !important;
+  --toolbarbutton-border-radius: 0px !important;
+  --urlbar-icon-border-radius: 0px !important;
+  --arrowpanel-border-radius: 0px !important;
+  --arrowpanel-menuitem-border-radius: 0px !important;
+  --panel-border-radius: 0px !important;
+  --button-border-radius: 0px !important;
+  --input-border-radius: 0px !important;
+  --border-radius-small: 0px !important;
+  --border-radius-medium: 0px !important;
+  --border-radius-large: 0px !important;
+  --border-radius-circle: 0px !important;
+  --subviewbutton-border-radius: 0px !important;
+}
+
+*,
+*::before,
+*::after {
+  border-radius: 0px !important;
+}
+
+.tabbrowser-tab,
+.tab-background,
+.tab-content,
+.tab-stack,
+.tab-icon-stack,
+.tab-close-button,
+#TabsToolbar .toolbarbutton-1,
+#tabbrowser-tabs {
+  border-radius: 0px !important;
+}
+
+.tabbrowser-tab[selected="true"] .tab-background {
+  border-radius: 0px !important;
+}
+
+#urlbar,
+#urlbar-background,
+.urlbar-background,
+#urlbar-input-container,
+.urlbar-input-container,
+#urlbar-container,
+.urlbarView,
+.urlbarView-row,
+.urlbarView-row-inner,
+#identity-box,
+#tracking-protection-icon-container,
+.urlbar-page-action,
+#searchbar,
+.searchbar-textbox {
+  border-radius: 0px !important;
+}
+
+menupopup,
+panel,
+.panel-arrowcontent,
+.popup-internal-box,
+#appMenu-popup,
+#unified-extensions-panel,
+toolbarbutton,
+.menuitem,
+.subviewbutton {
+  border-radius: 0px !important;
+}
+
+menupopup > menu,
+menupopup > menuitem {
+  border-radius: 0px !important;
+}
+
+button,
+toolbarbutton,
+.toolbarbutton-1,
+.toolbarbutton-icon,
+.toolbarbutton-badge-stack,
+#nav-bar toolbarbutton,
+#PersonalToolbar toolbarbutton,
+toolbarbutton.bookmark-item {
+  border-radius: 0px !important;
+}
+
+findbar,
+.findbar-container,
+.findbar-textbox {
+  border-radius: 0px !important;
+}
