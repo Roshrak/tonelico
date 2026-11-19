@@ -4,7 +4,6 @@
     { pkgs, ... }:
     {
       home.packages = with pkgs; [
-        nautilus
         file-roller
         seahorse
         gnome-disk-utility
@@ -19,6 +18,8 @@
         rclone
         zenity
         fzf
+        tealdeer
+        file
       ];
     }
   ;

@@ -11,6 +11,8 @@
           opencode = "opencode --auto";
           # Claude Code never saves folder trust for $HOME; start it in ~/vivian instead.
           cv = "cd ~/vivian && claude";
+          ls = "eza --icons";
+          cat = "bat --paging=never";
         };
         initExtra = ''
           export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
@@ -22,7 +24,7 @@
           __morgan_preexec() {
             [ -n "''${COMP_LINE:-}" ] && return
             case "$BASH_COMMAND" in
-              __morgan_*|starship_*|PROMPT_COMMAND*) return ;;
+              __morgan_*|starship_*|__zoxide_*|PROMPT_COMMAND*) return ;;
             esac
             printf '\033]0;%s\007' "''${BASH_COMMAND%% *}"
           }
@@ -46,6 +48,25 @@
         enableBashIntegration = true;
       };
       xdg.configFile."starship.toml".source = ../../../home/files/config/starship/starship.toml;
+
+      programs.zoxide = {
+        enable = true;
+        enableBashIntegration = true;
+      };
+
+      programs.bat.enable = true;
+
+      programs.eza = {
+        enable = true;
+        enableBashIntegration = true;
+        icons = "auto";
+      };
+
+      programs.yazi = {
+        enable = true;
+        enableBashIntegration = true;
+        shellWrapperName = "y";
+      };
     }
   ;
 }
