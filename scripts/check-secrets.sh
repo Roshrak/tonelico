@@ -67,9 +67,44 @@ collect_env() {  # secret-looking values from KEY=VALUE files
   grep -E '^[A-Za-z0-9_]*(KEY|TOKEN|SECRET|PASS|PASSWORD|AUTH)[A-Za-z0-9_]*=' "$1" \
     | sed -e 's/^[^=]*=//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'\$//" || true
 }
-collect_json() {  # long opaque strings and e-mail addresses from a JSON file
+collect_json() {  # long opaque strings and e-mail addresses from a JSON file, excluding plain model ids
   [ -f "$1" ] || return 0
-  jq -r '.. | strings | select((length >= 20 and (test("[[:space:]/]") | not)) or test("^[^@[:space:]]+@[^@[:space:]]+\\.[a-z]+$"))' "$1" 2>/dev/null || true
+  jq -r '
+    def is_email: test("^[^@[:space:]]+@[^@[:space:]]+\\.[A-Za-z]+$");
+    def is_long_opaque: (length >= 20) and (test("[[:space:]/]") | not);
+    def is_uuid: test("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
+    def is_plain_model_id:
+      test("^[a-z0-9]+([.-][a-z0-9]+)+$")
+      and test("[g-z]")
+      and (is_uuid | not)
+      and (test("^(sk|pk|rk|ak|tk|gh[pousr]|xox[baprs]|ya29|eyj|aiza|hf|glpat|npm|pypi|token|secret|auth|bearer)[.-]") | not);
+    def is_known_model_id:
+      is_plain_model_id
+      and test("^(claude|gemini|gpt|o[1-9]|chatgpt|llama|qwen|deepseek|mistral|mixtral|grok|kimi|glm|minimax|command|sonar|phi|gemma|codellama|starcoder|yi|baichuan|ernie|hunyuan|doubao|nova|titan|jamba|nemotron|granite|olmo|falcon)[.-]");
+    def is_secret_key: test("token|secret|key|pass|auth|cred|cookie|session|jwt|bearer|signature|private"; "i");
+    def is_model_key: test("^((.*_)?models?|model_ids?|model_names?|protected_models)$"; "i");
+
+    path(..) as $p
+    | getpath($p) as $v
+    | select(($v | type) == "string")
+    | [$p[] | strings] as $keys
+    | select(
+        ($v | is_email)
+        or (
+          ($v | is_long_opaque)
+          and (
+            ($keys | any(is_secret_key))
+            or (
+              (
+                (($keys | any(is_model_key)) and ($v | is_plain_model_id))
+                or ($v | is_known_model_id)
+              ) | not
+            )
+          )
+        )
+      )
+    | $v
+  ' "$1" 2>/dev/null || true
 }
 {
   collect_env "$H/.hermes/.env"
